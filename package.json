@@ -1,0 +1,13 @@
+{
+	"name": "q5play",
+	"version": "4.0.0",
+	"author": "quinton-ashley",
+	"license": "q5play License",
+	"description": "JavaScript game engine that uses q5.js for graphics and Box2D for physics.",
+	"main": "q5play.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"v": "npm version patch --force",
+		"V": "npm version minor --force"
+	}
+}
