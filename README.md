@@ -1,4 +1,4 @@
-# q5play
+# [q5play](https://q5play.org)
 
 Coming soon...
 
