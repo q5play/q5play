@@ -1,0 +1,7900 @@
+/**
+ * q5play
+ * @version 4.0-alpha11
+ * @author quinton-ashley
+ * @license q5play License
+ */
+
+let q5play_version = 'alpha11';
+
+if (typeof globalThis.Q5 == 'undefined') {
+	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
+	if (typeof globalThis.p5 != 'undefined') {
+		console.error('q5play is not compatible with p5.js yet.');
+	}
+}
+
+// called when a new instance of Q5 is created
+async function q5playPreSetup() {
+	const $ = this; // the q5 instance that called q5playInit
+
+	const log = console.log;
+
+	const Box2DFactory = await import('box2d3-wasm');
+	const Box2D = await Box2DFactory.default({ pthreadCount: 0 });
+
+	const {
+		b2Vec2,
+		b2Rot,
+		b2MakeRot,
+		b2AABB,
+		b2Transform,
+		b2QueryFilter,
+		TaskSystem,
+		b2ComputeHull,
+		DebugDrawCommandBuffer,
+
+		/* World */
+		b2DefaultWorldDef,
+		b2CreateWorld,
+		b2DestroyWorld,
+		b2World_Step,
+		b2World_Draw,
+		b2World_GetBodyEvents,
+		b2World_GetSensorEvents,
+		b2World_GetContactEvents,
+		b2World_EnableSleeping,
+		b2World_IsSleepingEnabled,
+		b2World_EnableWarmStarting,
+		b2World_IsWarmStartingEnabled,
+		b2World_GetAwakeBodyCount,
+		b2World_EnableContinuous,
+		b2World_IsContinuousEnabled,
+		b2World_SetRestitutionThreshold,
+		b2World_GetRestitutionThreshold,
+		b2World_SetHitEventThreshold,
+		b2World_GetHitEventThreshold,
+		b2World_SetContactTuning,
+		b2World_SetJointTuning,
+		b2World_SetMaximumLinearSpeed,
+		b2World_GetMaximumLinearSpeed,
+		b2World_GetProfile,
+		b2World_GetCounters,
+		b2World_GetPointer,
+		b2World_OverlapAABB,
+		b2World_OverlapPoint,
+		b2World_OverlapCircle,
+		b2World_OverlapCapsule,
+		b2World_OverlapPolygon,
+		b2World_CastRay,
+		b2World_CastRayClosest,
+		b2World_CastCircle,
+		b2World_CastCapsule,
+		b2World_CastPolygon,
+		b2World_SetCustomFilterCallback,
+		b2World_SetPreSolveCallback,
+		b2World_SetGravity,
+		b2World_GetGravity,
+		b2World_Explode,
+		b2World_RebuildStaticTree,
+		b2World_EnableSpeculative,
+
+		/* Shape */
+		b2DefaultShapeDef,
+		b2MakeOffsetRoundedBox,
+		b2MakeOffsetBox,
+		b2MakePolygon,
+		b2MakeOffsetRoundedPolygon,
+		b2Circle,
+		b2Capsule,
+		b2Segment,
+
+		b2DefaultChainDef,
+		b2CreateChain,
+
+		b2CreatePolygonShape,
+		b2CreateCircleShape,
+		b2CreateCapsuleShape,
+		b2CreateSegmentShape,
+		b2DestroyShape,
+
+		b2Shape_GetBody,
+		b2Shape_GetWorld,
+		b2Shape_GetPointer,
+		b2Shape_IsValid,
+		b2Shape_IsSensor,
+		b2Shape_TestPoint,
+		b2Shape_RayCast,
+		b2Shape_SetDensity,
+		b2Shape_GetDensity,
+		b2Shape_SetFriction,
+		b2Shape_GetFriction,
+		b2Shape_SetRestitution,
+		b2Shape_GetRestitution,
+		b2Shape_GetFilter,
+		b2Shape_SetFilter,
+		b2Shape_EnableSensorEvents,
+		b2Shape_AreSensorEventsEnabled,
+		b2Shape_EnableContactEvents,
+		b2Shape_AreContactEventsEnabled,
+		b2Shape_EnablePreSolveEvents,
+		b2Shape_ArePreSolveEventsEnabled,
+		b2Shape_EnableHitEvents,
+		b2Shape_AreHitEventsEnabled,
+		b2Shape_GetType,
+		b2Shape_GetCircle,
+		b2Shape_GetSegment,
+		b2Shape_GetChainSegment,
+		b2Shape_GetCapsule,
+		b2Shape_GetPolygon,
+		b2Shape_SetCircle,
+		b2Shape_SetCapsule,
+		b2Shape_SetSegment,
+		b2Shape_SetPolygon,
+		b2Shape_GetParentChain,
+		b2Shape_GetContactCapacity,
+		b2Shape_GetContactData,
+		b2Shape_GetSensorCapacity,
+		b2Shape_GetSensorOverlaps,
+		b2Shape_GetAABB,
+		b2Shape_GetClosestPoint,
+
+		/* Body */
+		b2BodyType,
+		b2DefaultBodyDef,
+		b2CreateBody,
+		b2DestroyBody,
+		b2Body_GetPosition,
+		b2Body_GetRotation,
+		b2Body_GetTransform,
+		b2Body_SetTransform,
+		b2Body_GetLocalPoint,
+		b2Body_GetWorldPoint,
+		b2Body_GetLocalVector,
+		b2Body_GetWorldVector,
+		b2Body_GetMass,
+		b2Body_GetRotationalInertia,
+		b2Body_GetLocalCenterOfMass,
+		b2Body_GetWorldCenterOfMass,
+		b2Body_SetMassData,
+		b2Body_GetMassData,
+		b2Body_ApplyMassFromShapes,
+		b2Body_GetLinearVelocity,
+		b2Body_GetAngularVelocity,
+		b2Body_SetLinearVelocity,
+		b2Body_SetAngularVelocity,
+		b2Body_ApplyForce,
+		b2Body_ApplyForceToCenter,
+		b2Body_ApplyTorque,
+		b2Body_ApplyLinearImpulse,
+		b2Body_ApplyLinearImpulseToCenter,
+		b2Body_ApplyAngularImpulse,
+		b2Body_SetLinearDamping,
+		b2Body_GetLinearDamping,
+		b2Body_SetAngularDamping,
+		b2Body_GetAngularDamping,
+		b2Body_SetGravityScale,
+		b2Body_GetGravityScale,
+		b2Body_GetType,
+		b2Body_SetType,
+		b2Body_IsAwake,
+		b2Body_SetAwake,
+		b2Body_IsEnabled,
+		b2Body_Enable,
+		b2Body_Disable,
+		b2Body_IsSleepEnabled,
+		b2Body_EnableSleep,
+		b2Body_SetSleepThreshold,
+		b2Body_GetSleepThreshold,
+		b2Body_SetFixedRotation,
+		b2Body_IsFixedRotation,
+		b2Body_SetBullet,
+		b2Body_IsBullet,
+		b2Body_GetPointer,
+		b2Body_EnableSensorEvents,
+		b2Body_EnableContactEvents,
+		b2Body_EnableHitEvents,
+		b2Body_GetShapeCount,
+		b2Body_GetShapes,
+		b2Body_GetJointCount,
+		b2Body_GetJoints,
+		b2Body_GetContactCapacity,
+		b2Body_GetContactData,
+		b2Body_ComputeAABB,
+		b2Body_GetWorld,
+
+		/* Joint */
+		b2DestroyJoint,
+		b2DefaultDistanceJointDef,
+		b2CreateDistanceJoint,
+		b2DefaultMotorJointDef,
+		b2CreateMotorJoint,
+		b2DefaultMouseJointDef,
+		b2CreateMouseJoint,
+		b2DefaultNullJointDef,
+		b2CreateNullJoint,
+		b2DefaultPrismaticJointDef,
+		b2CreatePrismaticJoint,
+		b2DefaultRevoluteJointDef,
+		b2CreateRevoluteJoint,
+		b2DefaultWeldJointDef,
+		b2CreateWeldJoint,
+		b2DefaultWheelJointDef,
+		b2CreateWheelJoint,
+		b2Joint_IsValid,
+		b2Joint_GetType,
+		b2Joint_GetBodyA,
+		b2Joint_GetBodyB,
+		b2Joint_GetWorld,
+		b2Joint_GetLocalAnchorA,
+		b2Joint_GetLocalAnchorB,
+		b2Joint_SetCollideConnected,
+		b2Joint_GetCollideConnected,
+		b2Joint_GetPointer,
+		b2Joint_WakeBodies,
+		b2Joint_GetConstraintForce,
+		b2Joint_GetConstraintTorque,
+		b2MouseJoint_SetTarget,
+		b2MouseJoint_GetTarget,
+		b2MouseJoint_SetSpringHertz,
+		b2MouseJoint_GetSpringHertz,
+		b2MouseJoint_SetSpringDampingRatio,
+		b2MouseJoint_GetSpringDampingRatio,
+		b2MouseJoint_SetMaxForce,
+		b2MouseJoint_GetMaxForce
+	} = Box2D;
+
+	$.Box2D = Box2D;
+
+	let friendlyRounding = true;
+
+	this.Q5Play = class {
+		constructor() {
+			// will use semver minor after 4.0 is released
+			this.version = q5play_version;
+			this.sprites = {};
+			this.groups = {};
+			this.groupsCreated = 0;
+			this.spritesCreated = 0;
+			this.spritesDrawn = 0;
+			this.images = {};
+			this.palettes = [];
+			this.storeDeletedGroupRefs = true;
+			this.snapToGrid = false;
+			this.gridSize = 0.5;
+			this.os = {};
+			this.context = 'web';
+
+			if (window.matchMedia) this.hasMouse = window.matchMedia('(any-hover: none)').matches ? false : true;
+			else this.hasMouse = true;
+			this.standardizeKeyboard = false;
+
+			if (typeof navigator == 'object') {
+				let idx = navigator.userAgent.indexOf('iPhone OS');
+				if (idx > -1) {
+					let version = navigator.userAgent.substring(idx + 10, idx + 12);
+
+					this.os.platform = 'iOS';
+					this.os.version = version;
+				} else {
+					let pl = navigator.userAgentData?.platform;
+					if (!pl && navigator.platform) {
+						pl = navigator.platform.slice(3);
+						if (pl == 'Mac') pl = 'macOS';
+						else if (pl == 'Win') pl = 'Windows';
+						else if (pl == 'Lin') pl = 'Linux';
+					}
+					this.os.platform = pl;
+				}
+			}
+
+			this.renderStats = false;
+			this._renderStats = {
+				x: 10,
+				y: 10,
+				font: 'monospace',
+				fontSize: 14,
+				gap: 22,
+				chartWidth: 100,
+				chartHeight: 40
+			};
+			this._fps = 60;
+			this._fpsArr = [60];
+
+			/*
+			 * Ledgers for contact relationship callback functions.
+			 *
+			 * Doing this:
+			 * group1.collides(group2, cb1);
+			 * sprite0.collides(sprite1, cb0);
+			 *
+			 * Would result in this:
+			 * q5play._collides = {
+			 *   1: {
+			 *     2: cb1
+			 *   },
+			 *   1000: {
+			 *     2: cb1,
+			 *     1001: cb0
+			 *   }
+			 * };
+			 */
+			this._collides = {};
+			this._colliding = {};
+			this._collided = {};
+			this._overlaps = {};
+			this._overlapping = {};
+			this._overlapped = {};
+		}
+
+		get friendlyRounding() {
+			return friendlyRounding;
+		}
+
+		set friendlyRounding(val) {
+			friendlyRounding = val;
+		}
+
+		onImageLoad() {}
+	};
+
+	this.q5play = new $.Q5Play();
+	delete $.Q5Play;
+
+	let using_p5v1 = !$._q5 && p5.VERSION[0] == 1;
+	let using_p5v2 = !$._q5 && p5.VERSION[0] == 2;
+
+	// in q5play the default angle mode is degrees
+	const DEGREES = $.DEGREES;
+	$.angleMode(DEGREES);
+
+	const ZERO_ROT = b2MakeRot(0);
+
+	let meterSize = 60;
+
+	// scale to box2d coordinates from q5 coordinates
+	const scaleTo = (x, y) => new b2Vec2(x / meterSize, y / meterSize);
+
+	// scale from box2d coordinates to q5 coordinates
+	const scaleFrom = (x) => ({ x: x * meterSize, y: y * meterSize });
+
+	// TODO: get these from the box2d library
+	// const linearSlop = pl.Settings.linearSlop;
+	// const angularSlop = pl.Settings.angularSlop / 60;
+
+	const linearSlop = 0.005;
+	const angularSlop = 0.000582;
+
+	const isSlop = (val) => Math.abs(val) <= linearSlop;
+	const fixRound = (val) => {
+		const v = Math.round(val);
+		return Math.abs(val - v) <= linearSlop ? v : val;
+	};
+	const fixRoundAngular = (val) => {
+		const v = Math.round(val);
+		return Math.abs(val - v) <= angularSlop ? v : val;
+	};
+
+	const minAngleDist = (ang, rot) => {
+		let full = $._angleMode == DEGREES ? 360 : $.TWO_PI;
+		let dist1 = (ang - rot) % full;
+		let dist2 = (full - Math.abs(dist1)) * -Math.sign(dist1);
+		return (Math.abs(dist1) < Math.abs(dist2) ? dist1 : dist2) || 0;
+	};
+
+	const eventTypes = {
+		_collisions: ['_collides', '_colliding', '_collided'],
+		_overlappers: ['_overlaps', '_overlapping', '_overlapped']
+	};
+
+	let usePhysics = true;
+	let timeScale = 1;
+
+	$.DYN = $.DYNAMIC = 'dynamic';
+	$.STA = $.STATIC = 'static';
+	$.KIN = $.KINEMATIC = 'kinematic';
+
+	let b2BodyTypes = [b2BodyType.b2_dynamicBody, b2BodyType.b2_staticBody, b2BodyType.b2_kinematicBody];
+
+	// let shapeTypes = ['box', 'circle', 'segment', 'capsule', 'chain', 'polygon];
+
+	const Shape = class {
+		constructor(type, id, def) {
+			this.type = type;
+			this.id = id;
+			for (let prop in def) {
+				let val = def[prop];
+				if (typeof val != 'function') this[prop] = val;
+			}
+		}
+	};
+
+	this.Visual = class {
+		constructor() {
+			this.ani = null;
+
+			this.img = null;
+			this._hasImagery = false;
+			this._aniChangeCount = 0;
+		}
+
+		get anis() {
+			if (!this._anis) {
+				this._anis = new $.Anis();
+			}
+			return this._anis;
+		}
+		set anis(val) {
+			this._anis = val;
+		}
+
+		get image() {
+			return this.img || this.ani?.frameImage;
+		}
+		set image(img) {
+			if (typeof img == 'string') {
+				if (!img.includes('.')) {
+					img = new $.EmojiImage(img, this.w || 50);
+				} else img = $.loadImage(img);
+			}
+			this.img = this._extendImage(img);
+			this._hasImagery = true;
+		}
+
+		_extendImage(img) {
+			img.offset ??= { x: 0, y: 0 };
+			img._scale ??= { x: 1, y: 1 };
+			if (!img.scale) {
+				Object.defineProperty(img, 'scale', {
+					get: () => img._scale,
+					set: (val) => {
+						if (typeof val == 'number') val = { x: val, y: val };
+						img._scale = val;
+					}
+				});
+			}
+			return img;
+		}
+
+		addAni() {
+			let args = [...arguments];
+			let ani, name;
+			if (args[0] instanceof $.Ani) {
+				if (args.length == 1) {
+					ani = args[0];
+					name = ani.name;
+				}
+			} else if (args.length >= 2 && typeof args[0] == 'string' && args[1] instanceof $.Ani) {
+				name = args[0];
+				ani = args[1];
+				if (ani._addedToSpriteOrGroup) ani = ani.clone();
+				ani.name = name;
+			} else {
+				ani = new $.Ani(this, ...args);
+				name = ani.name;
+			}
+
+			if (this._anis) {
+				this._anis[name] = ani;
+			} else if (this.ani) {
+				// Only create anis object if this is not the first animation
+				this._anis = new $.Anis();
+				// Add the previously added animation to anis
+				this._anis[this.ani.name] = this.ani;
+			}
+
+			this.ani = ani;
+			this._hasImagery = true;
+			ani._addedToSpriteOrGroup = true;
+
+			// this works if the image(s) used for the animation already loaded
+			if (this._dimensionsUndef && (ani.w != 1 || ani.h != 1)) {
+				if (this.w !== undefined) this.w = ani.w;
+				if (this.h !== undefined) this.h = ani.h;
+			}
+			return ani;
+		}
+
+		addAnis() {
+			let args = arguments;
+			let atlases;
+			if (args.length == 1) {
+				atlases = args[0];
+			} else {
+				this.spriteSheet = args[0];
+				atlases = args[1];
+			}
+			for (let name in atlases) {
+				let atlas = atlases[name];
+				this.addAni(name, atlas);
+			}
+		}
+
+		async changeAni(anis) {
+			if (!Array.isArray(anis)) anis = [...arguments];
+
+			let loop, stopOnLastAni;
+
+			for (let i = 0; i < anis.length; i++) {
+				let ani = anis[i];
+				if (ani instanceof $.Ani) {
+					anis[i] = { name: ani.name };
+					continue;
+				}
+				if (typeof ani == 'string') {
+					anis[i] = { name: ani };
+					ani = anis[i];
+				}
+				if (ani.name[0] == '!') {
+					ani.name = ani.name.slice(1);
+					ani.flipX = true;
+				}
+				if (ani.name[0] == '?') {
+					ani.name = ani.name.slice(1);
+					ani.flipY = true;
+				}
+				if (ani.name == '**') {
+					loop = true;
+					anis = anis.slice(0, -1);
+				}
+				if (ani.name == ';;') {
+					stopOnLastAni = true;
+					anis = anis.slice(0, -1);
+				}
+			}
+
+			let count = this._aniChangeCount;
+			this._aniChangeCount = count + 1;
+
+			do {
+				for (let i = 0; i < anis.length; i++) {
+					if (this._aniChangeCount != count) return;
+
+					await this._playSequencedAni(anis[i]);
+				}
+			} while (loop);
+
+			if (stopOnLastAni && this.ani) this.ani.stop();
+		}
+
+		/*
+		 * Changes the animation. Use `addAni` to define the
+		 * animation(s) first. Internal use only.
+		 */
+		_changeAni(label) {
+			let ani = this._anis?.[label];
+			if (!ani) {
+				for (let g of this.groups || []) {
+					ani = g._anis?.[label] || g._anis?.[label];
+					if (ani) {
+						ani = ani.clone();
+						break;
+					}
+				}
+				if (!ani) {
+					console.error('Ani not found: ' + label);
+					return;
+				}
+			}
+			this.ani = ani;
+			this.ani.name = label;
+			// reset to frame 0 of that animation
+			if (this.resetAnimationsOnChange) this.ani._frame = 0;
+		}
+
+		_playSequencedAni(ani) {
+			return new Promise((resolve) => {
+				let { name, start, end, flipX, flipY } = ani;
+				this._changeAni(name);
+
+				if (flipX) this.ani.scale.x = -this.ani.scale.x;
+				if (flipY) this.ani.scale.y = -this.ani.scale.y;
+
+				if (start < 0) start = this.ani.length + start;
+				if (start !== undefined) this.ani._frame = start;
+
+				if (end !== undefined) this.ani.goToFrame(end);
+				else if (this.ani._frame == this.ani.lastFrame) resolve();
+
+				this.ani._onComplete = this.ani._onChange = () => {
+					if (flipX) this.ani.scale.x = -this.ani.scale.x;
+					if (flipY) this.ani.scale.y = -this.ani.scale.y;
+					resolve();
+				};
+			});
+		}
+
+		draw() {
+			if (!this._hasImagery) return;
+
+			let g = this.ani || this.img;
+
+			let scaleX = g._scale._x;
+			let scaleY = g._scale._y;
+			let shouldScale = scaleX != 1 || scaleY != 1;
+
+			if (shouldScale) $.scale(scaleX, scaleY);
+
+			let ox = g.offset.x;
+			let oy = g.offset.y;
+
+			if (this.ani) $.animation(g, ox, oy);
+			else $.image(g, ox, oy);
+
+			if (shouldScale) $.scale(1 / scaleX, 1 / scaleY);
+		}
+	};
+
+	this.Sprite = class extends $.Visual {
+		constructor(x, y, w, h, physicsType) {
+			super(); // Call Visual constructor
+
+			// using boolean flags is faster than instanceof checks
+			this._isSprite = true;
+
+			this.idNum; // not set until the input params are validated
+
+			let args = [...arguments];
+
+			let group, ani;
+
+			// first arg was a group to add the sprite to
+			// used internally by the group.Sprite class
+			if (args[0] !== undefined && args[0]._isGroup) {
+				group = args[0];
+				args.splice(0, 1);
+			}
+
+			// first arg is a Ani, animation name, or Q5.Image
+			if (
+				args[0] !== undefined &&
+				(typeof args[0] == 'string' || args[0] instanceof $.Ani || args[0] instanceof Q5.Image)
+			) {
+				ani = args[0];
+				args.splice(0, 1);
+			}
+
+			// invalid
+			if (args.length == 1 && typeof args[0] == 'number') {
+				throw new FriendlyError('Sprite', 0, [args[0]]);
+			}
+
+			// last arg is collider type
+			let lastArg = args.at(-1);
+			if (typeof lastArg == 'string' && isPhysicsType(lastArg)) {
+				physicsType = args.pop();
+			} else physicsType = undefined;
+
+			if (!Array.isArray(args[0])) {
+				// valid use for creating a box collider:
+				// new Sprite(x, y, w, h)
+				x = args[0];
+				y = args[1];
+				w = args[2];
+				h = args[3];
+			} else {
+				// valid use for creating chain/polygon using vertex mode:
+				// new Sprite([[x1, y1], [x2, y2], ...])
+				x = undefined;
+				y = undefined;
+				if (Array.isArray(args[1])) {
+					throw new FriendlyError('Sprite', 1, [`[[${w}], [${h}]]`]);
+				}
+				this._vertexMode = true;
+			}
+
+			this.idNum = $.q5play.spritesCreated;
+			this._uid = 1000 + this.idNum;
+			$.q5play.sprites[this._uid] = this;
+			$.q5play.spritesCreated++;
+
+			this.groups = [];
+
+			this.joints = [];
+			this.joints.removeAll = () => {
+				while (this.joints.length) {
+					this.joints.at(-1).remove();
+				}
+			};
+
+			this.watch;
+
+			this.mod = {};
+
+			this._deleted = false;
+			this._life = 2147483647;
+			this._visible = true;
+			this._pixelPerfect = false;
+			this._aniChangeCount = 0;
+			this._draw = () => this.__draw();
+
+			this._hasOverlap = {};
+			this._collisions = {};
+			this._overlappers = {};
+
+			group ??= $.allSprites;
+
+			this._tile = '';
+
+			this._posX = x;
+			this._posY = y;
+			this._pos = $.createVector.call($);
+
+			let _this = this;
+			Object.defineProperties(this._pos, {
+				x: {
+					get() {
+						return _this.x;
+					},
+					set(val) {
+						_this.x = val;
+					}
+				},
+				y: {
+					get() {
+						return _this.y;
+					},
+					set(val) {
+						_this.x = val;
+					}
+				}
+			});
+
+			this._canvasPos = $.createVector.call($);
+
+			Object.defineProperties(this._canvasPos, {
+				x: {
+					get() {
+						let x = _this.x - $.camera.x;
+						if ($._c2d) x += $.canvas.hw / $.camera._zoom;
+						return x;
+					}
+				},
+				y: {
+					get() {
+						let y = _this.y - $.camera.y;
+						if ($._c2d) y += $.canvas.hh / $.camera._zoom;
+						return y;
+					}
+				}
+			});
+
+			this._direction = 0;
+			this._velX = 0;
+			this._velY = 0;
+			this._velSynced = true;
+			this._vel = $.createVector.call($);
+			this._vel._useCache = true;
+
+			this._syncVel = () => {
+				let v = b2Body_GetLinearVelocity(this.bdID);
+				this._velX = v.x;
+				this._velY = v.y;
+				this._velSynced = true;
+			};
+
+			Object.defineProperties(this._vel, {
+				x: {
+					get() {
+						if (!_this._velSynced && _this._physicsEnabled) {
+							_this._syncVel();
+						}
+						return _this._velX;
+					},
+					set(val) {
+						if (_this._physicsEnabled) {
+							b2Body_SetLinearVelocity(_this.bdID, new b2Vec2(val, this.y));
+						}
+						_this._velX = val;
+						this._magCached = this._directionCached = false;
+					}
+				},
+				y: {
+					get() {
+						if (!_this._velSynced && _this._physicsEnabled) {
+							_this._syncVel();
+						}
+						return _this._velY;
+					},
+					set(val) {
+						if (_this._physicsEnabled) {
+							b2Body_SetLinearVelocity(_this.bdID, new b2Vec2(this.x, val));
+						}
+						_this._velY = val;
+						this._magCached = this._directionCached = false;
+					}
+				}
+			});
+
+			this._heading = 'right';
+
+			this._layer = group._layer;
+			this._layer ??= $.allSprites._getTopLayer() + 1;
+
+			physicsType ??= group.physics || group.physicsType || 0;
+			this.physics = physicsType;
+
+			const bodyDef = new b2DefaultBodyDef();
+			bodyDef.type = b2BodyTypes[this._phys];
+			this.bdID = b2CreateBody(wID, bodyDef);
+			this._physicsEnabled = true;
+
+			this._shapes = [];
+
+			x ??= group.x;
+			if (x === undefined) {
+				if ($._c2d) x = $.canvas.hw;
+				else x = 0;
+			}
+			y ??= group.y;
+			if (y === undefined) {
+				if ($._c2d) y = $.canvas.hh;
+				else y = 0;
+			}
+
+			let forcedBoxShape = false;
+			if (w === undefined) {
+				w = group.w || group.width || group.d || group.diameter;
+				if (!h && !group.d && !group.diameter) {
+					h = group.h || group.height;
+					forcedBoxShape = true;
+				}
+			}
+
+			if (typeof x == 'function') x = x(group.length);
+			if (typeof y == 'function') y = y(group.length);
+			if (typeof w == 'function') w = w(group.length);
+			if (typeof h == 'function') h = h(group.length);
+
+			this.pos = { x, y };
+
+			if (!group._isAllSpritesGroup) {
+				if (!ani) {
+					for (let _ani in group._anis) {
+						ani = _ani;
+						break;
+					}
+					// Fallback to group image
+					if (!ani) {
+						ani = group._img;
+						if (typeof ani == 'function') {
+							ani = ani(group.length);
+						}
+						if (ani) this._img = true;
+					}
+				}
+			} // temporarily add all the groups the sprite belongs to,
+			// since the next section of code could potentially load an
+			// animation from one of the sprite's groups
+			for (let g = group; g; g = $.q5play.groups[g.parent]) {
+				this.groups.push(g);
+			}
+			this.groups.reverse();
+
+			if (ani) {
+				this._hasImagery = true;
+
+				if (this._img || ani instanceof Q5.Image) {
+					if (typeof ani != 'string') this.image = ani;
+					else this.image = new $.EmojiImage(ani, w);
+
+					if (!w && (this._img.w != 1 || this._img.h != 1)) {
+						w = this._img.defaultWidth || this._img.w;
+						h ??= this._img.defaultHeight || this._img.h;
+					}
+				} else {
+					if (typeof ani == 'string') this._changeAni(ani);
+					else this.ani = ani.clone();
+
+					if (!w && (this.ani.w != 1 || this.ani.h != 1)) {
+						w = this.ani.defaultWidth || this.ani.w;
+						h ??= this.ani.defaultHeight || this.ani.h;
+					}
+				}
+			}
+
+			// make groups list empty, the sprite will be "officially" added
+			// to its groups after its collider is potentially created
+			this.groups = [];
+
+			this._rotation = 0;
+			this._rotationSpeed = 0;
+			this._bearing = 0;
+
+			this._scale = new Scale();
+			this._shouldScale = false;
+
+			Object.defineProperty(this._scale, 'x', {
+				get() {
+					return this._x;
+				},
+				set(val) {
+					if (val == this._x) return;
+					if (_this.watch) _this.mod[26] = true;
+					let scalarX = Math.abs(val / this._x);
+					_this._w *= scalarX;
+					_this._hw *= scalarX;
+					_this._resizeShapes({ x: scalarX, y: 1 });
+					this._x = val;
+					this._avg = (this._x + this._y) * 0.5;
+					this._shouldScale = this._avg != 1;
+				}
+			});
+
+			Object.defineProperty(this._scale, 'y', {
+				get() {
+					return this._y;
+				},
+				set(val) {
+					if (val == this._y) return;
+					if (_this.watch) _this.mod[26] = true;
+					let scalarY = Math.abs(val / this._y);
+					if (_this._h) {
+						this._h *= scalarY;
+						this._hh *= scalarY;
+					}
+					_this._resizeShapes({ x: 1, y: scalarY });
+					this._y = val;
+					this._avg = (this._x + this._y) * 0.5;
+					this._shouldScale = this._avg != 1;
+				}
+			});
+
+			this._offset = {
+				_x: 0,
+				_y: 0,
+				get x() {
+					return this._x;
+				},
+				set x(val) {
+					if (val == this._x) return;
+					if (_this.watch) _this.mod[21] = true;
+					_this._offsetCenterBy(val - this._x, 0);
+				},
+				get y() {
+					return this._y;
+				},
+				set y(val) {
+					if (val == this._y) return;
+					if (_this.watch) _this.mod[21] = true;
+					_this._offsetCenterBy(0, val - this._y);
+				}
+			};
+
+			this._massUndef = true;
+			if (w === undefined) {
+				this._dimensionsUndef = true;
+				this._widthUndef = true;
+				w = 50;
+				if (h === undefined) this._heightUndef = true;
+			}
+
+			if (forcedBoxShape) h ??= 50;
+
+			if (!this._vertexMode) {
+				args[0] = 0;
+				args[1] = 0;
+				args[2] = w;
+				args[3] = h;
+			}
+			this.addCollider(...args);
+
+			this.prevPos = { x, y };
+			this.prevRotation = 0;
+			this._dest = { x, y };
+			this._destIdx = 0;
+			this._debug = false;
+
+			this.text;
+
+			if (!group._isAllSpritesGroup) $.allSprites.push(this);
+			group.push(this);
+
+			let gvx = group.vel.x || 0;
+			let gvy = group.vel.y || 0;
+			if (typeof gvx == 'function') gvx = gvx(group.length - 1);
+			if (typeof gvy == 'function') gvy = gvy(group.length - 1);
+			if (gvx || gvy) this.vel = { x: gvx, y: gvy };
+
+			// skip these properties
+			let skipProps = [
+				'ani',
+				'collider',
+				'x',
+				'y',
+				'w',
+				'h',
+				'd',
+				'diameter',
+				'dynamic',
+				'height',
+				'kinematic',
+				'static',
+				'vel',
+				'width'
+			];
+
+			// inherit properties from group in the order they were added
+			// skip props that were already set above
+			for (let prop of $.Sprite.propsAll) {
+				if (skipProps.includes(prop)) continue;
+				let val = group[prop];
+				if (val === undefined) continue;
+				if (typeof val == 'function' && isArrowFunction(val)) {
+					val = val.call(this, group.length - 1);
+				}
+				if (typeof val == 'object') {
+					if (val instanceof p5.Color) {
+						// make a copy of the color
+						this[prop] = $.color(val);
+					} else {
+						this[prop] = Object.assign({}, val);
+					}
+				} else {
+					this[prop] = val;
+				}
+			}
+
+			skipProps = [
+				'add',
+				'ani',
+				'anis',
+				'autoCull',
+				'contains',
+				'Group',
+				'idNum',
+				'length',
+				'mod',
+				'mouse',
+				'p',
+				'parent',
+				'Sprite',
+				'subgroups',
+				'velocity'
+			];
+
+			for (let i = 0; i < this.groups.length; i++) {
+				let g = this.groups[i];
+				let props = Object.keys(g);
+				for (let prop of props) {
+					if (!isNaN(prop) || prop[0] == '_' || skipProps.includes(prop) || $.Sprite.propsAll.includes(prop)) {
+						continue;
+					}
+					let val = g[prop];
+					if (val === undefined) continue;
+					if (typeof val == 'function' && isArrowFunction(val)) {
+						val = val.call(this, g.length - 1);
+					}
+					if (typeof val == 'object') {
+						this[prop] = Object.assign({}, val);
+					} else {
+						this[prop] = val;
+					}
+				}
+			}
+
+			{
+				let r = $.random(0.12, 0.96);
+				let g = $.random(0.12, 0.96);
+				let b = $.random(0.12, 0.96);
+
+				if ($._colorFormat != 1) {
+					r *= 255;
+					g *= 255;
+					b *= 255;
+				}
+
+				// "random" color that's not too dark or too light
+				this.color ??= $.color(r, g, b);
+			}
+
+			this._textFill ??= $.color(0);
+			this._textSize ??= $.canvas ? $.textSize() : 12;
+		}
+
+		addCollider(offsetX, offsetY, w, h) {
+			if (this._deleted) {
+				console.error("Can't add colliders to a sprite that was deleted.");
+				return;
+			}
+
+			this._add(false, ...arguments);
+
+			// TODO: reset mass
+			// if (this.watch) this.mod[19] = true;
+			// let com = new b2Vec2(this.body.getLocalCenter());
+
+			// this._shapeIDs = b2Body_GetShapes(this.bdID, b2Body_GetShapeCount(this.bdID));
+
+			// reset the center of mass to the sprite's center
+			// this.body.setMassData({
+			// 	mass: this.body.getMass(),
+			// 	center: com,
+			// 	I: this.body.getInertia()
+			// });
+		}
+
+		addSensor(offsetX, offsetY, w, h) {
+			if (this._deleted) {
+				console.error("Can't add sensors to a sprite that was deleted.");
+				return;
+			}
+			this._add(true, ...arguments);
+			this._hasSensors = true;
+		}
+
+		// adds a collider or sensor to the sprite
+		// composed of a single shape, several shapes, or a chain
+		_add(isSensor, a0, a1, a2, a3, a4) {
+			let offsetX, offsetY, w, h, path;
+			let rr; // rounded radius
+			let shape, shapeID, geom;
+			let vertexMode, originMode;
+			let shapes = this._shapes;
+
+			let shapeDef = new b2DefaultShapeDef();
+			shapeDef.density = this.density || 1;
+			shapeDef.material.friction = this.friction || 0.5;
+			shapeDef.material.restitution = this.bounciness || 0;
+			shapeDef.isSensor = isSensor;
+
+			// workaround to know which sprite the shape belongs to
+			shapeDef.material.customColor = this._uid;
+
+			if (a2 !== undefined) {
+				offsetX = a0;
+				offsetY = a1;
+			} else {
+				offsetX = 0;
+				offsetY = 0;
+				a2 = a0;
+				a3 = a1;
+				vertexMode = true;
+			}
+
+			if (typeof a3 == 'string') {
+				path = getRegularPolygon(a2, a3);
+				rr = a4;
+			} else if (Array.isArray(a2)) {
+				path = a2;
+				rr = a3;
+				if (Array.isArray(path[0])) originMode = 'start';
+			} else {
+				w = a2;
+				h = a3;
+				rr = a4;
+			}
+			rr ??= 0;
+
+			// if (w is vertex array) or (side length and h is a
+			// collider type or the name of a regular polygon)
+			if (path) {
+				let isPolygon = false;
+				let vecs = [{ x: 0, y: 0 }];
+				let vert = { x: 0, y: 0 };
+				let min = { x: 0, y: 0 };
+				let max = { x: 0, y: 0 };
+
+				vecs.isLoop = false;
+
+				// if the path is an array of position arrays
+				let usesVertices = Array.isArray(path[0]);
+
+				function checkVert() {
+					if (vert.x < min.x) min.x = vert.x;
+					if (vert.y < min.y) min.y = vert.y;
+					if (vert.x > max.x) max.x = vert.x;
+					if (vert.y > max.y) max.y = vert.y;
+				}
+
+				let x, y;
+				if (usesVertices) {
+					if (vertexMode) {
+						x = path[0][0];
+						y = path[0][1];
+						// log(x, y);
+						if (!this.fixture || !this._relativeOrigin) {
+							this.x = x;
+							this.y = y;
+						} else {
+							x = this.x - this._relativeOrigin.x;
+							y = this.y - this._relativeOrigin.y;
+							vecs.pop();
+						}
+					}
+					for (let i = 0; i < path.length; i++) {
+						if (vertexMode) {
+							if (i == 0 && !this.fixture) continue;
+							// verts are relative to the first vert
+							vert.x = path[i][0] - x;
+							vert.y = path[i][1] - y;
+						} else {
+							vert.x += path[i][0];
+							vert.y += path[i][1];
+						}
+						vecs.push({ x: vert.x, y: vert.y });
+
+						checkVert();
+					}
+				} else {
+					let rep = 1;
+					if (path.length % 2) rep = path[path.length - 1];
+					let mod = rep > 0 ? 1 : -1;
+					rep = Math.abs(rep);
+					let ang = 0;
+					for (let i = 0; i < rep; i++) {
+						for (let j = 0; j < path.length - 1; j += 2) {
+							let len = path[j];
+							ang += path[j + 1];
+							vert.x += len * $.cos(ang);
+							vert.y += len * $.sin(ang);
+							vecs.push({ x: vert.x, y: vert.y });
+
+							checkVert();
+						}
+						ang *= mod;
+					}
+				}
+
+				let isConvex = false;
+				if (
+					isSlop(Math.abs(vecs[0].x) - Math.abs(vecs[vecs.length - 1].x)) &&
+					isSlop(Math.abs(vecs[0].y) - Math.abs(vecs[vecs.length - 1].y))
+				) {
+					isPolygon = true;
+					originMode = 'center';
+					vecs.isLoop = true;
+					if (this._isConvexPoly(vecs.slice(0, -1))) isConvex = true;
+				}
+
+				w = max.x - min.x;
+				h = max.y - min.y;
+
+				if (originMode == 'start') {
+					for (let i = 0; i < vecs.length; i++) {
+						vecs[i] = scaleTo(vecs[i].x, vecs[i].y);
+					}
+				} else {
+					// the center relative to the first vertex
+					let centerX = 0;
+					let centerY = 0;
+					// use centroid of a triangle method to get center
+					// average of all vertices
+					let sumX = 0;
+					let sumY = 0;
+
+					let vl = vecs.length;
+					// last vertex is same as first
+					if (isPolygon || isConvex) vl--;
+					for (let i = 0; i < vl; i++) {
+						sumX += vecs[i].x;
+						sumY += vecs[i].y;
+					}
+					centerX = sumX / vl;
+					centerY = sumY / vl;
+
+					if (!this.fixture) {
+						this._relativeOrigin = { x: centerX, y: centerY };
+					}
+
+					if (vertexMode && usesVertices) {
+						if (!this.fixture) {
+							// repositions the sprite's x, y coordinates
+							// to be in the center of the shape
+							this.x += centerX;
+							this.y += centerY;
+						} else {
+							centerX = this._relativeOrigin.x;
+							centerY = this._relativeOrigin.y;
+						}
+					}
+
+					for (let i = 0; i < vecs.length; i++) {
+						let vec = vecs[i];
+						vecs[i] = scaleTo(vec.x + offsetX - centerX, vec.y + offsetY - centerY);
+					}
+				}
+
+				if (!isConvex || vecs.length - 1 > 8) {
+					isPolygon = false;
+				}
+
+				if (isPolygon) {
+					let hull = b2ComputeHull(vecs);
+					geom = b2MakePolygon(hull, 0);
+
+					shapeID = b2CreatePolygonShape(this.bdID, shapeDef, geom);
+					shapes.push(new Shape(5, shapeID, shapeDef));
+				} else {
+					if (vecs.length == 2) {
+						if (!rr) {
+							geom = new b2Segment();
+							geom.point1 = vecs[0];
+							geom.point2 = vecs[1];
+
+							shapeID = b2CreateSegmentShape(this.bdID, shapeDef, geom);
+							shapes.push(new Shape(2, shapeID, shapeDef));
+						} else {
+							geom = new b2Capsule();
+							geom.center1 = vecs[0];
+							geom.center2 = vecs[1];
+							geom.radius = rr / meterSize;
+							shapeID = b2CreateCapsuleShape(this.bdID, shapeDef, geom);
+							shapes.push(new Shape(3, shapeID, shapeDef));
+						}
+					} else if (this._phys != 1) {
+						// make capsules
+						for (let i = 1; i < vecs.length; i++) {
+							geom = new b2Capsule();
+							geom.center1 = vecs[i - 1];
+							geom.center2 = vecs[i];
+							geom.radius = 0.12;
+							shapeID = b2CreateCapsuleShape(this.bdID, shapeDef, geom);
+							shapes.push(new Shape(3, shapeID, shapeDef));
+						}
+						this.isSuperFast = true;
+					} else {
+						let chainDef = new b2DefaultChainDef();
+						chainDef.SetPoints([vecs[0], ...vecs, vecs.at(-1)]);
+						chainDef.isLoop = vecs.isLoop;
+						chainDef.SetMaterials([{ customColor: this._uid }]);
+
+						shapeID = b2CreateChain(this.bdID, chainDef);
+						shapes.push(new Shape(4, shapeID, chainDef));
+					}
+				}
+			} else {
+				w ??= 50;
+				h ??= w;
+
+				if (a3 === undefined) {
+					geom = new b2Circle();
+					geom.center = scaleTo(offsetX, offsetY);
+					geom.radius = (w * 0.5) / meterSize;
+
+					shapeID = b2CreateCircleShape(this.bdID, shapeDef, geom);
+					shape = new Shape(1, shapeID, shapeDef);
+					shape.radius = geom.radius;
+					shape.offset = geom.center;
+					shapes.push(shape);
+				} else {
+					let offset = scaleTo(offsetX, offsetY);
+					let hw = (w * 0.5) / meterSize;
+					let hh = (h * 0.5) / meterSize;
+					rr /= meterSize;
+
+					if (!rr) geom = b2MakeOffsetBox(hw, hh, offset, ZERO_ROT);
+					else {
+						geom = b2MakeOffsetRoundedBox(Math.max(hw - rr, 0.001), Math.max(hh - rr, 0.001), offset, ZERO_ROT, rr);
+					}
+
+					shapeID = b2CreatePolygonShape(this.bdID, shapeDef, geom);
+
+					shape = new Shape(0, shapeID, shapeDef);
+					shape.hw = hw;
+					shape.hh = hh;
+					shape.rr = rr;
+					shape.offset = offset;
+					shapes.push(shape);
+				}
+
+				// TODO: use AABB to get extents for multiple shapes
+				this._w = w;
+				this._hw = w * 0.5;
+				this._h = h;
+				this._hh = h * 0.5;
+			}
+		}
+
+		deleteColliders() {
+			this._deleteContacts(0);
+			this._deleteFixtures(0);
+		}
+
+		deleteSensors() {
+			this._deleteContacts(1);
+			this._deleteFixtures(1);
+			this._hasSensors = false;
+		}
+
+		/*
+		 * removes sensors or colliders or both
+		 * @param type can be undefined, 0, or 1
+		 * undefined removes both
+		 * 0 removes colliders
+		 * 1 removes sensors
+		 */
+		_deleteFixtures(type) {
+			let prevFxt;
+			for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
+				if (type === undefined || fxt.m_isSensor == type) {
+					let _fxt = fxt.m_next;
+					fxt.destroyProxies($.world.m_broadPhase);
+					if (!prevFxt) {
+						this.body.m_fixtureList = _fxt;
+					} else {
+						prevFxt.m_next = _fxt;
+					}
+				} else {
+					prevFxt = fxt;
+				}
+			}
+		}
+
+		/*
+		 * Removes contacts
+		 * @param type can be undefined, 0, or 1
+		 * undefined removes both
+		 * 0 removes colliders
+		 * 1 removes sensors
+		 */
+		_deleteContacts(type) {
+			if (!this.body) return;
+			let ce = this.body.m_contactList;
+			while (ce) {
+				let con = ce.contact;
+				ce = ce.next;
+				if (type === undefined || con.m_fixtureA.m_isSensor == type) {
+					$.world.destroyContact(con);
+				}
+			}
+		}
+
+		_offsetCenterBy(x, y) {
+			if (!x && !y) return;
+
+			this._offset._x += x;
+			this._offset._y += y;
+
+			if (!this.body) return;
+
+			let off = scaleTo(x, y);
+			this.__offsetCenterBy(off.x, off.y);
+		}
+
+		__offsetCenterBy(x, y) {
+			for (let fxt = this.body.m_fixtureList; fxt; fxt = fxt.m_next) {
+				let shape = fxt.m_shape;
+				if (shape.m_type != 'circle') {
+					let vertices = shape.m_vertices;
+					for (let v of vertices) {
+						v.x += x;
+						v.y += y;
+					}
+				} else {
+					shape.m_p.x += x;
+					shape.m_p.y += y;
+				}
+			}
+		}
+
+		/*
+		 * Clones the collider's props to be transferred to a new collider.
+		 */
+		_cloneBodyProps() {
+			let body = {};
+			let props = [
+				'bounciness',
+				'density',
+				'drag',
+				'friction',
+				'heading',
+				'isSuperFast',
+				'rotation',
+				'rotationDrag',
+				'rotationLock',
+				'rotationSpeed',
+				'scale',
+				'vel',
+				'x',
+				'y'
+			];
+			// if mass or dimensions were defined by the user,
+			// then the mass setting should be copied to the new body
+			// else the new body's mass should be calculated based
+			// on its dimensions
+			if (!this._massUndef || !this._dimensionsUndef) {
+				props.push('mass');
+			}
+			for (let prop of props) {
+				if (typeof this[prop] == 'object') {
+					body[prop] = Object.assign({}, this[prop]);
+				} else {
+					body[prop] = this[prop];
+				}
+			}
+			return body;
+		}
+
+		get autoUpdate() {
+			return this._autoUpdate;
+		}
+		set autoUpdate(val) {
+			this._autoUpdate = val;
+		}
+
+		get autoDraw() {
+			return this._autoDraw;
+		}
+		set autoDraw(val) {
+			this._autoDraw = val;
+		}
+
+		get allowSleeping() {
+			return this.body?.isSleepingAllowed();
+		}
+		set allowSleeping(val) {
+			if (this.watch) this.mod[5] = true;
+			if (this.body) this.body.setSleepingAllowed(val);
+		}
+
+		get bounciness() {
+			if (!this._shapes.length) return 0;
+			return b2Shape_GetRestitution(this._shapes[0].id);
+		}
+		set bounciness(val) {
+			if (this.watch) this.mod[7] = true;
+			for (let shape of this._shapes) {
+				b2Shape_SetRestitution(shape.id, val);
+			}
+		}
+
+		get physicsEnabled() {
+			return this._physicsEnabled;
+		}
+		set physicsEnabled(val) {
+			if (this.watch) this.mod[20] = true;
+			if (val) b2Body_Enable(this.bdID);
+			else b2Body_Disable(this.bdID);
+			this._physicsEnabled = val;
+		}
+
+		get physicsType() {
+			return this.physics;
+		}
+		set physicsType(val) {
+			this.physics = val;
+		}
+
+		get physics() {
+			return $.Sprite.types[this._phys];
+		}
+		set physics(val) {
+			if (val == this._phys) return;
+
+			if (typeof val == 'string') {
+				val = val.toLowerCase();
+				let c = val[0];
+				if (c == 'd') val = 0;
+				if (c == 's') val = 1;
+				if (c == 'k') val = 2;
+			}
+
+			if (val == this._phys) return;
+
+			if (this._deleted) {
+				throw new Error('Cannot change the collider type of a sprite that was deleted.');
+			}
+
+			if (this.watch) this.mod[8] = true;
+
+			if (this.bdID) b2Body_SetType(this.bdID, b2BodyTypes[val]);
+			this._phys = val;
+		}
+
+		_parseColor(val) {
+			// false if color was copied with Object.assign
+			if (val instanceof p5.Color) {
+				return val;
+			} else if (typeof val != 'object' && val.length == 1) {
+				return $.colorPal(val);
+			}
+			return $.color(val);
+		}
+
+		get color() {
+			return this._color;
+		}
+		set color(val) {
+			if (this.watch) this.mod[9] = true;
+			this._color = this._parseColor(val);
+		}
+
+		get colour() {
+			return this._color;
+		}
+		set colour(val) {
+			this.color = val;
+		}
+
+		get fill() {
+			return this._color;
+		}
+		set fill(val) {
+			this.color = val;
+		}
+
+		get stroke() {
+			return this._stroke;
+		}
+		set stroke(val) {
+			if (this.watch) this.mod[29] = true;
+			this._stroke = this._parseColor(val);
+		}
+
+		get strokeWeight() {
+			return this._strokeWeight;
+		}
+		set strokeWeight(val) {
+			if (this.watch) this.mod[30] = true;
+			this._strokeWeight = val;
+		}
+
+		get textColor() {
+			return this._textFill;
+		}
+		set textColor(val) {
+			if (this.watch) this.mod[32] = true;
+			this._textFill = this._parseColor(val);
+		}
+		get textColour() {
+			return this._textFill;
+		}
+		set textColour(val) {
+			this.textColor = val;
+		}
+
+		get textFill() {
+			return this._textFill;
+		}
+		set textFill(val) {
+			this.textColor = val;
+		}
+
+		get textSize() {
+			return this._textSize;
+		}
+		set textSize(val) {
+			if (this.watch) this.mod[33] = true;
+			this._textSize = val;
+		}
+
+		get textStroke() {
+			return this._textStroke;
+		}
+		set textStroke(val) {
+			if (this.watch) this.mod[34] = true;
+			this._textStroke = this._parseColor(val);
+		}
+
+		get textStrokeWeight() {
+			return this._textStrokeWeight;
+		}
+		set textStrokeWeight(val) {
+			if (this.watch) this.mod[35] = true;
+			this._textStrokeWeight = val;
+		}
+
+		get tile() {
+			return this._tile;
+		}
+		set tile(val) {
+			if (this.watch) this.mod[36] = true;
+			this._tile = val;
+		}
+
+		get bearing() {
+			return this._bearing;
+		}
+		set bearing(val) {
+			if (this.watch) this.mod[6] = true;
+			this._bearing = val;
+		}
+
+		get debug() {
+			return this._debug;
+		}
+		set debug(val) {
+			if (this.watch) this.mod[10] = true;
+			this._debug = val;
+		}
+
+		get deleted() {
+			return this._deleted;
+		}
+		set deleted(val) {
+			if (!val || this._deleted) return;
+			if (this.watch) this.mod[23] = true;
+			this._deleted = true;
+			this._remove();
+		}
+
+		get density() {
+			if (!this._shapes.length) return 1;
+			return b2Shape_GetDensity(this._shapes[0].id);
+		}
+		set density(val) {
+			if (this.watch) this.mod[11] = true;
+			for (let shape of this._shapes) {
+				b2Shape_SetDensity(shape.id, val, true);
+			}
+		}
+
+		_getDirectionAngle(name) {
+			name = name.toLowerCase().replaceAll(/[ _-]/g, '');
+			let dirs = {
+				up: -90,
+				down: 90,
+				left: 180,
+				right: 0,
+				upright: -45,
+				rightup: -45,
+				upleft: -135,
+				leftup: -135,
+				downright: 45,
+				rightdown: 45,
+				downleft: 135,
+				leftdown: 135,
+				forward: this.rotation,
+				backward: this.rotation + 180
+			};
+			let val = dirs[name];
+			if ($._angleMode == 'radians') val *= $._DEGTORAD;
+			return val;
+		}
+
+		get direction() {
+			return this._vel.direction();
+		}
+		set direction(val) {
+			if (this.watch) this.mod[12] = true;
+			if (typeof val == 'string') {
+				this._heading = val;
+				val = this._getDirectionAngle(val);
+			}
+			const speed = this._vel.mag();
+			if (speed) {
+				this._setVel($.cos(val) * speed, $.sin(val) * speed);
+				this._vel._magCached = false;
+			}
+			this._vel._direction = val;
+			this._vel._directionCached = true;
+		}
+
+		get drag() {
+			return this.body?.getLinearDamping();
+		}
+		set drag(val) {
+			if (this.watch) this.mod[13] = true;
+			if (this.body) this.body.setLinearDamping(val);
+		}
+
+		get draw() {
+			return this._display;
+		}
+		set draw(val) {
+			this._userDefinedDraw = true;
+			this._draw = val;
+		}
+
+		get friction() {
+			if (!this._shapes.length) return 0.5;
+			return b2Shape_GetFriction(this._shapes[0].id);
+		}
+		set friction(val) {
+			if (this.watch) this.mod[14] = true;
+			for (let shape of this._shapes) {
+				b2Shape_SetFriction(shape.id, val);
+			}
+		}
+
+		get heading() {
+			return this._heading;
+		}
+		set heading(val) {
+			this.direction = val;
+		}
+
+		get image() {
+			return this._img || this._ani?.frameImage;
+		}
+		set image(img) {
+			if (typeof img == 'string') {
+				if (!img.includes('.')) {
+					img = new $.EmojiImage(img, this.w);
+				} else img = $.loadImage(img);
+			}
+			this._img = this._extendImage(img);
+			this._hasImagery = true;
+		}
+
+		_extendImage(img) {
+			img.offset ??= { x: 0, y: 0 };
+			img._scale ??= { x: 1, y: 1 };
+			if (!img.scale) {
+				Object.defineProperty(img, 'scale', {
+					get: () => img._scale,
+					set: (val) => {
+						if (typeof val == 'number') val = { x: val, y: val };
+						img._scale = val;
+					}
+				});
+			}
+			return img;
+		}
+
+		get isMoving() {
+			return this.vel.x != 0 || this.vel.y != 0;
+		}
+
+		get isSuperFast() {
+			return b2Body_IsBullet(this.bdID);
+		}
+		set isSuperFast(val) {
+			if (this.watch) this.mod[16] = true;
+			b2Body_SetBullet(this.bdID, val);
+		}
+
+		get layer() {
+			return this._layer;
+		}
+		set layer(val) {
+			if (this.watch) this.mod[17] = true;
+			this._layer = val;
+		}
+
+		get life() {
+			return this._life;
+		}
+		set life(val) {
+			if (this.watch) this.mod[18] = true;
+			this._life = val;
+		}
+
+		get mass() {
+			return this.body?.getMass();
+		}
+		set mass(val) {
+			if (this.watch) this.mod[19] = true;
+			const com = new b2Vec2(this.body.getLocalCenter());
+			const t = { I: 0, center: com, mass: 0 };
+			this.body.getMassData(t);
+			t.mass = val > 0 ? val : 0.00000001;
+			this.body.setMassData(t);
+			delete this._massUndef;
+		}
+
+		resetMass() {
+			if (!this.body) return;
+			let com = new b2Vec2(this.body.getLocalCenter());
+
+			if (this.watch) this.mod[19] = true;
+			this.body.resetMassData();
+
+			// reset the center of mass to the sprite's center
+			this.body.setMassData({
+				mass: this.body.getMass(),
+				center: com,
+				I: this.body.getInertia()
+			});
+		}
+
+		resetCenterOfMass() {
+			if (this.watch) this.mod[19] = true;
+			this.body.resetMassData();
+
+			let { x, y } = this.body.getLocalCenter();
+			if (x == 0 && y == 0) return;
+			this.__offsetCenterBy(-x, -y);
+
+			// again? yes, to set local center to (0, 0)
+			this.body.resetMassData();
+
+			let pos = this.body.getPosition();
+			this.body.setPosition({ x: pos.x + x, y: pos.y + y });
+		}
+
+		get offset() {
+			return this._offset;
+		}
+		set offset(val) {
+			val.x ??= this._offset._x;
+			val.y ??= this._offset._y;
+			if (val.x == this._offset._x && val.y == this._offset._y) return;
+			if (this.watch) this.mod[21] = true;
+			this._offsetCenterBy(val.x - this._offset._x, val.y - this._offset._y);
+		}
+
+		get opacity() {
+			return this._opacity ?? 1;
+		}
+		set opacity(val) {
+			if (this.watch) this.mod[41] = true;
+			this._opacity = val;
+		}
+
+		get previousPosition() {
+			return this.prevPos;
+		}
+		set previousPosition(val) {
+			this.prevPos = val;
+		}
+
+		get previousRotation() {
+			return this.prevRotation;
+		}
+		set previousRotation(val) {
+			this.prevRotation = val;
+		}
+
+		get pixelPerfect() {
+			return this._pixelPerfect;
+		}
+		set pixelPerfect(val) {
+			if (this.watch) this.mod[22] = true;
+			this._pixelPerfect = val;
+		}
+
+		get rotation() {
+			if (!this._physicsEnabled || !usePhysics) return this._rotation || 0;
+			let val = b2Body_GetRotation(this.bdID).GetAngle();
+			if (friendlyRounding) val = fixRoundAngular(val);
+			return $._angleMode == DEGREES ? $.degrees(val) : val;
+		}
+		set rotation(val) {
+			this._rotation = val;
+
+			if (this._physicsEnabled) {
+				if ($._angleMode == DEGREES) val = (val % 360) * $._DEGTORAD;
+				b2Body_SetTransform(this.bdID, b2Body_GetPosition(this.bdID), b2MakeRot(val));
+			}
+		}
+
+		get rotationDrag() {
+			return this.body?.getAngularDamping();
+		}
+		set rotationDrag(val) {
+			if (this.watch) this.mod[24] = true;
+			this.body.setAngularDamping(val);
+		}
+
+		get rotationLock() {
+			return this.body?.isFixedRotation();
+		}
+		set rotationLock(val) {
+			if (this.watch) this.mod[25] = true;
+			let mass = this.mass;
+			this.body.setFixedRotation(val);
+			this.mass = mass;
+		}
+
+		get rotationSpeed() {
+			if (this._physicsEnabled) {
+				let val = b2Body_GetAngularVelocity(this.bdID) / 60;
+				return $._angleMode == DEGREES ? $.degrees(val) : val;
+			}
+			return this._rotationSpeed;
+		}
+		set rotationSpeed(val) {
+			if (this._physicsEnabled) {
+				val *= 60;
+				if ($._angleMode == DEGREES) val *= $._DEGTORAD;
+				b2Body_SetAngularVelocity(this.bdID, val);
+			} else this._rotationSpeed = val;
+		}
+
+		/*
+		 * Resizes the the sprite's shapes.
+		 * @param scalers {x, y}
+		 */
+		_resizeShapes(scalars) {
+			let geom;
+
+			for (let shape of this._shapes) {
+				if (shape.type == 0) {
+					shape.hw *= scalars.x;
+					shape.hh *= scalars.y;
+					shape.offset.x *= scalars.x;
+					shape.offset.y *= scalars.y;
+					geom = b2MakeOffsetBox(shape.hw, shape.hh, shape.offset, ZERO_ROT);
+					b2Shape_SetPolygon(shape.id, geom);
+				} else if (shape.type == 1) {
+					if (scalars.x != 1) shape.radius *= scalars.x;
+					else shape.radius *= scalars.y;
+					geom = new b2Circle();
+					geom.center = shape.offset;
+					geom.radius = shape.radius;
+					b2Shape_SetCircle(shape.id, geom);
+				}
+			}
+
+			// for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
+			// 	if (fxt.m_isSensor) continue;
+			// 	let sh = fxt.m_shape;
+			// 	if (sh.m_type == 'circle') {
+			// 		if (scalars.x != 1) sh.m_radius *= scalars.x;
+			// 		else sh.m_radius *= scalars.y;
+			// 	} else {
+			// 		for (let vert of sh.m_vertices) {
+			// 			vert.x *= scalars.x;
+			// 			vert.y *= scalars.y;
+			// 		}
+			// 	}
+			// }
+			// if (this._widthUndef || this._heightUndef) this.resetMass();
+			// this.body.synchronizeFixtures();
+		}
+
+		get scale() {
+			return this._scale;
+		}
+		set scale(val) {
+			if (val == 0) val = 0.01;
+			if (typeof val === 'number') {
+				val = { x: val, y: val };
+			} else {
+				val.x ??= this._scale._x;
+				val.y ??= this._scale._y;
+			}
+			if (val.x == this._scale._x && val.y == this._scale._y) return;
+
+			if (this.watch) this.mod[26] = true;
+
+			let scalars = {
+				x: Math.abs(val.x / this._scale._x),
+				y: Math.abs(val.y / this._scale._y)
+			};
+
+			this._w *= scalars.x;
+			this._hw *= scalars.x;
+			if (this._h) {
+				this._h *= scalars.y;
+				this._hh *= scalars.y;
+			}
+			this._resizeShapes(scalars);
+
+			this._scale._x = val.x;
+			this._scale._y = val.y;
+			this._scale._avg = val.x;
+		}
+
+		get sleeping() {
+			if (this.body) return !this.body.isAwake();
+			return undefined;
+		}
+		set sleeping(val) {
+			if (!this.body) return;
+			if (this.watch) this.mod[28] = true;
+			this.body.setAwake(!val);
+		}
+
+		get speed() {
+			return this._vel.mag();
+		}
+		set speed(val) {
+			this._vel._mag = val;
+			this._vel._magCached = true;
+
+			if (!val) return this._setVel(0, 0);
+			const mag = this._vel.mag();
+			if (mag > 0) {
+				this._setVel((this._vel.x / mag) * val, (this._vel.y / mag) * val);
+			} else {
+				const dir = this._vel.direction();
+				this._setVel($.cos(dir) * val, $.sin(dir) * val);
+			}
+		}
+
+		setSpeedAndDirection(speed, direction) {
+			this._setVel($.cos(direction) * speed, $.sin(direction) * speed);
+			this._vel._mag = speed;
+			this._vel._direction = direction;
+			this._vel._magCached = this._vel._directionCached = true;
+		}
+
+		get tint() {
+			return this._tint;
+		}
+		set tint(val) {
+			if (this.watch) this.mod[38] = true;
+			this._tint = this._parseColor(val);
+		}
+
+		get tintColor() {
+			return this._tint;
+		}
+		set tintColor(val) {
+			this.tint = val;
+		}
+
+		set vertices(val) {
+			if (this._phys == 3) {
+				throw new Error('Cannot set vertices of a sprite with collider type of "none".');
+			}
+			if (this.watch) this.mod[27] = true;
+
+			this._deleteFixtures();
+
+			this._originMode = 'start';
+			this.addCollider(val);
+			if (this._hasSensors) {
+				this.addDefaultSensors();
+			}
+		}
+		get vertices() {
+			return this._getVertices();
+		}
+
+		_getVertices(internalUse) {
+			let f = this.fixture;
+			let s = f.getShape();
+			let v = [...s.m_vertices];
+			if (s.m_type == 'polygon') v.unshift(v.at(-1));
+			let x = this.x;
+			let y = this.y;
+			for (let i = 0; i < v.length; i++) {
+				let arr = [v[i].x * meterSize + x, v[i].y * meterSize + y];
+				if (friendlyRounding) {
+					arr[0] = fixRound(arr[0]);
+					arr[1] = fixRound(arr[1]);
+				}
+				if (internalUse) v[i] = arr;
+				else v[i] = $.createVector(arr[0], arr[1]);
+			}
+			return v;
+		}
+
+		get visible() {
+			return this._visible;
+		}
+		set visible(val) {
+			if (this.watch) this.mod[39] = true;
+			this._visible = val;
+		}
+
+		get x() {
+			// let val = this._posX : b2Body_GetPosition(this.bdID).x;
+			let val = this._posX;
+			return friendlyRounding ? fixRound(val) : val;
+		}
+		set x(val) {
+			this._posX = val;
+
+			if (this._physicsEnabled) {
+				let pos = scaleTo(val, this.y);
+				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
+			}
+		}
+
+		get y() {
+			let val = this._posY;
+			return friendlyRounding ? fixRound(val) : val;
+		}
+		set y(val) {
+			this._posY = val;
+
+			if (_this._physicsEnabled) {
+				let pos = scaleTo(this.x, val);
+				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
+			}
+		}
+
+		get pos() {
+			return this._pos;
+		}
+		set pos(val) {
+			if (this._physicsEnabled) {
+				b2Body_SetTransform(this.bdID, scaleTo(val.x, val.y), b2Body_GetRotation(this.bdID));
+			}
+			this._posX = val.x;
+			this._posY = val.y;
+		}
+
+		get position() {
+			return this._pos;
+		}
+		set position(val) {
+			this.pos = val;
+		}
+
+		get canvasPos() {
+			return this._canvasPos;
+		}
+
+		get w() {
+			return this._w;
+		}
+		set w(val) {
+			if (val < 0) val = 0.01;
+			if (val == this._w) return;
+			if (this.watch) this.mod[40] = true;
+
+			this._resizeShapes({ x: val / this._w, y: 1 });
+			this._w = val;
+			this._hw = val * 0.5;
+			delete this._widthUndef;
+			delete this._dimensionsUndef;
+		}
+
+		get hw() {
+			return this._hw;
+		}
+		set hw(val) {
+			throw new FriendlyError('Sprite.hw');
+		}
+
+		get width() {
+			return this._w;
+		}
+		set width(val) {
+			this.w = val;
+		}
+
+		get halfWidth() {
+			return this.hw;
+		}
+		set halfWidth(val) {
+			throw new FriendlyError('Sprite.hw');
+		}
+
+		get h() {
+			return this._h || this._w;
+		}
+		set h(val) {
+			if (val < 0) val = 0.01;
+			if (val == this._h) return;
+			if (this.watch) this.mod[15] = true;
+			this._resizeShapes({ x: 1, y: val / this._h });
+			this._h = val;
+			this._hh = val * 0.5;
+			delete this._heightUndef;
+			delete this._dimensionsUndef;
+		}
+
+		get hh() {
+			return this._hh || this._hw;
+		}
+		set hh(val) {
+			throw new FriendlyError('Sprite.hh');
+		}
+
+		get height() {
+			return this.h;
+		}
+		set height(val) {
+			this.h = val;
+		}
+
+		get halfHeight() {
+			return this.hh;
+		}
+		set halfHeight(val) {
+			throw new FriendlyError('Sprite.hh');
+		}
+
+		get d() {
+			return this._w;
+		}
+		set d(val) {
+			if (val < 0) val = 0.01;
+			if (this._w == val) return;
+
+			if (this.watch) this.mod[40] = true;
+
+			if (this._dimensionsUndef) {
+				for (let shape of this._shapes) b2DestroyShape(shape.id, false);
+				this._add(false, 0, 0, val);
+				this._dimensionsUndef = false;
+			} else {
+				let scalar = val / this._w;
+				this._resizeShapes({ x: scalar, y: scalar });
+			}
+
+			this._w = val;
+			this._hw = val * 0.5;
+		}
+
+		get diameter() {
+			return this._w;
+		}
+		set diameter(val) {
+			this.d = val;
+		}
+
+		get r() {
+			return this._hw;
+		}
+		set r(val) {
+			this.d = val * 2;
+		}
+
+		get radius() {
+			return this._hw;
+		}
+		set radius(val) {
+			this.d = val * 2;
+		}
+
+		/*
+		 * Validates convexity.
+		 */
+		_isConvexPoly(vecs) {
+			loopk: for (let k = 0; k < 2; k++) {
+				if (k == 1) vecs = vecs.reverse();
+				for (let i = 0; i < vecs.length; ++i) {
+					const i1 = i;
+					const i2 = i < vecs.length - 1 ? i1 + 1 : 0;
+					const p = vecs[i1];
+					const e = { x: vecs[i2].x - p.x, y: vecs[i2].y - p.y };
+
+					for (let j = 0; j < vecs.length; ++j) {
+						if (j == i1 || j == i2) {
+							continue;
+						}
+
+						const v = { x: vecs[j].x - p.x, y: vecs[j].y - p.y };
+						const c = e.x * v.y - e.y * v.x;
+						if (c < 0.0) {
+							if (k == 0) continue loopk;
+							else return false;
+						}
+					}
+				}
+				break;
+			}
+			return true;
+		}
+
+		get update() {
+			return this._update;
+		}
+		set update(val) {
+			this._customUpdate = val;
+		}
+
+		get postDraw() {
+			return this._postDraw;
+		}
+		set postDraw(val) {
+			this._customPostDraw = val;
+		}
+
+		get vel() {
+			return this._vel;
+		}
+		set vel(val) {
+			this._setVel(val.x, val.y);
+			this._vel._magCached = this._vel._directionCached = false;
+		}
+
+		_setVel(x, y) {
+			if (this._physicsEnabled) {
+				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
+			}
+			this._velX = x;
+			this._velY = y;
+			this._velSynced = true;
+		}
+
+		get velocity() {
+			return this._vel;
+		}
+		set velocity(val) {
+			this.vel = val;
+		}
+
+		get gravityScale() {
+			return this.body?.getGravityScale();
+		}
+		set gravityScale(val) {
+			if (!this.body) return;
+			if (this.watch) this.mod[42] = true;
+			this.body.setGravityScale(val);
+		}
+
+		_update() {
+			if (this._customUpdate) this._customUpdate();
+			if (this.autoUpdate) this.autoUpdate = null;
+		}
+
+		_step() {
+			this.life -= timeScale;
+			if (this._life != 2147483647 && this._life <= 0) {
+				this.delete();
+			} else if (!this._physicsEnabled || !usePhysics) {
+				this._posX += this._velX * timeScale;
+				this._posY += this._velY * timeScale;
+				this._rotation += this._rotationSpeed * timeScale;
+			}
+
+			if (this.watch) {
+				if (this._posX != this.prevX) this.mod[0] = this.mod[2] = true;
+				if (this._posY != this.prevY) this.mod[1] = this.mod[2] = true;
+				if (this.rotation != this.prevRotation) {
+					this.mod[3] = this.mod[4] = true;
+				}
+			}
+
+			if (!this._physicsEnabled && !this._deleted) return;
+
+			this.__step();
+		}
+
+		//      a -> b
+		// sprite -> sprite
+		// sprite -> group
+		//  group -> group
+		__step() {
+			// for each type of collision and overlap event
+			let a = this;
+			let b;
+			for (let event in eventTypes) {
+				for (let k in this[event]) {
+					if (k >= 1000) {
+						// if a is group or a is sprite and a._uid >= k
+						if (a._isGroup || a._uid >= k) continue;
+						b = $.q5play.sprites[k];
+					} else {
+						// if a is group and a._uid >= k
+						if (a._isGroup && a._uid >= k) continue;
+						b = $.q5play.groups[k];
+					}
+
+					let v = a[event][k] + 1;
+					if (!b || v == 0 || v == -2) {
+						delete a[event][k];
+						if (b) delete b[event][a._uid];
+						continue;
+					}
+					this[event][k] = v;
+					b[event][a._uid] = v;
+				}
+			}
+		}
+
+		___step() {
+			let a = this;
+			let b, contactType, shouldOverlap, cb;
+			let checkCollisions = true;
+			for (let event in eventTypes) {
+				for (let k in this[event]) {
+					if (k >= 1000) {
+						if (a._isGroup || a._uid >= k) continue;
+						b = $.q5play.sprites[k];
+					} else {
+						if (a._isGroup && a._uid >= k) continue;
+						b = $.q5play.groups[k];
+					}
+
+					// contact callbacks can only be called between sprites
+					if (a._isGroup || b?._isGroup) continue;
+
+					// is there even a chance that a contact callback exists?
+					shouldOverlap = a._hasOverlap[b._uid] ?? b._hasOverlap[a._uid];
+					if ((checkCollisions && shouldOverlap !== false) || (!checkCollisions && shouldOverlap !== true)) {
+						continue;
+					}
+
+					let v = a[event][k];
+					for (let i = 0; i < 3; i++) {
+						if (i == 0 && v != 1 && v != -3) continue;
+						if (i == 1 && v == -1) continue;
+						if (i == 2 && v >= 1) continue;
+						contactType = eventTypes[event][i];
+
+						let la = $.q5play[contactType][a._uid];
+						if (la) {
+							cb = la[b._uid];
+							if (cb) cb.call(a, a, b, v);
+							for (let g of b.groups) {
+								cb = la[g._uid];
+								if (cb) cb.call(a, a, b, v);
+							}
+						}
+
+						let lb = $.q5play[contactType][b._uid];
+						if (lb) {
+							cb = lb[a._uid];
+							if (cb) cb.call(b, b, a, v);
+							for (let g of a.groups) {
+								cb = lb[g._uid];
+								if (cb && (!la || cb != la[g._uid])) {
+									cb.call(b, b, a, v);
+								}
+							}
+						}
+					}
+				}
+				checkCollisions = false;
+			}
+
+			// all of q5play's references to a deleted sprite can be deleted
+			// only if the sprite was not colliding or overlapping with
+			// anything or its last collided and overlapped events were handled
+			if (this._deleted) {
+				if (Object.keys(this._collisions).length == 0 && Object.keys(this._overlappers).length == 0) {
+					if (this._isSprite) delete $.q5play.sprites[this._uid];
+					else if (!$.q5play.storeDeletedGroupRefs) delete $.q5play.groups[this._uid];
+
+					// remove contact events
+					for (let eventType in eventTypes) {
+						for (let contactType of eventTypes[eventType]) {
+							delete $.q5play[contactType][this._uid];
+						}
+					}
+				}
+			}
+		}
+
+		/*
+		 * Applies translation, rotation, and scaling
+		 * before the sprite's `draw` function is called.
+		 */
+		_display() {
+			if (!this._hasImagery) return;
+
+			let x = this._posX;
+			let y = this._posY;
+
+			if (this._pixelPerfect) {
+				let w, h;
+				if (this.ani?.length) {
+					w = this.ani[this.ani._frame].w;
+					h = this.ani[this.ani._frame].h;
+				} else {
+					w = this.img._w;
+					h = this.img._h;
+				}
+				if (w % 2 == 0) x = Math.round(x);
+				else x = Math.round(x - 0.5) + 0.5;
+				if (h % 2 == 0) y = Math.round(y);
+				else y = Math.round(y - 0.5) + 0.5;
+			}
+
+			for (let j of this.joints) {
+				if (!j.visible) {
+					j.visible ??= true;
+					continue;
+				}
+				if (this._uid == j.spriteA._uid) {
+					if (!j.spriteB._visible || this.layer <= j.spriteB.layer) {
+						j._display();
+					}
+				} else if (!j.spriteA._visible || this.layer < j.spriteA.layer) {
+					j._display();
+				}
+			}
+
+			if (this._opacity == 0) return;
+
+			let camOn = $.camera.isActive;
+
+			if (camOn) $.pushMatrix();
+
+			$.translate(x, y);
+
+			let rot = this._rotation;
+			if (rot) $.rotate(rot);
+
+			if (this._shouldScale) $.scale(this._scale._x, this._scale._y);
+
+			if (this._tint) $.tint(this._tint);
+			if (this._opacity) $.opacity(this._opacity);
+
+			this._draw();
+
+			if (camOn) $.popMatrix();
+			else $.resetMatrix();
+			$.noTint();
+			$.opacity(1);
+
+			this._cameraActiveWhenDrawn = camOn;
+			if (!$.camera.isActive) $.camera._wasOff = true;
+
+			this._visible = true;
+			$.q5play.spritesDrawn++;
+			if (this.autoDraw) this.autoDraw = null;
+		}
+
+		// default draw
+		__draw() {
+			let g = this.ani || this._img;
+
+			if (this._offset._x || this._offset._y) {
+				$.translate(this._offset._x, this._offset._y);
+			}
+
+			let shouldScale = g._scale._avg != 1;
+
+			if (shouldScale) $.scale(g._scale._x, g._scale._y);
+
+			let ox = g.offset.x;
+			let oy = g.offset.y;
+
+			if (this.ani) $.animation(g, ox, oy);
+			else $.image(g, ox, oy);
+		}
+
+		_postDraw() {
+			for (let prop in this.mouse) {
+				if (this.mouse[prop] == -1) this.mouse[prop] = 0;
+			}
+
+			if (this._customPostDraw) this._customPostDraw();
+
+			this.autoDraw ??= true;
+			this.autoUpdate ??= true;
+		}
+
+		_args2Vec(x, y) {
+			if (Array.isArray(x)) {
+				return { x: x[0], y: x[1] };
+			} else if (typeof x == 'object') {
+				y = x.y;
+				x = x.x;
+			}
+			return { x: x || 0, y: y || 0 };
+		}
+
+		_parseForceArgs() {
+			let args = arguments;
+			if (typeof args[0] == 'number' && (args.length == 1 || typeof args[1] != 'number')) {
+				args[3] = args[2];
+				args[2] = args[1];
+				args[1] = $.sin(this._bearing) * args[0];
+				args[0] = $.cos(this._bearing) * args[0];
+			} else if (args.length == 2 && typeof args[1] != 'number') {
+				args[2] = args[1];
+				args[1] = undefined;
+			}
+			let o = {};
+			o.forceVector = new b2Vec2(this._args2Vec(args[0], args[1]));
+			if (args[2] !== undefined) {
+				o.poa = this._args2Vec(args[2], args[3]);
+				o.poa = scaleTo(o.poa.x, o.poa.y);
+			}
+			return o;
+		}
+
+		applyForce(amount, origin) {
+			if (!this.body) return;
+			let { forceVector, poa } = this._parseForceArgs(...arguments);
+			if (!poa) this.body.applyForceToCenter(forceVector);
+			else this.body.applyForce(forceVector, poa);
+		}
+
+		applyForceScaled(amount, origin) {
+			if (!this.body) return;
+			let { forceVector, poa } = this._parseForceArgs(...arguments);
+			forceVector.mul(this.mass);
+			if (!poa) this.body.applyForceToCenter(forceVector);
+			else this.body.applyForce(forceVector, poa);
+		}
+
+		attractTo(x, y, force, radius, easing) {
+			if (!this.body || this._phys != 0) {
+				console.error('attractTo can only be used on sprites with dynamic colliders');
+				return;
+			}
+			if (typeof x != 'number') {
+				let obj = x;
+				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
+				force = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			if (this.x == x && this.y == y) return;
+
+			let a = y - this.y;
+			let b = x - this.x;
+			let c = Math.sqrt(a * a + b * b);
+
+			let percent = force / c;
+
+			let forceVector = new b2Vec2(b * percent, a * percent);
+			this.body.applyForceToCenter(forceVector);
+		}
+
+		repelFrom(x, y, force, radius, easing) {
+			if (!this.body || this._phys != 0) {
+				console.error('repelFrom can only be used on sprites with dynamic colliders');
+				return;
+			}
+			if (typeof x != 'number') {
+				let obj = x;
+				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
+				force = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			this.attractTo(x, y, -force, radius, easing);
+		}
+
+		applyTorque(val) {
+			if (!this.body) return;
+			this.body.applyTorque(val);
+		}
+
+		angleTo(x, y) {
+			if (typeof x == 'object') {
+				let obj = x;
+				if (obj == $.mouse && !$.mouse.isActive) return 0;
+				if (obj.x === undefined || obj.y === undefined) {
+					console.error(
+						'sprite.angleTo ERROR: rotation destination not defined, object given with no x or y properties'
+					);
+					return 0;
+				}
+				y = obj.y;
+				x = obj.x;
+			}
+			return $.atan2(y - this.y, x - this.x);
+		}
+
+		rotationToFace(x, y, facing) {
+			if (typeof x == 'object') {
+				facing = y;
+				y = x.y;
+				x = x.x;
+			}
+			// if the sprite is too close to the position, don't rotate
+			if (Math.abs(x - this.x) < 0.01 && Math.abs(y - this.y) < 0.01) {
+				return 0;
+			}
+			return this.angleTo(x, y) + (facing || 0);
+		}
+
+		angleToFace(x, y, facing) {
+			let ang = this.rotationToFace(x, y, facing);
+			return minAngleDist(ang, this._rotation);
+		}
+
+		remove() {
+			this.deleted = true;
+		}
+
+		_remove() {
+			if (this.body) b2DestroyBody(this.bdID);
+			this.body = false;
+
+			// when deleted from the world also remove all the sprite
+			// from all its groups
+			for (let g of this.groups) {
+				g.remove(this);
+			}
+		}
+
+		toString() {
+			return 's' + this.idNum;
+		}
+
+		_setContactCB(target, cb, contactType, eventType) {
+			let type;
+			if (contactType == 0) type = eventTypes._collisions[eventType];
+			else type = eventTypes._overlappers[eventType];
+
+			let ledger = $.q5play[type];
+
+			let l = (ledger[this._uid] ??= {});
+
+			if (l[target._uid] == cb) return;
+			l[target._uid] = cb;
+
+			l = ledger[target._uid];
+			if (!l || !l[this._uid]) return;
+			delete l[this._uid];
+			if (Object.keys(l).length == 0) {
+				delete ledger[target._uid];
+			}
+		}
+
+		_validateCollideParams(target, cb) {
+			if (!target) {
+				throw new FriendlyError('Sprite.collide', 2);
+			}
+			if (!target._isSprite && !target._isGroup) {
+				throw new FriendlyError('Sprite.collide', 0, [target]);
+			}
+			if (cb && typeof cb != 'function') {
+				throw new FriendlyError('Sprite.collide', 1, [cb]);
+			}
+		}
+
+		_ensureCollide(target, cb, type) {
+			if (this._hasOverlap[target._uid] !== false) {
+				this._hasOverlap[target._uid] = false;
+			}
+			if (target._hasOverlap[this._uid] !== false) {
+				target._hasOverlap[this._uid] = false;
+				if (target._isGroup) {
+					for (let s of target) {
+						s._hasOverlap[this._uid] = false;
+						this._hasOverlap[s._uid] = false;
+					}
+				}
+			}
+		}
+
+		collide(target, callback) {
+			return this.collides(target, callback);
+		}
+
+		collides(target, callback) {
+			this._validateCollideParams(target, callback);
+			this._ensureCollide(target);
+			if (callback) this._setContactCB(target, callback, 0, 0);
+			return this._collisions[target._uid] == 1 || this._collisions[target._uid] <= -3;
+		}
+
+		colliding(target, callback) {
+			this._validateCollideParams(target, callback);
+			this._ensureCollide(target);
+			if (callback) this._setContactCB(target, callback, 0, 1);
+			let val = this._collisions[target._uid];
+			if (val <= -3) return 1;
+			return val > 0 ? val : 0;
+		}
+
+		collided(target, callback) {
+			this._validateCollideParams(target, callback);
+			this._ensureCollide(target);
+			if (callback) this._setContactCB(target, callback, 0, 2);
+			return this._collisions[target._uid] <= -1;
+		}
+
+		_validateOverlapParams(target, cb) {
+			if (!target) {
+				throw new FriendlyError('Sprite.overlap', 2);
+			}
+			if (!target._isSprite && !target._isGroup) {
+				throw new FriendlyError('Sprite.overlap', 0, [target]);
+			}
+			if (cb && typeof cb != 'function') {
+				throw new FriendlyError('Sprite.overlap', 1, [cb]);
+			}
+		}
+
+		_ensureOverlap(target) {
+			if (!this._hasSensors) this.addDefaultSensors();
+			if (!target._hasSensors) {
+				if (target._isSprite) {
+					target.addDefaultSensors();
+				} else {
+					for (let s of target) {
+						if (!s._hasSensors) s.addDefaultSensors();
+					}
+					target._hasSensors = true;
+				}
+			}
+
+			if (!this._hasOverlap[target._uid]) {
+				this._removeContactsWith(target);
+				this._hasOverlap[target._uid] = true;
+			}
+			if (!target._hasOverlap[this._uid]) {
+				target._removeContactsWith(this);
+				target._hasOverlap[this._uid] = true;
+				if (target._isGroup) {
+					for (let s of target) {
+						s._hasOverlap[this._uid] = true;
+						this._hasOverlap[s._uid] = true;
+					}
+				}
+			}
+		}
+
+		overlap(target, callback) {
+			return this.overlaps(target, callback);
+		}
+
+		overlaps(target, callback) {
+			this._validateOverlapParams(target, callback);
+			this._ensureOverlap(target);
+			if (callback) this._setContactCB(target, callback, 1, 0);
+			return this._overlappers[target._uid] == 1 || this._overlappers[target._uid] <= -3;
+		}
+
+		overlapping(target, callback) {
+			this._validateOverlapParams(target, callback);
+			this._ensureOverlap(target);
+			if (callback) this._setContactCB(target, callback, 1, 1);
+			let val = this._overlappers[target._uid];
+			if (val <= -3) return 1;
+			return val > 0 ? val : 0;
+		}
+
+		overlapped(target, callback) {
+			this._validateOverlapParams(target, callback);
+			this._ensureOverlap(target);
+			if (callback) this._setContactCB(target, callback, 1, 2);
+			return this._overlappers[target._uid] <= -1;
+		}
+
+		_removeContactsWith(target) {
+			if (target._isGroup) {
+				for (let s of target) {
+					this._removeContactsWith(s);
+				}
+			} else {
+				this.__removeContactsWith(target);
+			}
+		}
+
+		__removeContactsWith(o) {
+			if (!this.body) return;
+			for (let ce = this.body.getContactList(); ce; ce = ce.next) {
+				let c = ce.contact;
+				if (c.m_fixtureA.m_body.sprite._uid == o._uid || c.m_fixtureB.m_body.sprite._uid == o._uid) {
+					$.world.destroyContact(c);
+				}
+			}
+		}
+
+		/*
+		 * Internal method called anytime a new sensor is created. Ensures
+		 * that sensors are moved to the back of the fixture list.
+		 */
+		_sortFixtures() {
+			let colliders = null;
+			let sensors = null;
+			let lastColl, lastSens;
+			for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
+				if (fxt.m_isSensor) {
+					if (!sensors) sensors = fxt;
+					else sensors.m_next = fxt;
+					lastSens = fxt;
+				} else {
+					if (!colliders) colliders = fxt;
+					else colliders.m_next = fxt;
+					lastColl = fxt;
+				}
+			}
+			if (sensors) lastSens.m_next = null;
+			if (colliders) lastColl.m_next = sensors;
+			this.body.m_fixtureList = colliders || sensors;
+		}
+
+		addDefaultSensors() {
+			let shape;
+			if (this.body && this.fixtureList) {
+				for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
+					if (fxt.m_isSensor) continue;
+					shape = fxt.m_shape;
+					this.body.createFixture({
+						shape: shape,
+						isSensor: true
+					});
+				}
+				this._sortFixtures();
+			} else {
+				this.addSensor();
+			}
+			this._hasSensors = true;
+		}
+
+		distanceTo(o) {
+			return $.dist(this.x, this.y, o.x, o.y);
+		}
+	};
+
+	// only used by the q5play-pro Netcode class to convert sprite data to binary
+	$.Sprite.propTypes = {
+		x: 'Float64', // 0
+		y: 'Float64', // 1
+		vel: 'Vec2', // 2
+		rotation: 'number', // 3
+		rotationSpeed: 'number', // 4
+		allowSleeping: 'boolean', // 5
+		bearing: 'number', // 6
+		bounciness: 'number', // 7
+		type: 'Uint8', // 8
+		color: 'color', // 9
+		debug: 'boolean', // 10
+		density: 'number', // 11
+		direction: 'number', // 12
+		drag: 'number', // 13
+		friction: 'number', // 14
+		h: 'number', // 15 (height)
+		isSuperFast: 'boolean', // 16
+		layer: 'number', // 17
+		life: 'Int32', // 18
+		mass: 'number', // 19
+		physicsEnabled: 'boolean', // 20
+		offset: 'Vec2', // 21
+		pixelPerfect: 'boolean', // 22
+		deleted: 'boolean', // 23
+		rotationDrag: 'number', // 24
+		rotationLock: 'boolean', // 25
+		scale: 'Vec2', // 26
+		shape: 'Uint8', // 27
+		sleeping: 'boolean', // 28
+		stroke: 'color', // 29
+		strokeWeight: 'number', // 30
+		text: 'string', // 31
+		textColor: 'color', // 32
+		textSize: 'number', // 33
+		textStroke: 'color', // 34
+		textStrokeWeight: 'number', // 35
+		tile: 'string', // 36
+		tileSize: 'number', // 37
+		tint: 'color', // 38
+		visible: 'boolean', // 39
+		w: 'number', // 40 (width)
+		opacity: 'number', // 41
+		gravityScale: 'number' // 42
+	};
+
+	$.Sprite.props = Object.keys($.Sprite.propTypes);
+
+	// includes duplicates of some properties
+	$.Sprite.propsAll = $.Sprite.props.concat([
+		'autoDraw',
+		'autoUpdate',
+		'colour',
+		'd',
+		'diameter',
+		'dynamic',
+		'fill',
+		'height',
+		'heading',
+		'kinematic',
+		'resetAnimationsOnChange',
+		'speed',
+		'spriteSheet',
+		'static',
+		'textColour',
+		'textFill',
+		'width'
+	]);
+
+	$.Sprite.types = [$.DYN, $.STA, $.KIN];
+
+	this.Ani = class extends Array {
+		constructor() {
+			super();
+			let args = [...arguments];
+
+			this.name = 'default';
+
+			let owner;
+
+			if (typeof args[0] == 'object' && (args[0]._isSprite || args[0]._isGroup)) {
+				owner = args[0];
+				args = args.slice(1);
+				this._addedToSpriteOrGroup = true;
+			}
+			owner ??= $.allSprites;
+
+			if (typeof args[0] == 'string' && (args[0].length == 1 || !args[0].includes('.'))) {
+				this.name = args[0];
+				args = args.slice(1);
+			}
+
+			this._frame = 0;
+			this._cycles = 0;
+			this.targetFrame = -1;
+			this._resolveLoad = null; // promise resolver for loading
+			this.promise = new Promise((resolve) => {
+				this._resolveLoad = resolve;
+			}); // Use owner's anis if it exists, otherwise use the first group's anis for sprites
+			let anis;
+			if (owner?._anis) {
+				anis = owner._anis;
+			} else if (owner._isSprite) {
+				// Use the sprite's group's anis
+				anis = owner.groups[0]._anis;
+			}
+
+			this.frameDelay = anis?.frameDelay || 4;
+			this.demoMode = anis?.demoMode ?? false;
+
+			this._scale = new Scale();
+
+			this.offset = { x: anis?.offset.x ?? 0, y: anis?.offset.y ?? 0 };
+
+			this.playing = true;
+
+			this.looping = anis?.looping ?? true;
+
+			this.endOnFirstFrame = anis?.endOnFirstFrame ?? false;
+			this.frameChanged = false;
+			this.onComplete = this.onChange = null;
+			this._onComplete = this._onChange = null;
+
+			if (args.length == 0 || typeof args[0] == 'number') return;
+
+			if (anis) anis[this.name] = this;
+			owner.ani = this; // list mode images can be added as a list of arguments or an array
+			if (Array.isArray(args[0]) && typeof args[0][0] == 'string') {
+				args = [...args[0]];
+			}
+
+			// sequence mode - frames parameter must be a string
+			if (args.length == 2 && typeof args[0] == 'string' && typeof args[1] == 'string') {
+				let from = args[0];
+				let to = args[1];
+				let num2;
+
+				let extIndex = from.lastIndexOf('.');
+				let digits1 = 0;
+				let digits2 = 0;
+
+				// start from ext "."
+				// work backwards to find where the numbers end
+				for (let i = extIndex - 1; i >= 0; i--) {
+					if (!isNaN(from.charAt(i))) digits1++;
+					else break;
+				}
+
+				if (to) {
+					for (let i = to.length - 5; i >= 0; i--) {
+						if (!isNaN(to.charAt(i))) digits2++;
+						else break;
+					}
+				}
+
+				let ext = from.slice(extIndex);
+				let prefix1 = from.slice(0, extIndex - digits1);
+				let prefix2;
+				if (to) prefix2 = to.slice(0, extIndex - digits2);
+
+				// images don't belong to the same sequence
+				// they are just two separate images with numbers
+				if (to && prefix1 != prefix2) {
+					this.push($.loadImage(from));
+					this.push($.loadImage(to));
+				} else {
+					let num1 = parseInt(from.slice(extIndex - digits1, extIndex), 10);
+					num2 ??= parseInt(to.slice(extIndex - digits2, extIndex), 10);
+
+					// swap if inverted
+					if (num2 < num1) {
+						let t = num2;
+						num2 = num1;
+						num1 = t;
+					}
+
+					let fileName;
+					if (!to || digits1 == digits2) {
+						// load all images
+						for (let i = num1; i <= num2; i++) {
+							// Use nf() to number format 'i' into the amount of digits
+							// ex: 14 with 4 digits is 0014
+							fileName = prefix1 + $.nf(i, digits1) + ext;
+							this.push($.loadImage(fileName));
+						}
+					} // case: case img1, img2
+					else {
+						for (let i = num1; i <= num2; i++) {
+							// Use nf() to number format 'i' into four digits
+							fileName = prefix1 + i + ext;
+							this.push($.loadImage(fileName));
+						}
+					}
+				}
+			} // end sequence mode
+
+			// spriteSheet mode - handles (spriteSheetUrl, frames) or (spriteSheetUrl, frames, atlas)
+			else if (
+				(args.length >= 2 && typeof args[0] == 'string' && typeof args[1] == 'number') ||
+				(typeof args.at(-1) != 'string' && !(args.at(-1) instanceof Q5.Image))
+			) {
+				let sheet = owner.spriteSheet;
+				let atlas;
+
+				// New format: (spriteSheetUrl, frames, atlas?) where frames is a number
+				if (typeof args[0] == 'string' && typeof args[1] == 'number') {
+					sheet = args[0];
+					atlas = args[2] || { frameCount: args[1] };
+					// Ensure frameCount is set if atlas is provided without it
+					if (typeof atlas === 'object' && !atlas.frameCount && !atlas.frames) {
+						atlas.frameCount = args[1];
+					}
+				}
+				// Legacy format: (spriteSheetUrl, atlas) or (atlas)
+				else if (args[0] instanceof Q5.Image || typeof args[0] == 'string') {
+					if (args.length >= 3) {
+						throw new FriendlyError('Ani', 1);
+					}
+					sheet = args[0];
+					atlas = args[1];
+				} else {
+					atlas = args[0];
+				}
+
+				let _this = this;
+
+				if (sheet instanceof Q5.Image && sheet.width != 1 && sheet.height != 1) {
+					this.spriteSheet = sheet;
+					_generateSheetFrames();
+					// resolve immediately for synchronous loading
+					if (_this._resolveLoad) _this._resolveLoad(_this);
+				} else {
+					let url;
+					if (typeof sheet == 'string') url = sheet;
+					else url = sheet.url;
+					this.spriteSheet = $.loadImage(url, () => {
+						_generateSheetFrames();
+
+						if (_this._clones) {
+							// propagate frame data to all clones
+							for (let clone of _this._clones) {
+								for (let i = 0; i < _this.length; i++) {
+									clone.push(_this[i]);
+								}
+							}
+						}
+
+						if (_this._resolveLoad) _this._resolveLoad(_this);
+					});
+					if (typeof sheet == 'string') {
+						owner.spriteSheet = this.spriteSheet;
+					}
+				}
+
+				function _generateSheetFrames() {
+					if (Array.isArray(atlas)) {
+						if (typeof atlas[0] == 'object') {
+							atlas = { frames: atlas };
+						} else if (atlas.length == 4) {
+							atlas = { pos: atlas.slice(0, 2), size: atlas.slice(2) };
+						} else {
+							atlas = { pos: atlas };
+						}
+					}
+
+					let { w, h, width, height, row, col, line, x, y, pos, frames, frameCount, frameDelay, delay, rotation } =
+						atlas;
+					if (delay) _this.frameDelay = delay;
+					if (frameDelay) _this.frameDelay = frameDelay;
+					if (rotation) _this.rotation = rotation;
+					if (frames && Array.isArray(frames)) {
+						frameCount = frames.length;
+					} else frameCount ??= frames || 1;
+					w ??= width || anis?.w;
+					h ??= height || anis?.h;
+					x ??= col || 0;
+					y ??= line || row || 0;
+					if (pos) {
+						x = pos[0];
+						y = pos[1];
+					}
+
+					if (!w || !h) {
+						// sprites will be given default dimensions, but groups
+						// are not, _dimensionsUndef is only for sprites
+						if (!owner._dimensionsUndef && owner.w && owner.h) {
+							w ??= owner.w;
+							h ??= owner.h;
+						} else if (frameCount) {
+							w ??= _this.spriteSheet.width / frameCount;
+							h ??= _this.spriteSheet.height;
+						} else {
+							if (_this.spriteSheet.width < _this.spriteSheet.height) {
+								w = h = _this.spriteSheet.width;
+							} else {
+								w = h = _this.spriteSheet.height;
+							}
+						}
+					}
+
+					// add all the frames in the animation to the frames array
+					if (!Array.isArray(frames)) {
+						if (pos || line !== undefined || row !== undefined || col !== undefined) {
+							x *= w;
+							y *= h;
+						}
+						for (let i = 0; i < frameCount; i++) {
+							let f = { x, y, w, h };
+							f.defaultWidth = w * $._defaultImageScale;
+							f.defaultHeight = h * $._defaultImageScale;
+							_this.push(f);
+							x += w;
+							if (x >= _this.spriteSheet.width) {
+								x = 0;
+								y += h;
+								if (y >= _this.spriteSheet.height) y = 0;
+							}
+						}
+					} else {
+						let sw = Math.round(_this.spriteSheet.width / w);
+						for (let frame of frames) {
+							let f;
+							if (typeof frame == 'number') {
+								y = Math.floor(frame / sw) * h;
+								x = (frame % sw) * w;
+								f = { x, y, w, h };
+							} else {
+								if (frame.length == 2) {
+									x = frame[0] * w;
+									y = frame[1] * h;
+									f = { x, y, w, h };
+								} else {
+									f = {
+										x: frame[0],
+										y: frame[1],
+										w: frame[2],
+										h: frame[3]
+									};
+								}
+							}
+							f.defaultWidth = f.w * $._defaultImageScale;
+							f.defaultHeight = f.h * $._defaultImageScale;
+							_this.push(f);
+						}
+					}
+				}
+			} // end SpriteSheet mode
+			else {
+				// list of images
+				for (let i = 0; i < args.length; i++) {
+					if (args[i] instanceof Q5.Image) this.push(args[i]);
+					else this.push($.loadImage(args[i]));
+				}
+			}
+			// single frame animations don't need to play
+			if (this.length == 1) this.playing = false;
+			// if frames are already loaded synchronously, resolve immediately
+			if (this.length > 0 && this._resolveLoad) {
+				this._resolveLoad(this);
+			}
+		}
+
+		// make loading Ani objects awaitable
+		then(resolve, reject) {
+			return this.promise.then(() => resolve(this), reject);
+		}
+
+		get frame() {
+			return this._frame;
+		}
+		set frame(val) {
+			// Allow setting frame even if not loaded yet (will be clamped on load)
+			if (this.length > 0 && (val < 0 || val >= this.length)) {
+				throw new FriendlyError('Ani.frame', [val, this.length]);
+			}
+			this._frame = val;
+			this._cycles = 0;
+		}
+
+		/*
+		 * TODO frameChange
+		 * Set the animation's frame delay in seconds.
+		 */
+		// get frameChange() {
+
+		// }
+		// set frameChange(val) {
+
+		// }
+
+		get scale() {
+			return this._scale;
+		}
+		set scale(val) {
+			if (typeof val == 'number') {
+				val = { x: val, y: val };
+			}
+			this._scale._x = val.x;
+			this._scale._y = val.y;
+			this._scale._avg = val.x;
+		}
+
+		clone() {
+			let ani = new $.Ani();
+			ani.spriteSheet = this.spriteSheet;
+
+			// if frames are loaded, copy them immediately
+			if (this.length) {
+				for (let i = 0; i < this.length; i++) {
+					ani.push(this[i]);
+				}
+			} else {
+				// lazy clone: register with root parent to receive frames when loaded
+				// Use the root parent's _clones array (in case this is already a clone)
+				let root = this._clonesRoot || this;
+				root._clones ??= [];
+				root._clones.push(ani);
+				ani._clonesRoot = root;
+				ani.promise = root.promise;
+			}
+
+			ani.name = this.name;
+			ani.offset.x = this.offset.x;
+			ani.offset.y = this.offset.y;
+			ani.frameDelay = this.frameDelay;
+			ani.playing = this.playing;
+			ani.looping = this.looping;
+			return ani;
+		}
+
+		play(frame) {
+			this.playing = true;
+			if (frame !== undefined && this._frame != frame) {
+				this._frame = frame;
+				this._cycles = 0;
+			}
+			this.targetFrame = -1;
+			return new Promise((resolve) => {
+				this._onComplete = () => {
+					this._onComplete = null;
+					resolve();
+				};
+			});
+		}
+
+		pause(frame) {
+			this.playing = false;
+			if (frame) this._frame = frame;
+		}
+
+		stop(frame) {
+			this.playing = false;
+			if (frame) this._frame = frame;
+		}
+
+		rewind() {
+			this.looping = false;
+			return this.goToFrame(0);
+		}
+
+		loop() {
+			this.looping = true;
+			this.playing = true;
+		}
+
+		noLoop() {
+			this.looping = false;
+		}
+
+		nextFrame() {
+			if (this._frame < this.length - 1) this._frame = this._frame + 1;
+			else if (this.looping) this._frame = 0;
+
+			this.targetFrame = -1;
+			this.playing = false;
+			this._cycles = 0;
+		}
+
+		previousFrame() {
+			if (this._frame > 0) this._frame = this._frame - 1;
+			else if (this.looping) this._frame = this.length - 1;
+
+			this.targetFrame = -1;
+			this.playing = false;
+			this._cycles = 0;
+		}
+
+		goToFrame(toFrame) {
+			if (toFrame < 0 || toFrame >= this.length) {
+				return;
+			}
+
+			// targetFrame gets used by the update() method to decide what frame to
+			// select next.  When it's not being used it gets set to -1.
+			this.targetFrame = toFrame;
+			this._cycles = 0;
+
+			if (this.targetFrame !== this._frame) {
+				this.playing = true;
+			}
+			return new Promise((resolve) => {
+				this._onComplete = () => {
+					this._onComplete = null;
+					resolve();
+				};
+			});
+		}
+
+		get lastFrame() {
+			return this.length - 1;
+		}
+
+		get frameImage() {
+			let f = this._frame;
+			let img = this[f];
+			if (img instanceof Q5.Image) return img;
+
+			let { x, y, w, h } = img; // image info
+
+			let image = $.createImage(w, h);
+			image.copy(this.spriteSheet, this.offset.x, this.offset.y, w, h, x, y, w, h);
+			return image;
+		}
+
+		get w() {
+			return this.width;
+		}
+
+		get width() {
+			let frameInfo = this[this._frame];
+			if (frameInfo instanceof Q5.Image) return frameInfo.width;
+			return frameInfo?.w || 1;
+		}
+		get defaultWidth() {
+			return this[this._frame]?.defaultWidth || 1;
+		}
+
+		get h() {
+			return this.height;
+		}
+
+		get height() {
+			let frameInfo = this[this._frame];
+			if (frameInfo instanceof Q5.Image) return frameInfo.height;
+			return frameInfo?.h || 1;
+		}
+		get defaultHeight() {
+			return this[this._frame]?.defaultHeight || 1;
+		}
+	};
+
+	$.Ani.props = ['demoMode', 'endOnFirstFrame', 'frameDelay', 'offset', 'scale', 'looping'];
+
+	this.Anis = class {
+		#_ = {};
+		constructor() {
+			let _this = this;
+
+			let props = [...$.Ani.props, 'w', 'h'];
+			let vecProps = ['offset', 'scale'];
+
+			for (let prop of props) {
+				Object.defineProperty(this, prop, {
+					get() {
+						return _this.#_[prop];
+					},
+					set(val) {
+						_this.#_[prop] = val;
+
+						// change the prop in all the sprites of this group
+						for (let k in _this) {
+							let x = _this[k];
+							if (!(x instanceof $.Ani)) continue;
+							x[prop] = val;
+						}
+					}
+				});
+			}
+
+			for (let vecProp of vecProps) {
+				this.#_[vecProp] = {
+					_x: 0,
+					_y: 0
+				};
+				for (let prop of ['x', 'y']) {
+					Object.defineProperty(this.#_[vecProp], prop, {
+						get() {
+							return _this.#_[vecProp]['_' + prop];
+						},
+						set(val) {
+							_this.#_[vecProp]['_' + prop] = val;
+
+							for (let k in _this) {
+								let x = _this[k];
+								if (!(x instanceof $.Ani)) continue;
+								x[vecProp][prop] = val;
+							}
+						}
+					});
+				}
+			}
+		}
+
+		get width() {
+			return this.w;
+		}
+		set width(val) {
+			this.w = val;
+		}
+		get height() {
+			return this.h;
+		}
+		set height(val) {
+			this.h = val;
+		}
+	};
+
+	this.Visuals = class extends Array {
+		constructor(...args) {
+			super(...args);
+
+			this._anis = new $.Anis();
+			this.ani = null;
+			this._img = null;
+		}
+
+		get anis() {
+			if (!this._anis) {
+				this._anis = new $.Anis();
+			}
+			return this._anis;
+		}
+		set anis(val) {
+			this._anis = val;
+		}
+
+		get image() {
+			return this._img;
+		}
+		set image(img) {
+			if (typeof img == 'function') {
+				this._img = img;
+				return;
+			}
+			if (typeof img == 'string') {
+				if (!img.includes('.')) {
+					img = new $.EmojiImage(img, this.w || this.width || this.d || this.diameter);
+				} else img = $.loadImage(img);
+			}
+			this._img = $.Visual.prototype._extendImage(img);
+		}
+
+		draw() {
+			for (let v of this) {
+				if (v.draw && typeof v.draw === 'function') {
+					v.draw();
+				}
+			}
+		}
+	};
+
+	this.Group = class extends $.Visuals {
+		constructor(...args) {
+			let parent;
+			if (args[0] instanceof $.Group) {
+				parent = args[0];
+				args = args.slice(1);
+			}
+			super(...args);
+
+			if (typeof args[0] == 'number') return;
+			for (let s of this) {
+				if (!(s instanceof $.Sprite)) {
+					throw new Error('A group can only contain sprites');
+				}
+			}
+
+			this._isGroup = true;
+
+			if ($.q5play.groupsCreated < 999) {
+				this.idNum = $.q5play.groupsCreated;
+			} else {
+				// find the first empty slot in the groups array
+				for (let i = 1; i < $.q5play.groups.length; i++) {
+					if (!$.q5play.groups[i]?.deleted) {
+						this.idNum = i;
+						break;
+					}
+				}
+				if (!this.idNum) {
+					console.warn(
+						'ERROR: Surpassed the limit of 999 groups in memory. Try setting `q5play.storeDeletedGroupRefs = false`. Use less groups or delete groups from the q5play.groups array to recycle ids.'
+					);
+					// if there are no empty slots, try to prevent a crash by
+					// finding the first slot that has a group with no sprites in it
+					for (let i = 1; i < $.q5play.groups.length; i++) {
+						if (!$.q5play.groups[i]?.length) {
+							this.idNum = i;
+							break;
+						}
+					}
+					this.idNum ??= 1;
+				}
+			}
+
+			this._uid = this.idNum;
+			$.q5play.groups[this._uid] = this;
+			$.q5play.groupsCreated++;
+
+			// if the allSprites group doesn't exist yet,
+			// this group must be the allSprites group!
+			if (!$.allSprites) this._isAllSpritesGroup = true;
+
+			this.subgroups = [];
+
+			if (parent instanceof $.Group) {
+				parent.subgroups.push(this);
+				let p = parent;
+				do {
+					p = $.q5play.groups[p.parent];
+					p.subgroups.push(this);
+				} while (!p._isAllSpritesGroup);
+				this.parent = parent._uid;
+			} else if (!this._isAllSpritesGroup) {
+				$.allSprites.subgroups.push(this);
+				this.parent = 0;
+			}
+
+			this._hasOverlap = {};
+			this._collisions = {};
+			this._overlappers = {};
+
+			let _this = this;
+
+			this.Sprite = class extends $.Sprite {
+				constructor() {
+					super(_this, ...arguments);
+				}
+			};
+
+			this.Group = class extends $.Group {
+				constructor() {
+					super(_this, ...arguments);
+				}
+			};
+
+			this.mouse = {
+				presses: null,
+				pressing: null,
+				pressed: null,
+				holds: null,
+				holding: null,
+				held: null,
+				released: null,
+				hovers: null,
+				hovering: null,
+				hovered: null
+			};
+			for (let state in this.mouse) {
+				this.mouse[state] = function (inp) {
+					for (let s of _this) {
+						if (s.mouse[state](inp)) return true;
+					}
+					return false;
+				};
+			}
+
+			for (let prop of $.Sprite.propsAll) {
+				if (prop == 'ani' || prop == 'velocity' || prop == 'width' || prop == 'height' || prop == 'diameter') continue;
+
+				Object.defineProperty(this, prop, {
+					get() {
+						let val = _this['_' + prop];
+						if (val === undefined && !_this._isAllSpritesGroup) {
+							let parent = $.q5play.groups[_this.parent];
+							if (parent) {
+								val = parent[prop];
+							}
+						}
+						return val;
+					},
+					set(val) {
+						_this['_' + prop] = val;
+
+						// propagate the change to all of this group's subgroups
+						for (let g of _this.subgroups) {
+							g['_' + prop] = val;
+						}
+
+						// change the prop in all the sprites in this group
+						for (let i = 0; i < _this.length; i++) {
+							let s = _this[i];
+							let v = val;
+							if (typeof val == 'function') v = val(i);
+							s[prop] = v;
+						}
+					}
+				});
+			}
+
+			let vecProps = ['offset', 'scale', 'vel'];
+			for (let vecProp of vecProps) {
+				vecProp = '_' + vecProp;
+				if (vecProp != 'vel') this[vecProp] = {};
+				else this[vecProp] = new $.Vector();
+				this[vecProp]._x = 0;
+				this[vecProp]._y = 0;
+				for (let prop of ['x', 'y']) {
+					Object.defineProperty(this[vecProp], prop, {
+						get() {
+							let val = _this[vecProp]['_' + prop];
+							let i = _this.length - 1;
+							if (val === undefined && !_this._isAllSpritesGroup) {
+								let parent = $.q5play.groups[_this.parent];
+								if (parent) {
+									val = parent[vecProp][prop];
+									i = parent.length - 1;
+								}
+							}
+							return val;
+						},
+						set(val) {
+							_this[vecProp]['_' + prop] = val;
+
+							// change the prop in all the sprite of this group
+							for (let i = 0; i < _this.length; i++) {
+								let s = _this[i];
+								let v = val;
+								if (typeof val == 'function') v = val(i);
+								s[vecProp][prop] = v;
+							}
+						}
+					});
+				}
+			}
+
+			if (this._isAllSpritesGroup) {
+				this.autoCull = true;
+				this.autoDraw = true;
+				this.autoUpdate = true;
+			}
+
+			this.add = this.push;
+
+			this.contains = this.includes;
+		}
+
+		/*
+		 * Returns the highest layer in a group
+		 */
+		_getTopLayer() {
+			if (this.length == 0) return 0;
+			if (this.length == 1 && this[0]._layer === undefined) return 0;
+			let max = this[0]._layer;
+			for (let s of this) {
+				if (s._layer > max) max = s._layer;
+			}
+			return max;
+		}
+
+		get amount() {
+			return this.length;
+		}
+		set amount(val) {
+			let diff = val - this.length;
+			let shouldAdd = diff > 0;
+			diff = Math.abs(diff);
+			for (let i = 0; i < diff; i++) {
+				if (shouldAdd) new this.Sprite();
+				else this[this.length - 1].remove();
+			}
+		}
+
+		get diameter() {
+			return this.d;
+		}
+		set diameter(val) {
+			this.d = val;
+		}
+
+		get width() {
+			return this.w;
+		}
+		set width(val) {
+			this.w = val;
+		}
+
+		get height() {
+			return this.h;
+		}
+		set height(val) {
+			this.h = val;
+		}
+
+		get velocity() {
+			return this.vel;
+		}
+		set velocity(val) {
+			this.vel = val;
+		}
+
+		_resetCentroid() {
+			let x = 0;
+			let y = 0;
+			for (let s of this) {
+				x += s.x;
+				y += s.y;
+			}
+			this.centroid = { x: x / this.length, y: y / this.length };
+			return this.centroid;
+		}
+
+		_resetDistancesFromCentroid() {
+			for (let s of this) {
+				s.distCentroid = {
+					x: s.x - this.centroid.x,
+					y: s.y - this.centroid.y
+				};
+			}
+		}
+
+		_validateCollideParams(target, cb) {
+			if (cb && typeof cb != 'function') {
+				throw new FriendlyError('Group.collide', 1, [cb]);
+			}
+			if (!target) {
+				throw new FriendlyError('Group.collide', 2);
+			}
+			if (!target._isGroup && !target._isSprite) {
+				throw new FriendlyError('Group.collide', 0, [target]);
+			}
+		}
+
+		_setContactCB(target, cb, contactType, eventType) {
+			if (target._isSprite) {
+				let reversedCB = function (a, b, v) {
+					return cb.call(b, b, a, v);
+				};
+				target._setContactCB(this, reversedCB, contactType, eventType);
+				return;
+			}
+
+			let type;
+			if (contactType == 0) type = eventTypes._collisions[eventType];
+			else type = eventTypes._overlappers[eventType];
+
+			let ledger = $.q5play[type];
+
+			let l = (ledger[this._uid] ??= {});
+
+			if (l[target._uid] == cb) return;
+			l[target._uid] = cb;
+			for (let s of this) {
+				let c2 = (ledger[s._uid] ??= {});
+				c2[target._uid] = cb;
+			}
+
+			if (this._uid == target._uid) return;
+
+			l = ledger[target._uid];
+			if (!l || !l[this._uid]) return;
+			if (this._uid != target._uid) delete l[this._uid];
+			for (let s of target) {
+				l = ledger[s._uid];
+				if (!l || !l[this._uid]) continue;
+				delete l[this._uid];
+				if (Object.keys(l).length == 0) {
+					delete ledger[s._uid];
+				}
+			}
+			if (Object.keys(l).length == 0) {
+				delete ledger[target._uid];
+			}
+		}
+
+		_ensureCollide(target) {
+			if (this._hasOverlap[target._uid] !== false) {
+				this._hasOverlap[target._uid] = false;
+				for (let s of this) {
+					s._hasOverlap[target._uid] = false;
+					target._hasOverlap[s._uid] = false;
+					// if this group is the same group as the target
+					if (this._uid == target._uid) {
+						for (let s2 of target) {
+							s._hasOverlap[s2._uid] = false;
+							s2._hasOverlap[s._uid] = false;
+						}
+					}
+				}
+			}
+			if (target._hasOverlap[this._uid] !== false) {
+				target._hasOverlap[this._uid] = false;
+				if (target._isGroup) {
+					for (let s of target) {
+						s._hasOverlap[this._uid] = false;
+						this._hasOverlap[s._uid] = false;
+						for (let s2 of this) {
+							s._hasOverlap[s2._uid] = false;
+							s2._hasOverlap[s._uid] = false;
+						}
+					}
+				}
+			}
+		}
+
+		collide(target, callback) {
+			return this.collides(target, callback);
+		}
+
+		collides(target, callback) {
+			this._validateCollideParams(target, callback);
+			this._ensureCollide(target);
+			if (callback) this._setContactCB(target, callback, 0, 0);
+			return this._collisions[target._uid] == 1 || this._collisions[target._uid] <= -3;
+		}
+
+		colliding(target, callback) {
+			this._validateCollideParams(target, callback);
+			this._ensureCollide(target);
+			if (callback) this._setContactCB(target, callback, 0, 1);
+			let val = this._collisions[target._uid];
+			if (val <= -3) return 1;
+			return val > 0 ? val : 0;
+		}
+
+		collided(target, callback) {
+			this._validateCollideParams(target, callback);
+			this._ensureCollide(target);
+			if (callback) this._setContactCB(target, callback, 0, 2);
+			return this._collisions[target._uid] <= -1;
+		}
+
+		_validateOverlapParams(target, cb) {
+			if (cb && typeof cb != 'function') {
+				throw new FriendlyError('Group.overlap', 1, [cb]);
+			}
+			if (!target) {
+				throw new FriendlyError('Group.overlap', 2);
+			}
+			if (!target._isGroup && !target._isSprite) {
+				throw new FriendlyError('Group.overlap', 0, [target]);
+			}
+		}
+
+		_ensureOverlap(target) {
+			if (!this._hasSensors) {
+				for (let s of this) {
+					if (!s._hasSensors) s.addDefaultSensors();
+				}
+				this._hasSensors = true;
+			}
+			if (!target._hasSensors) {
+				if (target._isSprite) {
+					target.addDefaultSensors();
+				} else {
+					for (let s of target) {
+						if (!s._hasSensors) s.addDefaultSensors();
+					}
+					target._hasSensors = true;
+				}
+			}
+			if (this._hasOverlap[target._uid] != true) {
+				this._removeContactsWith(target);
+				this._hasOverlap[target._uid] = true;
+				for (let s of this) {
+					s._hasOverlap[target._uid] = true;
+					target._hasOverlap[s._uid] = true;
+					// if this group is the same group as the target
+					if (this._uid == target._uid) {
+						for (let s2 of target) {
+							s._hasOverlap[s2._uid] = true;
+							s2._hasOverlap[s._uid] = true;
+						}
+					}
+				}
+			}
+			if (target._hasOverlap[this._uid] != true) {
+				target._removeContactsWith(this);
+				target._hasOverlap[this._uid] = true;
+				if (target._isGroup) {
+					for (let s of target) {
+						s._hasOverlap[this._uid] = true;
+						this._hasOverlap[s._uid] = true;
+						for (let s2 of this) {
+							s._hasOverlap[s2._uid] = true;
+							s2._hasOverlap[s._uid] = true;
+						}
+					}
+				}
+			}
+		}
+
+		overlap(target, callback) {
+			return this.overlaps(target, callback);
+		}
+
+		overlaps(target, callback) {
+			this._validateOverlapParams(target, callback);
+			this._ensureOverlap(target);
+			if (callback) this._setContactCB(target, callback, 1, 0);
+			return this._overlappers[target._uid] == 1 || this._overlappers[target._uid] <= -3;
+		}
+
+		overlapping(target, callback) {
+			this._validateOverlapParams(target, callback);
+			this._ensureOverlap(target);
+			if (callback) this._setContactCB(target, callback, 1, 1);
+			let val = this._overlappers[target._uid];
+			if (val <= -3) return 1;
+			return val > 0 ? val : 0;
+		}
+
+		overlapped(target, callback) {
+			this._validateOverlapParams(target, callback);
+			this._ensureOverlap(target);
+			if (callback) this._setContactCB(target, callback, 1, 2);
+			return this._overlappers[target._uid] <= -1;
+		}
+
+		_removeContactsWith(o) {
+			for (let s of this) {
+				s._removeContactsWith(o);
+			}
+		}
+
+		applyForce() {
+			for (let s of this) {
+				s.applyForce(...arguments);
+			}
+		}
+
+		applyForceScaled() {
+			for (let s of this) {
+				s.applyForceScaled(...arguments);
+			}
+		}
+
+		attractTo() {
+			for (let s of this) {
+				s.attractTo(...arguments);
+			}
+		}
+
+		applyTorque() {
+			for (let s of this) {
+				s.applyTorque(...arguments);
+			}
+		}
+
+		move(distance, direction, speed) {
+			let movements = [];
+			for (let s of this) {
+				movements.push(s.move(distance, direction, speed));
+			}
+			return Promise.all(movements);
+		}
+
+		moveTo(x, y, speed) {
+			if (typeof x != 'number') {
+				let obj = x;
+				if (obj == $.mouse && !$.mouse.isActive) return;
+				speed = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			let centroid = this._resetCentroid();
+			let movements = [];
+			for (let s of this) {
+				let dest = {
+					x: s.x - centroid.x + x,
+					y: s.y - centroid.y + y
+				};
+				movements.push(s.moveTo(dest.x, dest.y, speed));
+			}
+			return Promise.all(movements);
+		}
+
+		moveTowards(x, y, tracking) {
+			if (typeof x != 'number') {
+				let obj = x;
+				if (obj == $.mouse && !$.mouse.isActive) return;
+				tracking = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			if (x === undefined && y === undefined) return;
+			this._resetCentroid();
+			for (let s of this) {
+				if (s.distCentroid === undefined) this._resetDistancesFromCentroid();
+				let dest = {
+					x: s.distCentroid.x + x,
+					y: s.distCentroid.y + y
+				};
+				s.moveTowards(dest.x, dest.y, tracking);
+			}
+		}
+
+		moveAway(x, y, repel) {
+			if (typeof x != 'number') {
+				let obj = x;
+				if (obj == $.mouse && !$.mouse.isActive) return;
+				repel = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			if (x === undefined && y === undefined) return;
+			this._resetCentroid();
+			for (let s of this) {
+				if (s.distCentroid === undefined) this._resetDistancesFromCentroid();
+				let dest = {
+					x: s.distCentroid.x + x,
+					y: s.distCentroid.y + y
+				};
+				s.moveAway(dest.x, dest.y, repel);
+			}
+		}
+
+		repelFrom() {
+			for (let s of this) {
+				s.repelFrom(...arguments);
+			}
+		}
+
+		size() {
+			return this.length;
+		}
+
+		toString() {
+			return 'g' + this.idNum;
+		}
+
+		cull(top, bottom, left, right, cb) {
+			if (left === undefined) {
+				let size = top;
+				cb = bottom;
+				top = bottom = left = right = size;
+			}
+			if (isNaN(top) || isNaN(bottom) || isNaN(left) || isNaN(right)) {
+				throw new TypeError('The culling boundary must be defined with numbers');
+			}
+			if (cb && typeof cb != 'function') {
+				throw new TypeError('The callback to group.cull must be a function');
+			}
+
+			let cx = $.camera.x - $.canvas.hw / $.camera.zoom;
+			let cy = $.camera.y - $.canvas.hh / $.camera.zoom;
+
+			let minX = -left + cx;
+			let minY = -top + cy;
+			let maxX = $.width + right + cx;
+			let maxY = $.height + bottom + cy;
+
+			let culled = 0;
+			for (let i = 0; i < this.length; i++) {
+				let s = this[i];
+				if (s.shape == 'chain') continue;
+				if (s.x < minX || s.y < minY || s.x > maxX || s.y > maxY) {
+					culled++;
+					if (cb) cb(s, culled);
+					else s.remove();
+					if (s.deleted) i--;
+				}
+			}
+			return culled;
+		}
+
+		push(...sprites) {
+			this.splice(this.length, 0, ...sprites);
+			return this.length;
+		}
+
+		splice(start, removalCount, ...sprites) {
+			if (this.deleted) {
+				console.warn(
+					'Edited group' +
+						this._uid +
+						" that was deleted. Use `group.deleteAll()` to remove all of a group's sprites without deleting the group itself. Restoring the group to q5play's memory."
+				);
+				$.q5play.groups[this._uid] = this;
+				this.deleted = false;
+			}
+
+			// filter out non-sprites and log a warning
+			sprites = sprites.filter((s) => {
+				if (!(s instanceof $.Sprite)) {
+					console.warn('Only sprites can be added to a group, skipping:', s);
+					return false;
+				}
+				if (s.deleted) {
+					console.warn("Can't add a deleted sprite to a group, skipping:", s);
+					return false;
+				}
+				return true;
+			});
+
+			let removed = super.splice(start, removalCount, ...sprites);
+
+			// removals
+			if (removalCount) {
+				for (let s of removed) {
+					if (s == undefined) continue;
+					for (let g of this.subgroups) {
+						// recursive removal
+						let i = g.indexOf(s);
+						if (i >= 0) g.splice(i, 1);
+					}
+					s.groups = s.groups.filter((g) => g._uid != this._uid);
+				}
+
+				// Only check contacts of removed sprites to find which group contacts need updating
+				// This is much faster than checking all sprites for all contacts
+				let a = this;
+				for (let eventType in eventTypes) {
+					let contactsToCheck = new Set();
+
+					// Collect unique contacts from removed sprites
+					for (let s of removed) {
+						if (!s) continue;
+						for (let b_uid in s[eventType]) {
+							if (s[eventType][b_uid] > 0) {
+								contactsToCheck.add(b_uid);
+							}
+						}
+					}
+
+					// Only check if group is still in contact with entities that removed sprites were touching
+					for (let b_uid of contactsToCheck) {
+						if (!a[eventType][b_uid] || a[eventType][b_uid] == 0) continue;
+
+						// Check if any remaining sprite is still in contact
+						let stillInContact = false;
+						for (let s of a) {
+							if (s[eventType][b_uid] > 0) {
+								stillInContact = true;
+								break;
+							}
+						}
+
+						if (!stillInContact) {
+							let b;
+							if (b_uid >= 1000) b = $.p5play.sprites[b_uid];
+							else b = $.p5play.groups[b_uid];
+							if (b) {
+								a[eventType][b_uid] = -2;
+								b[eventType][a._uid] = -2;
+							}
+						}
+					}
+				}
+			}
+
+			// addition
+			if (sprites.length > 0) {
+				for (let s of sprites) {
+					let b;
+					for (let tuid in this._hasOverlap) {
+						let hasOverlap = this._hasOverlap[tuid];
+						if (hasOverlap && !s._hasSensors) {
+							s.addDefaultSensors();
+						}
+						if (tuid >= 1000) b = $.q5play.sprites[tuid];
+						else b = $.q5play.groups[tuid];
+
+						if (!b || b.deleted) continue;
+
+						if (!hasOverlap) b._ensureCollide(s);
+						else b._ensureOverlap(s);
+					}
+					for (let event in eventTypes) {
+						let contactTypes = eventTypes[event];
+						for (let contactType of contactTypes) {
+							let ledger = $.q5play[contactType];
+							let lg = ledger[this._uid];
+							if (!lg) continue;
+
+							let ls = (ledger[s._uid] ??= {});
+							for (let b_uid in lg) {
+								ls[b_uid] = lg[b_uid];
+							}
+						}
+					}
+				}
+			}
+
+			// add recursively to parent groups, excluding allSprites (id is 0)
+			if (this.parent && sprites.length) {
+				let g = $.q5play.groups[this.parent];
+				// only add sprites that are not already in the group
+				let uniqueSprites = sprites.filter((s) => !g.includes(s));
+				if (uniqueSprites.length) g.splice(g.length, 0, ...uniqueSprites);
+			}
+
+			for (let s of sprites) {
+				// only add this group to the sprite's group list if not already present
+				if (!s.groups.some((g) => g._uid === this._uid)) {
+					s.groups.push(this);
+				}
+			}
+
+			return removed;
+		}
+
+		_splice(start, removalCount, ...sprites) {
+			return super.splice(start, removalCount, ...sprites);
+		}
+
+		pop() {
+			return this.splice(this.length - 1, 1)[0];
+		}
+
+		shift() {
+			return this.splice(0, 1)[0];
+		}
+
+		unshift(...sprites) {
+			this.splice(0, 0, ...sprites);
+			return this.length;
+		}
+
+		remove(item) {
+			// deprecated alias for `group.delete`, will remove this behavior in v4
+			if (item === undefined) return this.delete();
+
+			let idx;
+			if (typeof item == 'number') {
+				idx = item;
+				if (item < 0) idx += this.length;
+			} else {
+				idx = this.lastIndexOf(item);
+			}
+
+			if (idx < 0 || idx >= this.length) return;
+
+			return this.splice(idx, 1)[0];
+		}
+
+		//
+		// removeAll() {
+		// 	return this.splice(0, this.length);
+		// }
+
+		delete() {
+			this.deleteAll();
+			if (!this._isAllSpritesGroup) this.deleted = true;
+		}
+
+		deleteAll() {
+			while (this.length > 0) {
+				this.at(-1).delete();
+			}
+		}
+
+		_step() {
+			this.__step();
+		}
+
+		update() {
+			for (let s of this) {
+				if (s.autoUpdate) {
+					s.update();
+				}
+			}
+			if (this._autoUpdate) this._autoUpdate = null;
+		}
+
+		draw() {
+			let g = [...this];
+			g.sort((a, b) => a._layer - b._layer);
+			for (let s of g) {
+				if (s._visible !== false && s.autoDraw) {
+					s.draw();
+				}
+			}
+			if (this._autoDraw) this._autoDraw = null;
+		}
+
+		postDraw() {
+			for (let s of this) {
+				s.postDraw();
+			}
+		}
+	};
+
+	$.Group.prototype.__step = $.Sprite.prototype.__step;
+	$.Group.prototype.___step = $.Sprite.prototype.___step;
+
+	$.Visuals.prototype.addAni = $.Group.prototype.addAni = $.Sprite.prototype.addAni;
+	$.Visuals.prototype.addAnis = $.Group.prototype.addAnis = $.Sprite.prototype.addAnis;
+
+	let wID = 1;
+
+	this.World = class {
+		constructor() {
+			const worldDef = b2DefaultWorldDef();
+			worldDef.gravity.Set(0, 0);
+
+			this.wID = wID = b2CreateWorld(worldDef);
+
+			// this.taskSystem = new TaskSystem(navigator.hardwareConcurrency);
+			// this.wID = wID = b2CreateThreadedWorld(worldDef, this.taskSystem);
+
+			this.mod = {};
+
+			this.contacts = [];
+			// TODO: add contact listeners
+			// this.on('begin-contact', this._beginContact);
+			// this.on('end-contact', this._endContact);
+
+			let _this = this;
+			this._gravity = {
+				get x() {
+					return b2World_GetGravity(wID).x;
+				},
+				set x(val) {
+					val = Math.round(val || 0);
+					_this.mod[0] = true;
+					for (let s of $.allSprites) s.sleeping = false;
+					b2World_SetGravity(wID, new b2Vec2(val, this.y));
+				},
+				get y() {
+					return b2World_GetGravity(wID).y;
+				},
+				set y(val) {
+					val = Math.round(val || 0);
+					_this.mod[0] = true;
+					for (let s of $.allSprites) s.sleeping = false;
+					b2World_SetGravity(wID, new b2Vec2(this.x, val));
+				}
+			};
+
+			this._timeScale = 1;
+			this._updateRate = 60;
+			this._syncedToFrameRate = true;
+			this._lastStepTime = 0;
+			this._setTimeStep();
+
+			this.subSteps = 4;
+
+			this.bounceThreshold = 0.19;
+
+			this.physicsTime = 0;
+
+			this.mouseTracking ??= true;
+
+			this.mouseSprite = null;
+
+			this.mouseSprites = [];
+
+			this.autoStep = true;
+
+			this.step = this.physicsUpdate;
+		}
+
+		get profile() {
+			return b2World_GetProfile();
+		}
+
+		get gravity() {
+			return this._gravity;
+		}
+		set gravity(val) {
+			b2World_SetGravity(wID, new b2Vec2(val.x, val.y));
+		}
+
+		get meterSize() {
+			return meterSize;
+		}
+		set meterSize(val) {
+			meterSize = val;
+		}
+
+		get timeScale() {
+			return this._timeScale;
+		}
+		set timeScale(val) {
+			if (val < 0 || val > 2) {
+				return console.error('world.timeScale must be between 0 and 2');
+			}
+			if (this._timeScale == val) return;
+			this._timeScale = val;
+			this._setTimeStep();
+		}
+
+		get updateRate() {
+			return this._updateRate;
+		}
+		set updateRate(val) {
+			this._updateRate = val;
+			this._syncedToFrameRate = val == $._targetFrameRate;
+			this._setTimeStep();
+		}
+
+		_setTimeStep() {
+			this._timeStep = (1 / this._updateRate) * this._timeScale;
+		}
+
+		get bounceThreshold() {
+			return b2World_GetRestitutionThreshold(wID);
+		}
+		set bounceThreshold(val) {
+			b2World_SetRestitutionThreshold(wID, val);
+		}
+
+		physicsUpdate(timeStep) {
+			usePhysics = true;
+			timeScale = this._timeScale;
+
+			// TODO: more efficient way to get positions
+			// for (let s of $.allSprites) {
+			// 	s.prevPos.x = s.x;
+			// 	s.prevPos.y = s.y;
+			// 	s.prevRotation = s.rotation;
+			// }
+
+			timeStep ??= this._timeStep;
+
+			b2World_Step(wID, timeStep, this.subSteps);
+			this.taskSystem?.ClearTasks();
+
+			this.physicsTime += timeStep;
+
+			let sprites = Object.values($.q5play.sprites);
+			let groups = Object.values($.q5play.groups);
+
+			for (let s of sprites) s._step();
+			for (let g of groups) g._step();
+
+			for (let s of sprites) {
+				if (s._enableContactEvents) s.___step();
+			}
+			for (let g of groups) {
+				if (g._enableContactEvents) g.___step();
+			}
+
+			if (this.autoStep) this.autoStep = null;
+		}
+
+		speculate(timeStep) {
+			timeStep ??= this._timeStep;
+
+			for (let s of $.allSprites) {
+				s.prevPos.x = s.x;
+				s.prevPos.y = s.y;
+				s.prevRotation = s.rotation;
+			}
+
+			usePhysics = false;
+			timeScale = (timeStep / this._timeStep) * this._timeScale;
+
+			let sprites = Object.values($.q5play.sprites);
+			let groups = Object.values($.q5play.groups);
+
+			for (let s of sprites) s._step();
+			for (let g of groups) g._step();
+
+			if (this.autoStep) this.autoStep = null;
+		}
+
+		get realTime() {
+			return $.millis() / 1000;
+		}
+
+		getSpritesAt(x, y, group, cameraActiveWhenDrawn = true) {
+			if (typeof x == 'object') {
+				cameraActiveWhenDrawn = group ?? true;
+				group = y;
+				y = x.y;
+				x = x.x;
+			}
+			const point = new b2Vec2(x / meterSize, y / meterSize);
+			const filter = new b2QueryFilter();
+
+			// TODO
+			return [];
+
+			// Query the world for fixture AABBs that overlap the point AABB
+			// narrowing down the number of fixtures to check with
+			// the more expensive testPoint method
+			let fxts = [];
+			b2World_OverlapPoint(wID, point, this._origin, filter, (fxt) => {
+				// we need to make sure the point is actually within the shape
+				if (fxt.getShape().testPoint(fxt.getBody().getTransform(), point)) {
+					fxts.push(fxt);
+				}
+				return true;
+			});
+			if (fxts.length == 0) return [];
+
+			group ??= $.allSprites;
+			let sprites = [];
+			for (let fxt of fxts) {
+				const s = fxt.m_body.sprite;
+				if (s._cameraActiveWhenDrawn == cameraActiveWhenDrawn) {
+					if (!sprites.find((x) => x._uid == s._uid)) sprites.push(s);
+				}
+			}
+			sprites.sort((a, b) => (a._layer - b._layer) * -1);
+			return sprites;
+		}
+
+		getSpriteAt(x, y, group) {
+			const sprites = this.getSpritesAt(x, y, group);
+			return sprites[0];
+		}
+
+		getMouseSprites() {
+			let sprites = this.getSpritesAt($.mouse.x, $.mouse.y);
+			if ($.camera._wasOff) {
+				let uiSprites = this.getSpritesAt($.mouse.canvasPos.x, $.mouse.canvasPos.y, $.allSprites, false);
+				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
+			}
+			return sprites;
+		}
+
+		/*
+		 * Sets contact trackers to 0, after the world's super.step()
+		 * they will be increased to 1.
+		 */
+		_beginContact(contact) {
+			// Get both fixtures
+			let a = contact.m_fixtureA;
+			let b = contact.m_fixtureB;
+			let t = '_collisions';
+			if (a.m_isSensor) t = '_overlappers';
+			a = a.m_body.sprite;
+			b = b.m_body.sprite;
+
+			a[t][b._uid] = 0;
+			b[t][a._uid] = 0;
+
+			for (let g of b.groups) {
+				if (!a[t][g._uid] || a[t][g._uid] < 0) {
+					a[t][g._uid] = 0;
+					g[t][a._uid] = 0;
+				}
+			}
+
+			for (let g of a.groups) {
+				if (!b[t][g._uid] || b[t][g._uid] < 0) {
+					b[t][g._uid] = 0;
+					g[t][b._uid] = 0;
+				}
+				for (let g2 of b.groups) {
+					if (!g[t][g2._uid] || g[t][g2._uid] < 0) {
+						g[t][g2._uid] = 0;
+						g2[t][g._uid] = 0;
+					}
+				}
+			}
+		}
+
+		/*
+		 * If contact ended between sprites that where previously in contact,
+		 * then their contact trackers are set to -2 which will be incremented
+		 * to -1 on the next physics update.
+		 *
+		 * However, if contact begins and ends on the same frame, then the contact
+		 * trackers are set to -4 and incremented to -3 on the next physics update.
+		 */
+		_endContact(contact) {
+			let a = contact.m_fixtureA;
+			let b = contact.m_fixtureB;
+			let contactType = '_collisions';
+			if (a.m_isSensor) contactType = '_overlappers';
+			a = a.m_body.sprite;
+			b = b.m_body.sprite;
+
+			a[contactType][b._uid] = a[contactType][b._uid] != 0 ? -2 : -4;
+			b[contactType][a._uid] = b[contactType][a._uid] != 0 ? -2 : -4;
+
+			for (let g of b.groups) {
+				let inContact = false;
+				for (let s of g) {
+					if (s[contactType][a._uid] >= 0) {
+						inContact = true;
+						break;
+					}
+				}
+				if (!inContact) {
+					g[contactType][a._uid] = g[contactType][a._uid] != 0 ? -2 : -4;
+					a[contactType][g._uid] = a[contactType][g._uid] != 0 ? -2 : -4;
+				}
+			}
+
+			for (let g of a.groups) {
+				let inContact = false;
+				for (let s of g) {
+					if (s[contactType][b._uid] >= 0) {
+						inContact = true;
+						break;
+					}
+				}
+				if (!inContact) {
+					g[contactType][b._uid] = g[contactType][b._uid] != 0 ? -2 : -4;
+					b[contactType][g._uid] = b[contactType][g._uid] != 0 ? -2 : -4;
+					for (let g2 of b.groups) {
+						g[contactType][g2._uid] = g[contactType][g2._uid] != 0 ? -2 : -4;
+						g2[contactType][g._uid] = g2[contactType][g._uid] != 0 ? -2 : -4;
+					}
+				}
+			}
+		}
+
+		/*
+		 * Used internally to find contact callbacks.
+		 *
+		 * @param type is the eventType of contact callback to find
+		 * @param s0 is the first sprite
+		 * @param s1 is the second sprite
+		 */
+		_findContact(type, s0, s1) {
+			let cb = s0[type][s1._uid];
+			if (cb) return cb;
+
+			for (let g1 of s1.groups) {
+				cb = s0[type][g1._uid];
+				if (cb) return cb;
+			}
+
+			for (let g0 of s0.groups) {
+				cb = g0[type][s1._uid];
+				if (cb) return cb;
+
+				for (let g1 of s1.groups) {
+					if (g0._uid != g1._uid) continue;
+					cb = g0[type][g1._uid];
+					if (cb) return cb;
+				}
+			}
+			return false;
+		}
+
+		get allowSleeping() {
+			return this.getAllowSleeping();
+		}
+		set allowSleeping(val) {
+			this.setAllowSleeping(val);
+		}
+
+		rayCast(startPos, direction, maxDistance) {
+			let sprites = this.rayCastAll(startPos, direction, maxDistance, () => true);
+			return sprites[0];
+		}
+
+		rayCastAll(startPos, direction, maxDistance, limiter) {
+			let start = scaleTo(startPos.x, startPos.y);
+
+			let end;
+			if (typeof arguments[1] == 'number') {
+				end = scaleTo(startPos.x + maxDistance * $.cos(direction), startPos.y + maxDistance * $.sin(direction));
+			} else {
+				let endPos = arguments[1];
+				limiter ??= arguments[2];
+				end = scaleTo(endPos.x, endPos.y);
+			}
+
+			let results = [];
+			let maxFraction = 1;
+
+			super.rayCast(start, end, function (fixture, point, normal, fraction) {
+				let sprite = fixture.getBody().sprite;
+
+				let shouldLimit = limiter && limiter(sprite);
+
+				// TODO provide advanced info: point and angle of intersection
+				results.push({
+					sprite,
+					// point,
+					// normal,
+					fraction
+				});
+
+				// limit the ray cast so it can't go beyond this sprite
+				if (shouldLimit) {
+					if (fraction < maxFraction) {
+						maxFraction = fraction;
+					}
+					return fraction;
+				}
+				return 1; // keep casting the full length of the ray
+			});
+
+			// sort results by the distance from the starting position
+			results.sort((a, b) => a.fraction - b.fraction);
+
+			let sprites = [];
+
+			for (let res of results) {
+				if (res.fraction <= maxFraction) {
+					sprites.push(res.sprite);
+				}
+			}
+
+			return sprites;
+		}
+	};
+
+	this.Camera = class {
+		constructor() {
+			// camera position
+			this._pos = $.createVector.call($);
+
+			// camera translation
+			this.__pos = { x: 0, y: 0, rounded: {} };
+
+			this.isActive = false;
+
+			this.bound = {
+				min: { x: 0, y: 0 },
+				max: { x: 0, y: 0 }
+			};
+
+			this._zoomIdx = -1;
+
+			this._zoom = 1;
+
+			this._destIdx = 0;
+		}
+
+		get pos() {
+			return this._pos;
+		}
+		set pos(val) {
+			this.x = val.x;
+			this.y = val.y;
+		}
+
+		get position() {
+			return this._pos;
+		}
+		set position(val) {
+			this.x = val.x;
+			this.y = val.y;
+		}
+
+		_calcBoundsX(val) {
+			let mod = $.canvas.hw / this._zoom;
+			this.bound.min.x = val - mod;
+			this.bound.max.x = val + mod;
+		}
+
+		_calcBoundsY(val) {
+			let mod = $.canvas.hh / this._zoom;
+			this.bound.min.y = val - mod;
+			this.bound.max.y = val + mod;
+		}
+
+		get x() {
+			return this._pos.x;
+		}
+		set x(val) {
+			if (val === undefined || isNaN(val)) return;
+			this._pos.x = val;
+			let x = -val;
+			if ($._c2d) x += $.canvas.hw / this._zoom;
+			this.__pos.x = x;
+			if ($.allSprites.pixelPerfect) {
+				this.__pos.rounded.x = Math.round(x);
+			}
+			this._calcBoundsX(val);
+		}
+
+		get y() {
+			return this._pos.y;
+		}
+		set y(val) {
+			if (val === undefined || isNaN(val)) return;
+			this._pos.y = val;
+			let y = -val;
+			if ($._c2d) y += $.canvas.hh / this._zoom;
+			this.__pos.y = y;
+			if ($.allSprites.pixelPerfect) {
+				this.__pos.rounded.y = Math.round(y);
+			}
+			this._calcBoundsY(val);
+		}
+
+		moveTo(x, y, speed) {
+			if (x === undefined) return;
+			if (isNaN(x)) {
+				speed = y;
+				y = x.y;
+				x = x.x;
+			}
+			speed ??= 1;
+			if (speed <= 0) {
+				console.warn('camera.moveTo: speed should be a positive number');
+				return Promise.resolve(false);
+			}
+			let a = y - this.y;
+			let b = x - this.x;
+			let c = Math.sqrt(a * a + b * b);
+			let percent = speed / c;
+			let velX = b * percent;
+			let velY = a * percent;
+
+			this._destIdx++;
+			let destIdx = this._destIdx;
+			let steps = Math.ceil(c / speed);
+
+			return (async () => {
+				for (let i = 0; i < steps; i++) {
+					this.x += velX;
+					this.y += velY;
+					await $.sleep();
+					if (destIdx != this._destIdx) return false;
+				}
+				this.x = x;
+				this.y = y;
+				return true;
+			})();
+		}
+
+		get zoom() {
+			return this._zoom;
+		}
+		set zoom(val) {
+			if (val === undefined || isNaN(val)) return;
+			this._zoom = val;
+			let x = -this._pos.x;
+			if ($._c2d) x += $.canvas.hw / val;
+			let y = -this._pos.y;
+			if ($._c2d) y += $.canvas.hh / val;
+			this.__pos.x = x;
+			this.__pos.y = y;
+			if ($.allSprites.pixelPerfect) {
+				this.__pos.rounded.x = Math.round(x);
+				this.__pos.rounded.y = Math.round(y);
+			}
+			this._calcBoundsX(this._pos.x);
+			this._calcBoundsY(this._pos.y);
+		}
+
+		zoomTo(target, speed) {
+			if (target == this._zoom) return Promise.resolve(true);
+			speed ??= 0.1;
+			let delta = Math.abs(target - this._zoom);
+			let frames = Math.round(delta / speed);
+			if (target < this.zoom) speed = -speed;
+
+			this._zoomIdx++;
+			let zoomIdx = this._zoomIdx;
+			return (async () => {
+				for (let i = 0; i < frames; i++) {
+					if (zoomIdx != this._zoomIdx) return false;
+					this.zoom += speed;
+					await $.sleep();
+				}
+				this.zoom = target;
+				return true;
+			})();
+		}
+
+		on() {
+			if (!this.isActive) {
+				$.push();
+				$.scale(this._zoom);
+				if (!$.allSprites.pixelPerfect) {
+					$.translate(this.__pos.x, this.__pos.y);
+				} else {
+					this.__pos.rounded.x ??= Math.round(this.__pos.x);
+					this.__pos.rounded.y ??= Math.round(this.__pos.y);
+					$.translate(this.__pos.rounded.x, this.__pos.rounded.y);
+				}
+				this.isActive = true;
+			}
+		}
+
+		off() {
+			if (this.isActive) {
+				$.pop();
+				this.isActive = false;
+			}
+		}
+	}; //end camera class
+
+	// TODO
+
+	function shouldCollide(that) {
+		// should this and that produce a contact event?
+		let a = this;
+		let b = that;
+
+		// sensors overlap (returning true doesn't mean they will collide it means
+		// they're included in begin contact and end contact events)
+		if (a.m_isSensor && b.m_isSensor) return true;
+		// ignore contact events between a sensor and a non-sensor
+		if (a.m_isSensor || b.m_isSensor) return false;
+		// else test if the two non-sensor colliders should overlap
+
+		a = a.m_body.sprite;
+		b = b.m_body.sprite;
+
+		let shouldOverlap = a._hasOverlap[b._uid] ?? b._hasOverlap[a._uid];
+
+		// if `a` has an overlap enabled with `b` their colliders should
+		// not produce a contact event, the overlap contact event should
+		// only be produced between their sensors
+		if (shouldOverlap) return false;
+		return true;
+	}
+
+	this.Tiles = class {
+		constructor(tiles, x, y, w, h) {
+			if (typeof tiles == 'string') {
+				if (tiles[0] == '\n') tiles = tiles.slice(1);
+				tiles = tiles.replaceAll('\t', '  ');
+				tiles = tiles.split('\n');
+			}
+
+			x ??= 0;
+			y ??= 0;
+			w ??= 1;
+			h ??= 1;
+
+			let sprites = new $.Group();
+
+			for (let row = 0; row < tiles.length; row++) {
+				for (let col = 0; col < tiles[row].length; col++) {
+					let t = tiles[row][col];
+					if (t == ' ' || t == '.') continue;
+					let ani, g;
+					let groups = Object.values($.q5play.groups);
+					for (g of groups) {
+						ani = g._anis[t];
+						if (ani) break;
+					}
+					if (ani) {
+						sprites.push(new g.Sprite(ani, x + col * w, y + row * h));
+						continue;
+					}
+					let wasFound = false;
+					for (g of groups) {
+						if (g.tile == t) {
+							wasFound = true;
+							break;
+						}
+					}
+					if (wasFound) {
+						sprites.push(new g.Sprite(x + col * w, y + row * h));
+						continue;
+					}
+					let s;
+					for (s of $.allSprites) {
+						if (s.tile == t) {
+							wasFound = true;
+							break;
+						}
+					}
+					if (wasFound) {
+						s.x = x + col * w;
+						s.y = y + row * h;
+						continue;
+					}
+					throw 'Tile not found: ' + t;
+				}
+			}
+
+			return sprites;
+		}
+	};
+
+	this.createTiles = function (tiles, x, y, w, h) {
+		return new $.Tiles(tiles, x, y, w, h);
+	};
+
+	this.Joint = class {
+		constructor(spriteA, spriteB, type) {
+			if (!spriteA?._isSprite || !spriteB?._isSprite) {
+				throw new Error('The Joint constructor requires two sprites as input.');
+			}
+
+			if (!spriteA.body) spriteA.addDefaultSensors();
+			if (!spriteB.body) spriteB.addDefaultSensors();
+
+			this.spriteA = spriteA;
+
+			this.spriteB = spriteB;
+
+			type ??= 'glue';
+
+			this.type = type;
+
+			if (type == 'glue') {
+				let j = pl.WeldJoint({}, spriteA.body, spriteB.body, spriteA.body.getWorldCenter());
+				this._createJoint(j);
+			}
+
+			let _this = this;
+
+			if (type != 'glue' && type != 'slider' && type != 'rope') {
+				for (let l of ['A', 'B']) {
+					if (l == 'A' && type == 'wheel') continue;
+
+					const prop = '_offset' + l;
+					this[prop] = $.createVector.call($);
+
+					for (let axis of ['x', 'y']) {
+						Object.defineProperty(this[prop], axis, {
+							get() {
+								let val = _this._j['m_localAnchor' + l][axis] * meterSize;
+								return friendlyRounding ? fixRound(val) : val;
+							},
+							set(val) {
+								_this._j['m_localAnchor' + l][axis] = val / meterSize;
+								if (_this.type == 'distance' || _this.type == 'rope') {
+									_this._j.m_length = b2Vec2.distance(
+										_this._j.m_bodyA.getWorldPoint(_this._j.m_localAnchorA),
+										_this._j.m_bodyB.getWorldPoint(_this._j.m_localAnchorB)
+									);
+								} else if (_this.type == 'hinge' || _this.type == 'wheel') {
+									let o;
+									if (l == 'A') o = 'B';
+									else o = 'A';
+									// body o's local point of body l anchor's world point
+									_this._j['m_localAnchor' + o][axis] = _this._j['m_body' + o].getLocalPoint(
+										_this._j['m_body' + l].getWorldPoint(_this._j['m_localAnchor' + l])
+									)[axis];
+								}
+							}
+						});
+					}
+				}
+			}
+
+			let removeProps = [];
+			if (type == 'distance' || type == 'glue' || type == 'rope') {
+				removeProps.push('enableMotor', 'maxPower', 'motorSpeed', 'power', 'speed');
+			}
+			if (type == 'rope') {
+				removeProps.push('damping', 'springiness');
+			}
+
+			let def = {};
+			for (let prop of removeProps) {
+				def[prop] = { value: null, enumerable: false };
+			}
+			Object.defineProperties(this, def);
+
+			this.visible = true;
+
+			spriteA.joints.push(this);
+			spriteB.joints.push(this);
+		}
+
+		_createJoint(j) {
+			this._j = $.world.createJoint(j);
+		}
+
+		_display() {
+			this._draw(this.spriteA.x, this.spriteA.y, this.spriteB.x, this.spriteB.y);
+			this.visible = null;
+		}
+
+		_draw(xA, yA, xB, yB) {
+			if (yB) {
+				$.line(xA, yA, xB, yB);
+			} else {
+				$.point(xA, yA);
+			}
+		}
+
+		get draw() {
+			return this._display;
+		}
+		set draw(val) {
+			this._draw = val;
+		}
+
+		get offsetA() {
+			return this._offsetA;
+		}
+		set offsetA(val) {
+			this._offsetA.x = val.x;
+			this._offsetA.y = val.y;
+		}
+
+		get offsetB() {
+			return this._offsetB;
+		}
+		set offsetB(val) {
+			this._offsetB.x = val.x;
+			this._offsetB.y = val.y;
+		}
+
+		get springiness() {
+			return this._springiness;
+		}
+		set springiness(val) {
+			if (val > 0) {
+				if (val < 0.1) {
+					val = $.map(val, 0, 0.1, 30, 4);
+				} else if (val < 0.5) {
+					val = $.map(val, 0.1, 0.5, 4, 2.5);
+				} else if (val < 0.8) {
+					val = $.map(val, 0.5, 0.8, 2.5, 1);
+				} else if (val < 0.9) {
+					val = $.map(val, 0.8, 0.9, 1, 0.5);
+				} else {
+					val = $.map(val, 0.9, 1.0, 0.5, 0.2);
+				}
+			}
+			this._springiness = val;
+
+			if (this.type != 'wheel') return this._j.setFrequency(val);
+			this._j.setSpringFrequencyHz(val);
+		}
+
+		get damping() {
+			if (this.type != 'wheel') {
+				return this._j.getDampingRatio();
+			}
+			return this._j.getSpringDampingRatio();
+		}
+		set damping(val) {
+			if (this.type != 'wheel') {
+				this._j.setDampingRatio(val);
+				return;
+			}
+			this._j.setSpringDampingRatio(val);
+		}
+
+		get speed() {
+			return this._j.getJointSpeed();
+		}
+		set speed(val) {
+			if (!this._j.isMotorEnabled()) {
+				this._j.enableMotor(true);
+			}
+			this._j.setMotorSpeed(val);
+		}
+
+		get motorSpeed() {
+			return this._j.getMotorSpeed();
+		}
+
+		get enableMotor() {
+			return this._j.isMotorEnabled();
+		}
+		set enableMotor(val) {
+			this._j.enableMotor(val);
+		}
+
+		get maxPower() {
+			return this._j.getMaxMotorTorque();
+		}
+		set maxPower(val) {
+			if (!this._j.isMotorEnabled() && val) {
+				this._j.enableMotor(true);
+			}
+			this._j.setMaxMotorTorque(val);
+			if (!val) this._j.enableMotor(false);
+		}
+
+		get power() {
+			return this._j.getMotorTorque();
+		}
+
+		get collideConnected() {
+			return this._j.getCollideConnected();
+		}
+		set collideConnected(val) {
+			this._j.m_collideConnected = val;
+		}
+
+		get reactionForce() {
+			return this._j.getReactionForce($.world._timeStep);
+		}
+
+		get reactionTorque() {
+			return this._j.getReactionTorque($.world._timeStep);
+		}
+
+		delete() {
+			if (this._deleted) return;
+			this.spriteA.joints.splice(this.spriteA.joints.indexOf(this), 1);
+			this.spriteB.joints.splice(this.spriteB.joints.indexOf(this), 1);
+			$.world.destroyJoint(this._j);
+			this._deleted = true;
+		}
+	};
+
+	this.GlueJoint = class extends $.Joint {
+		constructor(spriteA, spriteB) {
+			super(...arguments, 'glue');
+		}
+	};
+
+	this.DistanceJoint = class extends $.Joint {
+		constructor(spriteA, spriteB) {
+			super(...arguments, 'distance');
+
+			let j = pl.DistanceJoint(
+				{},
+				spriteA.body,
+				spriteB.body,
+				spriteA.body.getWorldCenter(),
+				spriteB.body.getWorldCenter()
+			);
+			this._createJoint(j);
+		}
+
+		_display() {
+			let ancA, ancB;
+			if (this.offsetA.x || this.offsetA.y) {
+				ancA = this.spriteA.body.getWorldPoint(this._j.m_localAnchorA);
+				ancA = scaleFrom(ancA.x, ancA.y);
+			}
+			if (this.offsetB.x || this.offsetB.y) {
+				ancB = this.spriteB.body.getWorldPoint(this._j.m_localAnchorB);
+				ancB = scaleFrom(ancB.x, ancB.y);
+			}
+			this._draw(
+				!ancA ? this.spriteA.x : ancA.x,
+				!ancA ? this.spriteA.y : ancA.y,
+				!ancB ? this.spriteB.x : ancB.x,
+				!ancB ? this.spriteB.y : ancB.y
+			);
+			this.visible = null;
+		}
+	};
+
+	this.WheelJoint = class extends $.Joint {
+		constructor(spriteA, spriteB) {
+			super(...arguments, 'wheel');
+
+			let j = pl.WheelJoint(
+				{
+					maxMotorTorque: 1000,
+					frequencyHz: 4,
+					dampingRatio: 0.7
+				},
+				spriteA.body,
+				spriteB.body,
+				spriteB.body.getWorldCenter(),
+				new b2Vec2(0, 1)
+			);
+			this._createJoint(j);
+			this._angle = $._angleMode == DEGREES ? 90 : 1.5707963267948966;
+		}
+
+		_display() {
+			let xA = this.spriteA.x;
+			let yA = this.spriteA.y;
+
+			let xB, yB;
+			if (!this.offsetB.x && !this.offsetB.y) {
+				xB = this.spriteB.x;
+				yB = this.spriteB.y;
+			} else {
+				let ancB = this.spriteB.body.getWorldPoint(this._j.m_localAnchorB);
+				ancB = scaleFrom(ancB.x, ancB.y);
+				xB = ancB.x;
+				yB = ancB.y;
+			}
+
+			// Calculate the slopes of the lines
+			let slopeA = $.tan(this.spriteA.rotation);
+			let slopeB = $.tan(this._angle + this.spriteA.rotation);
+
+			// Calculate the intersection point
+			let xI = (yB - yA + slopeA * xA - slopeB * xB) / (slopeA - slopeB);
+			let yI = slopeA * (xI - xA) + yA;
+
+			this._draw(xI, yI, xB, yB);
+			this.visible = null;
+		}
+
+		get angle() {
+			return this._angle;
+		}
+		set angle(val) {
+			if (val == this._angle) return;
+			this._angle = val;
+			this._j.m_localXAxisA = new b2Vec2($.cos(val), $.sin(val));
+			this._j.m_localXAxisA.normalize();
+			this._j.m_localYAxisA = b2Vec2.crossNumVec2(1.0, this._j.m_localXAxisA);
+		}
+	};
+
+	this.HingeJoint = class extends $.Joint {
+		constructor(spriteA, spriteB) {
+			super(...arguments, 'hinge');
+
+			let j = pl.RevoluteJoint({}, spriteA.body, spriteB.body, spriteA.body.getWorldCenter());
+			this._createJoint(j);
+		}
+
+		_display() {
+			const offsetAx = this.offsetA.x;
+			const offsetAy = this.offsetA.y;
+			const rotationA = this.spriteA.rotation;
+
+			const rotatedOffsetAx = offsetAx * $.cos(rotationA) - offsetAy * $.sin(rotationA);
+			const rotatedOffsetAy = offsetAx * $.sin(rotationA) + offsetAy * $.cos(rotationA);
+
+			this._draw(this.spriteA.x + rotatedOffsetAx, this.spriteA.y + rotatedOffsetAy);
+			this.visible = null;
+		}
+
+		get range() {
+			return this.upperLimit - this.lowerLimit;
+		}
+		set range(val) {
+			val /= 2;
+			this.upperLimit = val;
+			this.lowerLimit = -val;
+		}
+
+		get lowerLimit() {
+			let val = this._j.getLowerLimit();
+			if ($._angleMode == 'radians') return val;
+			return $.degrees(val);
+		}
+		set lowerLimit(val) {
+			if (!this._j.isLimitEnabled()) {
+				this._j.enableLimit(true);
+			}
+			this.spriteA.body.setAwake(true);
+			this.spriteB.body.setAwake(true);
+			if ($._angleMode == DEGREES) val *= $._DEGTORAD;
+			this._j.m_lowerAngle = val;
+		}
+
+		get upperLimit() {
+			let val = this._j.getUpperLimit();
+			if ($._angleMode == 'radians') return val;
+			return $.degrees(val);
+		}
+		set upperLimit(val) {
+			if (!this._j.isLimitEnabled()) {
+				this._j.enableLimit(true);
+			}
+			this.spriteA.body.setAwake(true);
+			this.spriteB.body.setAwake(true);
+			if ($._angleMode == DEGREES) val *= $._DEGTORAD;
+			this._j.m_upperAngle = val;
+		}
+
+		get angle() {
+			let ang = this._j.getJointAngle();
+			if ($._angleMode == 'radians') return ang;
+			return ang * $._DEGTORAD;
+		}
+	};
+	$.RevoluteJoint = $.HingeJoint;
+
+	this.SliderJoint = class extends $.Joint {
+		constructor(spriteA, spriteB) {
+			super(...arguments, 'slider');
+
+			let j = pl.PrismaticJoint(
+				{
+					lowerTranslation: -1,
+					upperTranslation: 1,
+					enableLimit: true,
+					maxMotorForce: 50,
+					motorSpeed: 0,
+					enableMotor: true
+				},
+				spriteA.body,
+				spriteB.body,
+				spriteA.body.getWorldCenter(),
+				new b2Vec2(1, 0)
+			);
+			this._createJoint(j);
+			this._angle = 0;
+		}
+
+		get angle() {
+			return this._angle;
+		}
+		set angle(val) {
+			if (val == this._angle) return;
+			this._angle = val;
+			this._j.m_localXAxisA = new b2Vec2($.cos(val), $.sin(val));
+			this._j.m_localXAxisA.normalize();
+			this._j.m_localYAxisA = b2Vec2.crossNumVec2(1.0, this._j.m_localXAxisA);
+		}
+
+		get range() {
+			return this.upperLimit - this.lowerLimit;
+		}
+		set range(val) {
+			val /= 2;
+			this.upperLimit = val;
+			this.lowerLimit = -val;
+		}
+
+		get lowerLimit() {
+			return this._j.getLowerLimit() * meterSize;
+		}
+		set lowerLimit(val) {
+			if (!this._j.isLimitEnabled()) {
+				this._j.enableLimit(true);
+			}
+			val = val / meterSize;
+			this._j.setLimits(val, this._j.getUpperLimit());
+		}
+
+		get upperLimit() {
+			return this._j.getUpperLimit() * meterSize;
+		}
+		set upperLimit(val) {
+			if (!this._j.isLimitEnabled()) {
+				this._j.enableLimit(true);
+			}
+			val = val / meterSize;
+			this._j.setLimits(this._j.getLowerLimit(), val);
+		}
+	};
+	$.PrismaticJoint = $.SliderJoint;
+
+	this.RopeJoint = class extends $.Joint {
+		constructor(spriteA, spriteB) {
+			super(...arguments, 'rope');
+
+			let j = pl.RopeJoint(
+				{
+					maxLength: 1
+				},
+				spriteA.body,
+				spriteB.body,
+				spriteA.body.getWorldCenter()
+			);
+			this._createJoint(j);
+			this._j.m_localAnchorB.x = 0;
+			this._j.m_localAnchorB.y = 0;
+		}
+
+		get maxLength() {
+			return this._j.getMaxLength() * meterSize;
+		}
+		set maxLength(val) {
+			this._j.setMaxLength(val / meterSize);
+		}
+	};
+
+	this.GrabberJoint = class extends this.Joint {
+		constructor(sprite) {
+			super(sprite, sprite, 'grab');
+
+			this._target = { x: 0, y: 0 };
+			this.__target = new b2Vec2(0, 0);
+
+			let j = pl.MouseJoint(
+				{
+					maxForce: 1000,
+					frequencyHz: 3,
+					dampingRatio: 0.9,
+					target: sprite.body.getPosition()
+				},
+				sprite.body,
+				sprite.body
+			);
+			this._createJoint(j);
+		}
+
+		_draw() {
+			$.line(this.spriteA.x, this.spriteA.y, this._target.x, this._target.y);
+		}
+
+		get target() {
+			return this._target;
+		}
+		set target(pos) {
+			this._target.x = pos.x;
+			this._target.y = pos.y;
+			this.__target.x = pos.x / meterSize;
+			this.__target.y = pos.y / meterSize;
+			this._j.setTarget(this.__target);
+		}
+
+		get maxForce() {
+			return this._j.getMaxForce();
+		}
+		set maxForce(val) {
+			this._j.setMaxForce(val);
+		}
+	};
+
+	class Scale {
+		constructor() {
+			let _this = this;
+			Object.defineProperties(this, {
+				x: {
+					get() {
+						return _this._x;
+					},
+					set(val) {
+						if (val == _this._x) return;
+						_this._x = val;
+						_this._avg = (_this._x + _this._y) * 0.5;
+					},
+					configurable: true,
+					enumerable: true
+				},
+				y: {
+					get() {
+						return _this._y;
+					},
+					set(val) {
+						if (val == _this._y) return;
+						_this._y = val;
+						_this._avg = (_this._x + _this._y) * 0.5;
+					},
+					configurable: true,
+					enumerable: true
+				},
+				_x: {
+					value: 1,
+					enumerable: false,
+					writable: true
+				},
+				_y: {
+					value: 1,
+					enumerable: false,
+					writable: true
+				},
+				_avg: {
+					value: 1,
+					enumerable: false,
+					writable: true
+				}
+			});
+		}
+
+		valueOf() {
+			return this._avg;
+		}
+	}
+
+	function isArrowFunction(fn) {
+		return !/^(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*\s*(?:(?:(?:async\s(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*\s*)?function|class)(?:\s|(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*)|(?:[_$\w][\w0-9_$]*\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*\()|(?:\[\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*(?:(?:['][^']+['])|(?:["][^"]+["]))\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*\]\())/.test(
+			fn.toString()
+		);
+	}
+
+	/*
+	 * Checks if the given string is a valid physics body type.
+	 */
+	function isPhysicsType(t) {
+		if (t == 'd' || t == 's' || t == 'k') return true;
+		let abr = t.slice(0, 2);
+		return abr == 'dy' || abr == 'st' || abr == 'ki';
+	}
+
+	/*
+	 * Returns an array with the line length, angle, and number of sides
+	 * of a regular polygon, which is used internally to create a Sprite
+	 * using line mode.
+	 */
+	function getRegularPolygon(lineLength, name) {
+		let l = lineLength;
+		let n = name.toLowerCase();
+		if (n == 'triangle') l = [l, -120, 3];
+		else if (n == 'square') l = [l, -90, 4];
+		else if (n == 'pentagon') l = [l, -72, 5];
+		else if (n == 'hexagon') l = [l, -60, 6];
+		else if (n == 'septagon') l = [l, -51.4285714286, 7];
+		else if (n == 'octagon') l = [l, -45, 8];
+		else if (n == 'enneagon') l = [l, -40, 9];
+		else if (n == 'decagon') l = [l, -36, 10];
+		else if (n == 'hendecagon') l = [l, -32.7272727273, 11];
+		else if (n == 'dodecagon') l = [l, -30, 12];
+		if (l == lineLength) throw new Error('Invalid, not a regular polygon: ' + name);
+		return l;
+	}
+
+	// default color palettes
+	$.q5play.palettes = [
+		{
+			a: 'aqua',
+			b: 'black',
+			c: 'crimson',
+			d: 'darkviolet',
+			e: 'peachpuff',
+			f: 'olive',
+			g: 'green',
+			h: 'hotpink',
+			i: 'indigo',
+			j: 'navy',
+			k: 'khaki',
+			l: 'lime',
+			m: 'magenta',
+			n: 'brown',
+			o: 'orange',
+			p: 'pink',
+			q: 'turquoise',
+			r: 'red',
+			s: 'skyblue',
+			t: 'tan',
+			u: 'blue',
+			v: 'violet',
+			w: 'white',
+			x: 'gold',
+			y: 'yellow',
+			z: 'gray'
+		}
+	];
+
+	this.colorPal = (c, palette) => {
+		if (c instanceof p5.Color) return c;
+		if (typeof palette == 'number') {
+			palette = $.q5play.palettes[palette];
+		}
+		palette ??= $.q5play.palettes[0];
+		let clr = palette[c];
+		if (!clr) return $.color(0, 0, 0, 0);
+		return $.color(clr);
+	};
+
+	this.EmojiImage = function (emoji, textSize) {
+		textSize *= $.q5play.emojiScale;
+		let size = textSize * 1.25;
+		let g = $.createGraphics(size, size, $.P2D);
+		g.textSize(textSize);
+		g.textAlign($.CENTER);
+		g.textFont(!$.canvas.webgpu ? $.textFont() : $._g.textFont());
+		g.text(emoji, size / 2, textSize);
+
+		// same code as img.trim() in q5.js
+		let ctx = g.drawingContext;
+		let pd = g._pixelDensity || 1;
+		let w = g.canvas.width;
+		let h = g.canvas.height;
+		let data = ctx.getImageData(0, 0, w, h).data;
+		let left = w,
+			right = 0,
+			top = h,
+			bottom = 0;
+
+		let i = 3;
+		for (let y = 0; y < h; y++) {
+			for (let x = 0; x < w; x++) {
+				if (data[i] !== 0) {
+					if (x < left) left = x;
+					if (x > right) right = x;
+					if (y < top) top = y;
+					if (y > bottom) bottom = y;
+				}
+				i += 4;
+			}
+		}
+		top = Math.floor(top / pd);
+		bottom = Math.floor(bottom / pd);
+		left = Math.floor(left / pd);
+		right = Math.floor(right / pd);
+
+		g = g.get(left, top, right - left + 1, bottom - top + 1);
+		g.src = emoji;
+		return g;
+	};
+
+	this.spriteArt = (txt, scale, palette) => {
+		scale ??= 1;
+		if (typeof palette == 'number') {
+			palette = $.q5play.palettes[palette];
+		}
+		palette ??= $.q5play.palettes[0];
+		let lines = txt; // accepts 2D arrays of characters
+		if (typeof txt == 'string') {
+			txt = txt.trim();
+			txt = txt.replace(/\r*\n\t+/g, '\n'); // trim leading tabs
+			txt = txt.replace(/\s+$/g, ''); // trim trailing whitespace
+			lines = txt.split('\n');
+		}
+		let w = 0;
+		for (let line of lines) {
+			if (line.length > w) w = line.length;
+		}
+		let h = lines.length;
+		let img = $.createImage(w * scale, h * scale);
+		img.loadPixels();
+
+		for (let i = 0; i < lines.length; i++) {
+			for (let j = 0; j < lines[i].length; j++) {
+				for (let sX = 0; sX < scale; sX++) {
+					for (let sY = 0; sY < scale; sY++) {
+						let c = this.colorPal(lines[i][j], palette);
+						img.set(j * scale + sX, i * scale + sY, c);
+					}
+				}
+			}
+		}
+		img.updatePixels();
+		img.w = img.width;
+		img.h = img.height;
+		$.q5play.onImageLoad(img);
+		return img; // return the p5 graphics object
+	};
+
+	this.createSprite = function () {
+		return new $.Sprite(...arguments);
+	};
+
+	this.createGroup = function () {
+		return new $.Group(...arguments);
+	};
+
+	this.loadAni = function () {
+		return new $.Ani(...arguments);
+	};
+
+	this.parseTextureAtlas = function (xml) {
+		let doc = xml.DOM || (xml instanceof Document ? xml : new DOMParser().parseFromString(xml.text || xml, 'text/xml'));
+		let subTextures = doc.querySelectorAll('SubTexture'),
+			atlas = {};
+		for (let st of subTextures) {
+			// remove file extension
+			let name = st.getAttribute('name').replace(/\.[^/.]+$/, '');
+			atlas[name] = {
+				x: Number(st.getAttribute('x')),
+				y: Number(st.getAttribute('y')),
+				width: Number(st.getAttribute('width')),
+				height: Number(st.getAttribute('height'))
+			};
+		}
+		return atlas;
+	};
+
+	this.animation = function (ani, dx, dy, dw, dh) {
+		// Draw the current frame
+		let img = ani[ani._frame];
+		if (img !== undefined) {
+			if (ani.spriteSheet) {
+				let { x, y, w, h } = img; // image info
+				if (!ani.demoMode) {
+					$.image(ani.spriteSheet, dx, dy, dw || img.defaultWidth || w, dh || img.defaultHeight || h, x, y, w, h);
+				} else {
+					$.image(
+						ani.spriteSheet,
+						dx,
+						dy,
+						dw || ani.spriteSheet.w,
+						dh || ani.spriteSheet.h,
+						x - ani.spriteSheet.w / 2 + w / 2,
+						y - ani.spriteSheet.h / 2 + h / 2
+					);
+				}
+			} else $.image(img, dx, dy, dw, dh);
+		} else {
+			console.warn(
+				'q5play: "' +
+					ani.name +
+					'"' +
+					' animation not loaded yet or frame ' +
+					ani._frame +
+					" doesn't exist. Load this animation in the preload function if you need to use it at the start of your program."
+			);
+		}
+
+		// don't update if paused or no frames
+		if (!ani.playing || !ani.length) return;
+
+		ani._cycles++;
+
+		if (ani._cycles % ani.frameDelay == 0) {
+			ani._cycles = 0;
+			ani.frameChanged = true;
+
+			if ((ani.targetFrame == -1 && ani._frame == ani.lastFrame) || ani._frame == ani.targetFrame) {
+				if (ani.endOnFirstFrame) ani._frame = 0;
+				if (ani.looping) ani.targetFrame = -1;
+				else ani.playing = false;
+				if (ani._onComplete) ani._onComplete();
+				if (ani.onComplete) ani.onComplete(); //fire when on last frame
+				if (!ani.looping) return;
+			}
+
+			//going to target frame up
+			if (ani.targetFrame > ani._frame && ani.targetFrame !== -1) {
+				ani._frame++;
+			}
+			//going to target frame down
+			else if (ani.targetFrame < ani._frame && ani.targetFrame !== -1) {
+				ani._frame--;
+			} else if (ani.targetFrame === ani._frame && ani.targetFrame !== -1) {
+				ani.playing = false;
+			} else if (ani.looping) {
+				//advance frame
+				//if next frame is too high
+				if (ani._frame >= ani.lastFrame) {
+					ani._frame = 0;
+				} else ani._frame++;
+			} else {
+				//if next frame is too high
+				if (ani._frame < ani.lastFrame) ani._frame++;
+			}
+		} else {
+			ani.frameChanged = false;
+		}
+	};
+
+	this.delay = (milliseconds) => {
+		if (!milliseconds) return new Promise(requestAnimationFrame);
+		// else it wraps setTimeout in a Promise
+		return new Promise((resolve) => {
+			setTimeout(resolve, milliseconds);
+		});
+	};
+
+	this.sleep = (milliseconds) => {
+		if (!milliseconds) {
+			return new Promise((resolve) => {
+				if ($.canvas.dispatchEvent) {
+					function handler() {
+						$.canvas.removeEventListener('q5play_worldStepped', handler);
+						resolve();
+					}
+					$.canvas.addEventListener('q5play_worldStepped', handler);
+				} else {
+					setTimeout(resolve, $.world._timeStep * 1000);
+				}
+			});
+		}
+		return $.delay(milliseconds);
+	};
+
+	this.play = (sound) => {
+		if (!sound?.play) {
+			throw new Error("Tried to play your sound but it wasn't a sound object.");
+		}
+		return new Promise((resolve) => {
+			sound.play();
+			sound.onended(() => resolve());
+		});
+	};
+
+	async function playIntro() {
+		if (document.getElementById('made-with-q5play')) return;
+		if (!using_p5v2) $._incrementPreload();
+		let d = document.createElement('div');
+		d.id = 'made-with-q5play';
+		d.style = 'position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 1000; background-color: black;';
+		let logo = document.createElement('img');
+		logo.style = `position: absolute; top: 50%; left: 50%; width: 80vmin; height: 40vmin; margin-left: -40vmin; margin-top: -20vmin; z-index: 1001; opacity: 1; scale: 1; transition: scale 1.5s, opacity 0.4s ease-in-out;`;
+		logo.onerror = () => {
+			logo.style.imageRendering = 'pixelated';
+			logo.src = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAACACAYAAADktbcKAAABc2lDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAACiRfZC9S8NQFMWPVSloHUSHDg6ZxCFqaQW7OLQViiIYqoLVKU2/hCQ+kohU3MRVCv4HVnAWHCwiFVwcHATRQUQ3p04KXbQ870uUdNH7uLwfh3MP710gEFYZ03sAGKZjZdJJaTW7JgXf0EXHLVWzWUJRFgT/3h1Frtaj570fF1nNdu0gvp++Ns4uF3eewpP4v/ryBVuj+4s6ojHLoUiZWNl2mOBd4mGLHkVcFVzy+FhwzuNz17OcSRHfEktaWc0TN4nlXIde6mBD39L8PyBUMFeWRA71CGaxARsMOlRUIEFB7A//lOtPYZPcFVg0V0IZDs0kSBEJBeI5mNAwAZk4igh1VOzZi2s9/OxP9rW9V2CmwTm/8LX5BnA6TSur+9pYHBjsB27qTLVUV+qmDhSLwPsJMJAFhu5oZt0uxqLe60NJoPeF849RIHgItKucfx5x3q7R8DNwZX4DGP5qvdREziwAAAn3SURBVHic7Z29cqQ6EIXF1s1uuvm+jvN9zsnndZw7dcwNbHwxBqm71X9C56ty1dbODGqEzlFLCFEKAAAAAOZjiQ4AAAnruq7RMWwsyzKsjoYNHMxJJuEfGdEIhgsYzEtm8W+MZgJDBQvmZQTxb4xkAsMECuZlJPFvjGICQwQJ5mVE8W+MYAL/RAcAwBUs8f/71zCSHe8Pn3KcSO9QYF6aBuAl+isIZpA9C/gVHQAAZ6QXf5YYOoEBgPHIJLxGLNnnMGAAAEwMDACkI3uveSdgAGAsMqX/GwMPA2AAAEwMDACkInNveUdgAGAcMqb/G4MOA2AAAEwMDACkIWsveWdgAGAMMqf/GwMOA/AwELgNz1fbB3Ve/gxgQkyQAYAU9PaO1uL3KsMbGADITyO19hRms6zBhgEwABBONlFYk+l8SXMAmQIGIJrn66N7PkBLU737DVQzgPWTngIA6CJR+k/G8Y5Fr0ZPMwCIHoCx2DTLzQh+ZAAQPwBtUmYeha/fbwYA8YNUjJj+bwQuXOLo+GsIAPGDu/Lym/f955tNHBn5VQrED8AeqmFkzkComr7NUuD93Med/SzdeQalulTxcXt/VSzrhrAl+bqua2tS8DYGMBrH65JCzBxGeDjnzmz13/mikl9I/wH4yTDDgM6lx8gAEpIuzT8S3PsPkf4PAgwgiJTCBtOBh4EAj4nG/jMMA8gZwDEtrU1icSa4zr7bSoGlE2g9E2/UmKjxUv6vddyrY98ZpP+6iIYAVw211oiPDfPq7kTtroXkN5TfcUVzdj6UzyRlteLglh9FeC9pjNb5ee86pDoEkIjXmrMekmpGx99Ry+AeWxuzMoXp/8ji984kxHUlHAaIDeBMSJTPSjlvoBa/Ofv+2b8lSETfKvPsfCj1nLHH34gQ/+jpv2ediQygJiSJyLx+syzLtz8ulPE99TNtMpsAyAvuAnSgNRE6BIL0f+TUPxpR3QmGAVMZwD5lPv5xjsH5f+CLRfo/+pCiRgoD2PeW1LRZ8puzY0iHAxxgDiArIQZwNZauCVHym+PveucAarFQPhuWQdJ/y546IgvwGAaEZQCSVFqafvd+3mI6Q5iUOw4FyAuBpI1cW9BWJsClV/Se9XlnvEW5lXeXXYMWPA4Mqhim/3fsUTlQTUS0OrCyT8B+k5AUk4AAAD/2nT4MAICJgQGAa5D+m2L6uDHx2sEAAJiQbRgAAwBgYmAA4JxBFv+MTvQwAAYA3MH4Pwfruq4wAAAmBgYAfjLRxp8ZiBwGwACACrj9NyYwAAAmBi8G4XCVTnW+n20mtvXvyAQ+4D5U9Hx9qO4cjAwAhHCXp+l6yFAHeTIAycRTkp4XvZqM59u8dSYVv/Z7A5ABgJ84GuvzLUdP6IX7+Tau5dAGMFvjcYVpAr090wzXsfcc2XVMuIZDGwAwJsAE7moEGcW/LMvSPwdQG7vvgzh+zyrNrJVDjdUCStln36l9dvwOp1zq+b4/WPMzW0PteS7gTnMD7sIvhdWW5QZAaRSdK8pUHi6hxrB9T9sIqPVkYUBaK/qYJlDKR8Od3QQyi3/bFkxmAAoNK+3MuaYYOfV08d2veqqIkFuXz9dHKdz6p2QiB3qzgbRtpIHGMMYi5T+DbwAB68TdG4CGCTjWU29vywLZQJXMvf7GflNQngE4i/+yMjxuU/WYgFU9ccRnea2E2QD2C6jj0esvhzfiqC4E2l9g1slwG2uHODkxWvQ8RxFoLezYBNaK99v5956b4wThSFmABGvxH4W/Qb8N2LjQx4tq7vYKO9a0Ynz585ef0lXiOiuPXU9JVj9+IYhHezVbFiTp/8ufv2HiL0VpHcCPXu33p1tH3lo7EBbjRflWMTzfyvVkoWbvv+f94b5mICPcOhUJX1H8pRg8CyBqWJ8ndeWg1YoSDAe4MWqnn1apd/g4WzAkmHUfgYjx/hmqKwGtLtLz9VFtKJzU624NiYpZ738k2xDlDgh6fYr4S8n0NGDpa5ijTBKpxVjJAsIR3CW4Cy+/aR0S6bl+o15/j0oGcHkinFtWxz9lumO0Kt8xhlKcTbLRgGdN/y3g9Pp76AbQuJg/Gnhvo/YwAeadDRKVejo1AQfxh80LTJgBRCAR/obuEED7gu8n+LSOHd0oNcsXrMoD9qgOA4zhDQGsJnhaT7Mx761r4DZpZkzW80D6T4Bg7j29fynYD8AGz5nwrLPuyEyGgG8AEVnABVa9m8pxEwgza+8/A6Yv+1BElgEIViRRj0upkNa6ACnqxyWez1b2LCD9Z2CcSfVNAr4//n9mezeZIX4oqHxOoHz+/uqYZ79pcRUT67iNFYtXx6jVx/4zzVc/hfb+SP/dWNd1Db0LsM14avZg1GNKG7bVcVvHo55T1WAgrtsReTdA5TbgXjD7xtsjJItj1o7LObY0hr0R1I7Xe46Zx/4Z0n/pdedCvR3YxGrLuJLlYaCAY1oeN2u5LiTOUK7EOOrWYxs9wwDcBrwZmXv/SEgLc266JXkNGMBNsLozoklUfBxhR72bIKpu7J8GFMycD1VeMFcNJ6T3V0z/NdLynjbQ+3SpevtrzANIhwGpHgcGBAgGd6fUXypEDQFGlu3FUsqHe0QHAnh4zWSzIGQAPakuab2HkfjIK/s6yu/dH0CSAcAAgA7E9L93rFsTonXPa1k2eR1AxQTE+wH0PlEEABWrtwh7pN1WZWstApJ05F/CRxYAumBOAGrMeqsttAksW3tzUG5n/u3LMAEgomP2P/utSyu6en3FYcC3dQAYCgBvotbAi17IoVh2Fk4Fj0wAsNB4W7RTJnAlvujyWShmANUvwwgACc0FQIZCbL4LMrBsFl4GcASGAC5JbgIcAWqX7yX+UowNAMxNtQMweApQ5U6BUHxaJqA+3ocBgCiaGWAyE+hecxBY9ilWKwEBoDKCCWiLL7r8UgppQxAYADCHPA8UZARWt9jCyibuBIQNQYAL5IZmsIVVS2CW99dDynbYWh4ZABARmQmU0rfzdCml65Vz3WVTYIi/ZwEfDACIYd0WzrRX4FFcmWNr0Lt6FwYAuhjKBFriyh7fAY2l+zAA0A17gViE0KjiijKBAPGXAgMASqQ2Aclkmld8QcL/Op7mwQBINSTonUVPFp/F07owAKBOimxA6xZaktisHtWHAQATwkzA6t55UHzWe3TAAIAprkMC64UzzvF5bNADAwDmuGQDDqvmSilusXntzgUDAC6YmYCSuLLE570tHwwAuKIqNGVxqZtAcvGXAgMAAYh2ltqLzTil7jIC4VAkakNeGAAIw2uLOYm4MsemWn5k4QBYCq1XXNYmEC3+UmAAIAEWQtMUl3Z8GYS/kSYQALSEZiGwzLH1kCoYAHqE5iEuaXzZhL+RMigAOEKLEFf2+KikDQyAUupCyyCsq/gyxAYAAFX+AyqVmTiXMeeKAAAAAElFTkSuQmCC`;
+		};
+		let src = window._q5play_intro_image;
+		if (src == '' || src?.includes('made_with_q5play')) {
+			if (src.includes('bit.') || src.includes('pixel')) {
+				logo.style.imageRendering = 'pixelated';
+			}
+			logo.src = src;
+		} else {
+			logo.src = 'https://q5play.org/assets/made_with_q5play.webp';
+		}
+		await new Promise((r) => (logo.onload = r));
+		d.append(logo);
+		document.body.append(d);
+		await $.delay();
+		logo.offsetHeight; // trigger css reflow
+		logo.style.scale = 1.2;
+		await $.delay(1100);
+		logo.style.opacity = 0;
+		await $.delay(400);
+		d.style.display = 'none';
+		d.remove();
+		document.getElementById('made-with-q5play')?.remove();
+		if (!using_p5v2) $._decrementPreload();
+	}
+
+	if (window.location) {
+		let lh = location.hostname;
+		switch (lh) {
+			case '':
+			case '127.0.0.1':
+			case 'localhost':
+			case 'q5play.org':
+			case 'q5play-web.pages.dev':
+			case 'editor.p5js.org':
+			case 'codepen.io':
+			case 'aug4th.com':
+			case 'cdpn.io':
+			case 'glitch.com':
+			case 'replit.com':
+			case 'stackblitz.com':
+			case 'jsfiddle.net':
+			case 'codevre.com':
+			case 'preview.codevre.com':
+			case 'quintos-org.github.io':
+				break;
+			default:
+				if (
+					/^[\d\.]+$/.test(lh) ||
+					lh.endsWith('.lan') ||
+					lh.endsWith('.local') ||
+					lh.endsWith('stackblitz.io') ||
+					lh.endsWith('glitch.me') ||
+					lh.endsWith('replit.dev') ||
+					lh.endsWith('codehs.com') ||
+					lh.endsWith('openprocessing.org') ||
+					location.origin.endsWith('preview.p5js.org')
+				) {
+					break;
+				}
+				playIntro();
+		}
+	}
+
+	let userDisabledP5Errors = p5.disableFriendlyErrors;
+	p5.disableFriendlyErrors = true;
+
+	let didCreateCanvas = false;
+
+	const _createCanvas = $.createCanvas;
+
+	this.createCanvas = function () {
+		let args = [...arguments];
+
+		// prevent p5.js v1 overriding the user's canvas with a new default canvas
+		if (didCreateCanvas && args[0] == 100 && args[1] == 100) return;
+
+		let display, renderQuality, displayScale;
+		if (typeof args[0] == 'string') {
+			if (args[0].includes(':')) {
+				let ratio = args[0].split(':');
+				let rW = Number(ratio[0]);
+				let rH = Number(ratio[1]);
+				let w = window.innerWidth;
+				let h = window.innerWidth * (rH / rW);
+				if (h > window.innerHeight) {
+					w = window.innerHeight * (rW / rH);
+					h = window.innerHeight;
+				}
+				args[0] = Math.round(w);
+				args.splice(1, 0, Math.round(h));
+				display = 'maxed';
+			} else {
+				args = [0, 0, ...args];
+			}
+		}
+		if (!args[0]) {
+			args[0] = window.innerWidth;
+			args[1] = window.innerHeight;
+			display = 'maxed';
+		}
+		if (typeof args[2] == 'string') {
+			let rend = args[2].toLowerCase().split(' ');
+			if (rend[0] == 'pixelated') {
+				renderQuality = 'pixelated';
+				if (!rend[1]) display = 'maxed';
+				else {
+					display = 'centered';
+					displayScale = Number(rend[1].slice(1));
+				}
+				args.splice(2, 1);
+			} else if (rend[0] == 'maxed') {
+				display = 'maxed';
+				args.splice(2, 1);
+			}
+		}
+		let rend = _createCanvas.call($, ...args);
+		$.ctx = $.drawingContext;
+		let c = rend.canvas || rend;
+		window.canvas = c; // for p5 v2
+		if (rend.GL) {
+			c.renderer = 'webgl';
+			$._webgl = true;
+		} else if (!$._webgpu) $._c2d = true;
+		c.tabIndex = 0;
+		c.w = args[0];
+		c.h = args[1];
+		if (c.addEventListener) {
+			c.addEventListener('keydown', function (e) {
+				if (
+					e.key == ' ' ||
+					e.key == '/' ||
+					e.key == 'ArrowUp' ||
+					e.key == 'ArrowDown' ||
+					e.key == 'ArrowLeft' ||
+					e.key == 'ArrowRight'
+				) {
+					e.preventDefault();
+				}
+			});
+			c.addEventListener('mouseover', () => {
+				$.mouse.isOnCanvas = true;
+				$.mouse.isActive = true;
+			});
+			c.addEventListener('mouseleave', () => {
+				$.mouse.isOnCanvas = false;
+			});
+			c.addEventListener('touchstart', (e) => e.preventDefault());
+			// this stops the right click menu from appearing
+			c.addEventListener('contextmenu', (e) => e.preventDefault());
+		}
+		c.save ??= $.saveCanvas.bind($);
+		c.resize ??= $.resizeCanvas.bind($);
+		c.hw = c.w * 0.5;
+		c.hh = c.h * 0.5;
+		c.mouse = { x: $.mouseX, y: $.mouseY };
+		if ($._c2d) {
+			$.camera.x = $.camera.ogX = c.hw;
+			$.camera.y = $.camera.ogY = c.hh;
+		} else {
+			$.camera.x = 0;
+			$.camera.y = 0;
+			if ($._webgpu) {
+				let rs = $.q5play._renderStats;
+				rs.x = -c.hw + 10;
+				rs.y = -c.hh + 20;
+			}
+		}
+		p5.disableFriendlyErrors = userDisabledP5Errors;
+
+		$.displayMode(display, renderQuality, displayScale);
+
+		let pointer = window.PointerEvent ? 'pointer' : 'mouse';
+		c.addEventListener(pointer + 'down', onpointerdown);
+		if (window) {
+			window.addEventListener(pointer + 'move', onpointermove);
+			window.addEventListener(pointer + 'up', onpointerup);
+		}
+
+		didCreateCanvas = true;
+		return rend;
+	};
+
+	// this is only for jsdoc
+
+	this.Canvas = class {
+		constructor(width, height, renderer, options) {
+			this.w;
+
+			this.width;
+
+			this.h;
+
+			this.height;
+
+			this.hw;
+
+			this.hh;
+
+			this.mouse;
+		}
+
+		resize() {}
+
+		save() {}
+	};
+
+	this.canvas = $.canvas;
+
+	const _resizeCanvas = $.resizeCanvas;
+
+	this.resizeCanvas = (w, h) => {
+		w ??= window.innerWidth;
+		h ??= window.innerHeight;
+		_resizeCanvas.call($, w, h);
+		let c = $.canvas;
+		c.w = c.width / $.pixelDensity();
+		c.h = c.height / $.pixelDensity();
+		c.hw = c.w * 0.5;
+		c.hh = c.h * 0.5;
+		if (c.maxed) {
+			if (c.w / c.h > window.innerWidth / window.innerHeight) {
+				c.style.width = '100%!important';
+				c.style.height = 'auto!important';
+			} else {
+				c.style.width = 'auto!important';
+				c.style.height = '100%!important';
+			}
+		}
+		if (c.c2d) {
+			$.camera.x = c.hw;
+			$.camera.y = c.hh;
+		} else {
+			$.camera.x = 0;
+			$.camera.y = 0;
+		}
+	};
+
+	const _frameRate = $.frameRate;
+
+	this.frameRate = function (hz) {
+		let ret = _frameRate.call($, hz);
+		if (hz) $.world._setTimeStep();
+		return ret;
+	};
+
+	// if the user isn't using q5.js
+	// add a backwards compatibility layer for p5.js
+	if (!$.displayMode && typeof document == 'object') {
+		document.head.insertAdjacentHTML(
+			'beforeend',
+			`<style>
+html, body {
+	margin: 0;
+	padding: 0;
+}
+body.hasFrameBorder {
+	display: block;
+}
+.p5Canvas {
+	outline: none;
+	-webkit-touch-callout: none;
+	-webkit-text-size-adjust: none;
+	-webkit-user-select: none;
+	overscroll-behavior: none;
+}
+.p5-pixelated {
+	image-rendering: pixelated;
+	font-smooth: never;
+	-webkit-font-smoothing: none;
+}
+.p5-centered,
+.p5-maxed {
+  display: flex;
+	align-items: center;
+	justify-content: center;
+}
+main.p5-centered,
+main.p5-maxed {
+	height: 100vh;
+}
+main {
+	overscroll-behavior: none;
+}
+</style>`
+		);
+
+		$._adjustDisplay = (forced) => {
+			let c = $.canvas;
+			let s = c.style;
+			// if the canvas doesn't have a style,
+			// it may be a server side canvas, so return
+			if (!s) return;
+			if (c.displayMode == 'normal') {
+				// unless the canvas needs to be resized, return
+				if (!forced) return;
+				s.width = c.w * c.displayScale + 'px';
+				s.height = c.h * c.displayScale + 'px';
+			} else {
+				let parent = c.parentElement.getBoundingClientRect();
+				if (c.w / c.h > parent.width / parent.height) {
+					if (c.displayMode == 'centered') {
+						s.width = c.w * c.displayScale + 'px';
+						s.maxWidth = '100%';
+					} else s.width = '100%';
+					s.height = 'auto';
+					s.maxHeight = '';
+				} else {
+					s.width = 'auto';
+					s.maxWidth = '';
+					if (c.displayMode == 'centered') {
+						s.height = c.h * c.displayScale + 'px';
+						s.maxHeight = '100%';
+					} else s.height = '100%';
+				}
+			}
+		};
+
+		$.MAXED = 'maxed';
+		$.SMOOTH = 'smooth';
+		$.PIXELATED = 'pixelated';
+
+		$.displayMode = (displayMode = 'normal', renderQuality = 'smooth', displayScale = 1) => {
+			let c = $.canvas;
+			if (typeof displayScale == 'string') {
+				displayScale = parseFloat(displayScale.slice(1));
+			}
+			if (displayMode == 'fullscreen') displayMode = 'maxed';
+			if (displayMode == 'center') displayMode = 'centered';
+
+			if (c.displayMode) {
+				c.parentElement.classList.remove('p5-' + c.displayMode);
+				c.classList.remove('p5-pixelated');
+			}
+
+			c.parentElement.classList.add('p5-' + displayMode);
+
+			if (renderQuality == 'pixelated') {
+				c.classList.add('p5-pixelated');
+				$.pixelDensity(1);
+				if ($.noSmooth) $.noSmooth();
+				if ($.textFont) $.textFont('monospace');
+			}
+
+			Object.assign(c, { displayMode, renderQuality, displayScale });
+
+			if ($.ctx) $.push();
+			$._adjustDisplay(true);
+			if ($.ctx) $.pop();
+		};
+	}
+
+	let errMsgs = {
+		generic: [
+			'Ah! I found an error',
+			'Oh no! Something went wrong',
+			'Oof! Something went wrong',
+			'Houston, we have a problem',
+			'Whoops, having trouble here'
+		],
+		Sprite: {
+			constructor: {
+				base: "Sorry I'm unable to make a new Sprite",
+				0: "What is $0 for? If you're trying to specify the x position of the sprite, please specify the y position as well.",
+				1: "If you're trying to specify points for a chain Sprite, please use an array of position arrays.\n$0",
+				2: 'Invalid input parameters: $0'
+			},
+			hw: {
+				0: "I can't change the halfWidth of a Sprite directly, change the sprite's width instead."
+			},
+			hh: {
+				1: "I can't change the halfHeight of a Sprite directly, change the sprite's height instead."
+			},
+			rotate: {
+				0: "Can't use this function on a sprite with a static collider, try changing the sprite's collider type to kinematic.",
+				1: 'Can\'t use "$0" for the angle of rotation, it must be a number.'
+			},
+			rotateTo: {},
+			rotateMinTo: {},
+			rotateTowards: {},
+			changeAnimation: `I can't find any animation named "$0".`,
+			collide: {
+				0: "I can't make that sprite collide with $0. Sprites can only collide with another sprite or a group.",
+				1: 'The collision callback has to be a function.',
+				2: "You're trying to check for an collision with a sprite or group that doesn't exist!"
+			},
+			overlap: {
+				0: "I can't make that sprite overlap with $0. Sprites can only overlap with another sprite or a group.",
+				1: 'The overlap callback has to be a function.',
+				2: "You're trying to check for an overlap with a sprite or group that doesn't exist!"
+			}
+		},
+		Ani: {
+			constructor: {
+				base: "I tried to make a new Ani but couldn't",
+				1: 'The name of the animation must be the first input parameter.',
+				2: 'Make sure to set the sprite sheet image before adding animations from it.'
+			},
+			frame: 'Index $0 out of bounds. That means there is no frame $0 in this animation. It only has $1 frames!'
+		},
+		Group: {
+			constructor: {
+				base: "Hmm awkward! Well it seems I can't make that new Group you wanted"
+			}
+		}
+	};
+	errMsgs.Group.collide = errMsgs.Sprite.collide;
+	errMsgs.Group.overlap = errMsgs.Sprite.overlap;
+	errMsgs.Sprite.rotateTo[0] =
+		errMsgs.Sprite.rotateMinTo[0] =
+		errMsgs.Sprite.rotateTowards[0] =
+			errMsgs.Sprite.rotate[0];
+
+	class FriendlyError extends Error {
+		constructor(func, errorNum, e) {
+			super();
+
+			if (typeof func != 'string') {
+				e = errorNum;
+				errorNum = func;
+				func = this.stack.match(/\n\s*at ([^\(]*)/)[1];
+				func = func.slice(0, -1);
+			}
+			if (typeof errorNum != 'number') {
+				e = errorNum;
+				errorNum = undefined;
+			}
+			if (func.slice(0, 3) == 'new') func = func.slice(4);
+			func = func.split('.');
+			let className = func[0];
+			func = func[1] || 'constructor';
+
+			let ln = this.stack.match(/\/([^p\/][^5][^\/:]*:[^\/:]+):/);
+			if (ln) {
+				ln = ln[1].split(':');
+				ln = ' in ' + ln[0] + ' at line ' + ln[1];
+			}
+			ln = ' using ' + className + '.' + func + '. ';
+
+			e = e || [];
+
+			let m = errMsgs[className][func];
+			let msg;
+			if (m.base) msg = m.base + ln;
+			else msg = errMsgs.generic[Math.floor(Math.random() * errMsgs.generic.length)] + ln;
+			if (errorNum !== undefined) m = m[errorNum];
+			if (m) {
+				m = m.replace(/\$([0-9]+)/g, (m, n) => {
+					return e[n];
+				});
+				msg += m;
+			}
+
+			p5._friendlyError(msg, func);
+		}
+	}
+
+	this.allSprites = new $.Group();
+
+	this.world = new $.World();
+
+	this.camera = new $.Camera();
+
+	this.InputDevice = class {
+		constructor() {
+			this.holdThreshold = 12;
+
+			this._default = 0;
+		}
+
+		/*
+		 * Attempt to auto-correct the user's input. Inheriting classes
+		 * override this method.
+		 */
+		_ac(inp) {
+			return inp;
+		}
+
+		presses(inp) {
+			inp ??= this._default;
+			if (this[inp] === undefined) inp = this._ac(inp);
+			return this[inp] == 1 || this[inp] == -3;
+		}
+
+		pressing(inp) {
+			inp ??= this._default;
+			if (this[inp] === undefined) inp = this._ac(inp);
+			if (this[inp] == -3) return 1;
+			return this[inp] > 0 ? this[inp] : 0;
+		}
+
+		pressed(inp) {
+			return this.released(inp);
+		}
+
+		holds(inp) {
+			inp ??= this._default;
+			if (this[inp] === undefined) inp = this._ac(inp);
+			return this[inp] == this.holdThreshold;
+		}
+
+		holding(inp) {
+			inp ??= this._default;
+			if (this[inp] === undefined) inp = this._ac(inp);
+			return this[inp] >= this.holdThreshold ? this[inp] : 0;
+		}
+
+		held(inp) {
+			inp ??= this._default;
+			if (this[inp] === undefined) inp = this._ac(inp);
+			return this[inp] == -2;
+		}
+
+		released(inp) {
+			inp ??= this._default;
+			if (this[inp] === undefined) inp = this._ac(inp);
+			return this[inp] <= -1;
+		}
+
+		releases(inp) {
+			return this.released(inp);
+		}
+	};
+
+	this._Mouse = class extends $.InputDevice {
+		constructor() {
+			super();
+			this._default = 'left';
+
+			let _this = this;
+
+			// this.x and this.y store the actual position values of the mouse
+			this._pos = $.createVector.call($);
+
+			Object.defineProperty(this._pos, 'x', {
+				get() {
+					return _this.x;
+				},
+				set(val) {
+					_this.x = val;
+				}
+			});
+
+			Object.defineProperty(this._pos, 'y', {
+				get() {
+					return _this.y;
+				},
+				set(val) {
+					_this.y = val;
+				}
+			});
+
+			this.x = 0;
+
+			this.y = 0;
+
+			this.canvasPos = {};
+
+			this.left = 0;
+
+			this.center = 0;
+
+			this.right = 0;
+
+			this.drag = {
+				left: 0,
+				center: 0,
+				right: 0
+			};
+			this._dragFrame = {
+				left: false,
+				center: false,
+				right: false
+			};
+
+			this.isOnCanvas = false;
+
+			this.isActive = false;
+
+			this._visible = true;
+			this._cursor = 'default';
+			this._ogX = 0;
+			this._ogY = 0;
+		}
+
+		_ac(inp) {
+			inp = inp.toLowerCase();
+			if (inp.slice(0, 4) == 'left') inp = 'left';
+			else if (inp.slice(0, 5) == 'right') inp = 'right';
+			else if (inp.slice(0, 6) == 'middle') inp = 'center';
+			return inp;
+		}
+
+		_update() {
+			$.mouse.canvasPos.x = $.mouseX;
+			$.mouse.canvasPos.y = $.mouseY;
+
+			if ($.camera.x == $.camera.ogX && $.camera.y == $.camera.ogY && $.camera.zoom == 1) {
+				this.x = $.mouseX;
+				this.y = $.mouseY;
+			} else if (!$._webgpu) {
+				this.x = ($.mouseX - $.canvas.hw) / $.camera.zoom + $.camera.x;
+				this.y = ($.mouseY - $.canvas.hh) / $.camera.zoom + $.camera.y;
+			} else {
+				this.x = $.mouseX / $.camera.zoom + $.camera.x;
+				this.y = $.mouseY / $.camera.zoom + $.camera.y;
+			}
+		}
+
+		get pos() {
+			return this._pos;
+		}
+
+		get position() {
+			return this._pos;
+		}
+
+		get cursor() {
+			return $.canvas.style.cursor;
+		}
+		set cursor(val) {
+			if (val != this._cursor) {
+				$.cursor(val);
+				this._cursor = val;
+			}
+		}
+
+		get visible() {
+			return this._visible;
+		}
+		set visible(val) {
+			this._visible = val;
+			if (val) $.canvas.style.cursor = 'default';
+			else $.canvas.style.cursor = 'none';
+		}
+
+		drags(inp) {
+			inp ??= this._default;
+			return this.drag[inp] == 1;
+		}
+
+		dragging(inp) {
+			inp ??= this._default;
+			return this.drag[inp] > 0 ? this.drag[inp] : 0;
+		}
+
+		dragged(inp) {
+			inp ??= this._default;
+			return this.drag[inp] <= -1;
+		}
+	};
+
+	this.mouse = new $._Mouse();
+
+	let pressAmt = 0;
+
+	let onpointerdown = function (e) {
+		if (!$._setupDone) return;
+		pressAmt++;
+
+		if (!$._isQ5 && $.userStartAudio) $.userStartAudio();
+
+		let btn = 'left';
+		if (e.button === 1) btn = 'center';
+		else if (e.button === 2) btn = 'right';
+
+		$.mouse.isActive = true;
+		$.mouse[btn]++;
+		if ($.world.mouseSprites.length) {
+			let msm = $.world.mouseSprite?.mouse;
+			// old mouse sprite didn't have the mouse released on it
+			if (msm) {
+				msm[btn] = 0;
+				msm.hover = 0;
+				msm.drag[btn] = 0;
+			}
+			let ms = $.world.mouseSprites[0];
+			$.world.mouseSprite = ms;
+			msm = ms.mouse;
+			msm[btn] = 1;
+			if (msm.hover <= 0) msm.hover = 1;
+		}
+	};
+
+	let onpointermove = function (e) {
+		if (!$._setupDone) return;
+
+		let btn = 'left';
+		if (e.button === 1) btn = 'center';
+		else if (e.button === 2) btn = 'right';
+
+		let m = $.mouse;
+		if (m[btn] > 0) m._dragFrame[btn] = true;
+	};
+
+	let onpointerup = function (e) {
+		if (!$._setupDone) return;
+		if (pressAmt > 0) pressAmt--;
+		else return;
+
+		let btn = 'left';
+		if (e.button === 1) btn = 'center';
+		else if (e.button === 2) btn = 'right';
+
+		let m = $.mouse;
+		if (m[btn] >= m.holdThreshold) m[btn] = -2;
+		else if (m[btn] > 1) m[btn] = -1;
+		else m[btn] = -3;
+
+		if (m.drag[btn] > 0) m.drag[btn] = -1;
+
+		let msm = $.world.mouseSprite?.mouse;
+		if (!msm) return;
+
+		if (msm.hover > 1) {
+			if (msm[btn] >= $.mouse.holdThreshold) msm[btn] = -2;
+			else if (msm[btn] > 1) msm[btn] = -1;
+			else msm[btn] = -3;
+
+			if (msm.drag[btn] > 0) msm.drag[btn] = -1;
+		} else {
+			msm[btn] = 0;
+			msm.drag[btn] = 0;
+		}
+	};
+
+	this._Touch = class extends $.InputDevice {
+		constructor(touch) {
+			super();
+
+			this.x;
+
+			this.y;
+
+			this.id = touch.identifier;
+			this._default = 'duration';
+
+			this.holdThreshold = $.touches.holdThreshold;
+
+			this.duration = 1;
+
+			this.drag = 0;
+			this._dragFrame = false;
+
+			this.canvasPos = {};
+			this._update(touch);
+		}
+
+		_update(v) {
+			let c = $.canvas;
+			const rect = c.getBoundingClientRect();
+			const sx = c.scrollWidth / c.w || 1;
+			const sy = c.scrollHeight / c.h || 1;
+			const x = (this.canvasPos.x = (v.clientX - rect.left) / sx);
+			const y = (this.canvasPos.y = (v.clientY - rect.top) / sy);
+			if ($.camera.x == c.hw && $.camera.y == c.hh && $.camera.zoom == 1) {
+				this.x = x;
+				this.y = y;
+			} else {
+				this.x = (x - c.hw) / $.camera.zoom + $.camera.x;
+				this.y = (y - c.hh) / $.camera.zoom + $.camera.y;
+			}
+			this.force = v.force;
+		}
+	};
+
+	$.touches = [];
+	$.touches.holdThreshold = 12;
+
+	$._ontouchstart = function (e) {
+		if (!$._setupDone) return;
+
+		if ($.getAudioContext && $.getAudioContext()?.state == 'suspended') $.userStartAudio();
+
+		for (let touch of e.changedTouches) {
+			$.touches.push(new $._Touch(touch));
+
+			if ($.touches.length == 1) {
+				$.mouseX = $.touches[0].x;
+				$.mouseY = $.touches[0].y;
+				$.mouse._update();
+				$.world.mouseSprites = $.world.getMouseSprites();
+				if (using_p5v1) $._onmousedown(e);
+			}
+		}
+		if ($.touchStarted && !$.touchStarted(e)) e.preventDefault();
+	};
+
+	$._ontouchmove = function (e) {
+		if (!$._setupDone) return;
+
+		for (let touch of e.changedTouches) {
+			let t = $.touches.find((t) => t.id == touch.identifier);
+			t._update(touch);
+			t._dragFrame = true;
+			if (t.id == $.touches[0].id) {
+				$.mouseX = $.touches[0].x;
+				$.mouseY = $.touches[0].y;
+				$.mouse._update();
+				if (using_p5v1) $._onmousemove(e);
+			}
+		}
+		if ($.touchMoved && !$.touchMoved(e)) e.preventDefault();
+	};
+
+	$._ontouchend = function (e) {
+		if (!$._setupDone) return;
+
+		for (let touch of e.changedTouches) {
+			let t = $.touches.find((t) => t.id == touch.identifier);
+			t._update(touch);
+
+			if (t.duration >= t.holdThreshold) t.duration = -2;
+			else if (t.duration > 1) t.duration = -1;
+			else t.duration = -3;
+
+			if (t.drag > 0) t.drag = -1;
+
+			if (t.id == $.touches[0].id) {
+				$.mouseX = $.touches[0].x;
+				$.mouseY = $.touches[0].y;
+				$.mouse._update();
+				if (using_p5v1) $._onmouseup(e);
+			}
+		}
+		if ($.touchEnded && !$.touchEnded(e)) e.preventDefault();
+	};
+
+	this._Keyboard = class extends $.InputDevice {
+		constructor() {
+			super();
+			this._default = ' ';
+
+			this.alt = 0;
+			this.arrowUp = 0;
+			this.arrowDown = 0;
+			this.arrowLeft = 0;
+			this.arrowRight = 0;
+			this.backspace = 0;
+			this.capsLock = 0;
+			this.control = 0;
+			this.enter = 0;
+			this.meta = 0;
+			this.shift = 0;
+			this.tab = 0;
+
+			let k = (this._simpleKeyControls = {
+				arrowUp: 'up',
+				arrowDown: 'down',
+				arrowLeft: 'left',
+				arrowRight: 'right'
+			});
+
+			k.w = k.W = 'up';
+			k.s = k.S = 'down';
+			k.a = k.A = 'left';
+			k.d = k.D = 'right';
+
+			k.i = k.I = 'up2';
+			k.k = k.K = 'down2';
+			k.j = k.J = 'left2';
+			k.l = k.L = 'right2';
+		}
+
+		get visible() {
+			return this._inp == document.activeElement;
+		}
+		set visible(v) {
+			if (!this._inp) {
+				this._inp = Object.assign(document.createElement('input'), {
+					type: 'text',
+					style: 'position: fixed; height: 0; padding: 0; border: none; opacity: 0.0001; pointer-events: none;'
+				});
+				document.body.appendChild(this._inp);
+			}
+			this._visible = v;
+			v ? this._inp.focus() : this._inp.blur();
+		}
+
+		_ac(inp) {
+			if (inp.length != 1) {
+				if (!isNaN(inp)) {
+					if (inp == 38) return 'arrowUp';
+					if (inp == 40) return 'arrowDown';
+					if (inp == 37) return 'arrowLeft';
+					if (inp == 39) return 'arrowRight';
+					if (inp >= 10) {
+						throw new Error('Use key names with the keyboard input functions, not keyCode numbers!');
+					}
+					return inp;
+				}
+				inp = inp.replaceAll(/[ _-]/g, '');
+			}
+			inp = inp.toLowerCase();
+			if (inp.length != 1) {
+				if (inp == 'arrowup') return 'arrowUp';
+				if (inp == 'arrowdown') return 'arrowDown';
+				if (inp == 'arrowleft') return 'arrowLeft';
+				if (inp == 'arrowright') return 'arrowRight';
+				if (inp == 'capslock') return 'capsLock';
+			}
+			return inp;
+		}
+
+		_pre(k) {
+			if (!this[k] || this[k] < 0) {
+				this[k] = 1;
+			}
+		}
+
+		_rel(k) {
+			if (this[k] >= this.holdThreshold) this[k] = -2;
+			else if (this[k] > 1) this[k] = -1;
+			else this[k] = -3;
+		}
+
+		get cmd() {
+			return this['meta'];
+		}
+		get command() {
+			return this['meta'];
+		}
+		get ctrl() {
+			return this['control'];
+		}
+		get space() {
+			return this[' '];
+		}
+		get spacebar() {
+			return this[' '];
+		}
+		get opt() {
+			return this['alt'];
+		}
+		get option() {
+			return this['alt'];
+		}
+		get win() {
+			return this['meta'];
+		}
+		get windows() {
+			return this['meta'];
+		}
+	};
+
+	this.kb = new $._Keyboard();
+
+	this.keyboard = $.kb;
+
+	if (typeof navigator == 'object' && navigator.keyboard) {
+		const keyboard = navigator.keyboard;
+		if (window == window.top) {
+			keyboard.getLayoutMap().then((keyboardLayoutMap) => {
+				const key = keyboardLayoutMap.get('KeyW');
+				if (key != 'w') $.q5play.standardizeKeyboard = true;
+			});
+		} else {
+			$.q5play.standardizeKeyboard = true;
+		}
+	} else {
+		// Firefox and Safari don't have navigator.keyboard
+		// so just make them use key codes
+		$.q5play.standardizeKeyboard = true;
+	}
+
+	function _getKeyFromCode(e) {
+		let code = e.code;
+		if (code.length == 4 && code.slice(0, 3) == 'Key') {
+			return code[3].toLowerCase();
+		}
+		return e.key;
+	}
+
+	let onkeydown = function (e) {
+		let key = e.key;
+		if (this.q5play.standardizeKeyboard) {
+			key = _getKeyFromCode(e);
+		}
+		// convert PascalCase key names into camelCase
+		// which is more common for JavaScript properties
+		if (key.length > 1) {
+			key = key[0].toLowerCase() + key.slice(1);
+		} else {
+			let lower = key.toLowerCase();
+			let upper = key.toUpperCase();
+			if (lower != upper) {
+				if (key != upper) this.kb._pre(upper);
+				else this.kb._pre(lower);
+			}
+		}
+		this.kb._pre(key);
+
+		let k = this.kb._simpleKeyControls[key];
+		if (k) this.kb._pre(k);
+	};
+
+	let onkeyup = function (e) {
+		let key = e.key;
+		if (this.q5play.standardizeKeyboard) {
+			key = _getKeyFromCode(e);
+		}
+		if (key.length > 1) {
+			key = key[0].toLowerCase() + key.slice(1);
+		} else {
+			let lower = key.toLowerCase();
+			let upper = key.toUpperCase();
+			if (lower != upper) {
+				if (key != upper) this.kb._rel(upper);
+				else this.kb._rel(lower);
+			}
+		}
+		this.kb._rel(key);
+
+		let k = this.kb._simpleKeyControls[key];
+		if (k) this.kb._rel(k);
+
+		if (e.shiftKey) {
+			// if user is pressing shift but released another key
+			let k = key.toLowerCase();
+			if (this.kb[k] > 0) this.kb._rel(k);
+		}
+	};
+
+	if (window) {
+		window.addEventListener('keydown', onkeydown.bind(this));
+		window.addEventListener('keyup', onkeyup.bind(this));
+	}
+
+	this.Contro = class extends $.InputDevice {
+		constructor(gp) {
+			super();
+			this._default = 'a';
+			this.connected = true;
+
+			this.a = 0;
+			this.b = 0;
+			this.x = 0;
+			this.y = 0;
+			this.l = 0;
+			this.r = 0;
+			this.lt = 0;
+			this.rt = 0;
+			this.select = 0;
+			this.start = 0;
+			this.lsb = 0;
+			this.rsb = 0;
+			this.up = 0;
+			this.down = 0;
+			this.left = 0;
+			this.right = 0;
+
+			this.leftStick = {
+				x: 0,
+				y: 0
+			};
+
+			this.rightStick = {
+				x: 0,
+				y: 0
+			};
+
+			this.leftTrigger = 0;
+
+			this.rightTrigger = 0;
+
+			this.buttonMapping = {
+				a: 0,
+				b: 1,
+				x: 2,
+				y: 3,
+				l: 4,
+				r: 5,
+				lt: 6,
+				rt: 7,
+				select: 8,
+				start: 9,
+				lsb: 10,
+				rsb: 11,
+				up: 12,
+				down: 13,
+				left: 14,
+				right: 15,
+				home: 16,
+				capture: 17,
+				lsl: 18,
+				lsr: 19,
+				rsl: 20,
+				rsr: 21
+			};
+
+			this.axeMapping = {
+				leftStick: {
+					x: 0,
+					y: 1
+				},
+				rightStick: {
+					x: 2,
+					y: 3
+				},
+				leftTrigger: 4,
+				rightTrigger: 5
+			};
+
+			this.isMock = false;
+
+			if (typeof gp != 'string') {
+				this.gamepad = gp;
+				this.id = gp.id;
+			} else {
+				this.gamepad = {};
+				this.id = gp;
+				this.isMock = true;
+			}
+
+			this._axeTriggers = this.gamepad.axes && this.gamepad.axes[this.axeMapping.leftTrigger] !== undefined;
+
+			this.hasAnalogTriggers = this._axeTriggers || undefined;
+
+			this.isNintendo = false;
+
+			// corrects button mapping for GuliKit KingKong 2 Pro controllers
+			// which have a Nintendo Switch style button layout
+			// https://www.aliexpress.com/item/1005003624801819.html
+			if (this.id.includes('Joy-Con') || this.id.includes('Nintendo') || this.id.includes('GuliKit')) {
+				this.buttonMapping.a = 1;
+				this.buttonMapping.b = 0;
+				this.buttonMapping.x = 3;
+				this.buttonMapping.y = 2;
+				this.isNintendo = true;
+			}
+		}
+
+		_ac(inp) {
+			inp = inp.toLowerCase();
+			if (inp == 'lb') inp = 'l';
+			else if (inp == 'rb') inp = 'r';
+			else if (inp == 'leftstickbutton') inp = 'lsb';
+			else if (inp == 'rightstickbutton') inp = 'rsb';
+			return inp;
+		}
+
+		_update() {
+			if (this.isMock) return;
+
+			this.gamepad = navigator.getGamepads()[this.gamepad.index];
+			if (!this.gamepad?.connected) return;
+
+			let pad = this.gamepad;
+
+			// buttons
+			for (let name in this.buttonMapping) {
+				let idx = this.buttonMapping[name];
+				let b = pad.buttons[idx];
+				if (!b) continue;
+				if (b.pressed) this[name]++;
+				else this[name] = this[name] > 0 ? -1 : 0;
+			}
+
+			// sticks
+			this.leftStick.x = pad.axes[this.axeMapping.leftStick.x];
+			this.leftStick.y = pad.axes[this.axeMapping.leftStick.y];
+
+			this.rightStick.x = pad.axes[this.axeMapping.rightStick.x];
+			this.rightStick.y = pad.axes[this.axeMapping.rightStick.y];
+
+			// triggers
+			if (this._axeTriggers) {
+				this.leftTrigger = pad.axes[this.axeMapping.leftTrigger];
+				this.rightTrigger = pad.axes[this.axeMapping.rightTrigger];
+			} else {
+				this.leftTrigger = pad.buttons[this.buttonMapping.lt].value;
+				this.rightTrigger = pad.buttons[this.buttonMapping.rt].value;
+
+				// only needs to be checked once
+				if (this.hasAnalogTriggers === undefined && (this.leftTrigger || this.rightTrigger)) {
+					this.hasAnalogTriggers = !Number.isInteger(this.leftTrigger) || !Number.isInteger(this.rightTrigger);
+				}
+			}
+			return true; // update completed
+		}
+
+		_reset() {
+			for (let name in this.buttonMapping) {
+				this[name] = 0;
+			}
+			this.leftStick.x = 0;
+			this.leftStick.y = 0;
+			this.rightStick.x = 0;
+			this.rightStick.y = 0;
+			this.leftTrigger = 0;
+			this.rightTrigger = 0;
+		}
+		// aliases for playstation face buttons
+		get cross() {
+			return this.a;
+		}
+		get circle() {
+			return this.b;
+		}
+		get square() {
+			return this.x;
+		}
+		get triangle() {
+			return this.y;
+		}
+
+		get ls() {
+			return this.leftStick;
+		}
+
+		get rs() {
+			return this.rightStick;
+		}
+
+		get lb() {
+			return this.l;
+		}
+
+		get rb() {
+			return this.r;
+		}
+
+		get l1() {
+			return this.l;
+		}
+
+		get r1() {
+			return this.r;
+		}
+
+		get zl() {
+			return this.lt;
+		}
+
+		get zr() {
+			return this.rt;
+		}
+
+		get l2() {
+			return this.leftTrigger;
+		}
+
+		get r2() {
+			return this.rightTrigger;
+		}
+
+		get leftStickButton() {
+			return this.lsb;
+		}
+
+		get rightStickButton() {
+			return this.rsb;
+		}
+
+		get l3() {
+			return this.lsb;
+		}
+
+		get r3() {
+			return this.rsb;
+		}
+
+		get leftSideLeft() {
+			return this.lsl;
+		}
+
+		get leftSideRight() {
+			return this.lsr;
+		}
+
+		get rightSideLeft() {
+			return this.rsl;
+		}
+
+		get rightSideRight() {
+			return this.rsr;
+		}
+	};
+
+	this._Contros = class extends Array {
+		constructor() {
+			super();
+			if (window) {
+				window.addEventListener('gamepadconnected', (e) => {
+					this._onConnect(e.gamepad);
+				});
+				window.addEventListener('gamepaddisconnected', (e) => {
+					this._onDisconnect(e.gamepad);
+				});
+			}
+
+			// test if the browser supports the HTML5 Gamepad API
+			// all modern browsers do, this is really just to prevent
+			// q5play's Jest tests from failing
+			if (typeof navigator != 'object' || !navigator.getGamepads) return;
+
+			// if the page was not reloaded, but q5play sketch was,
+			// then gamepads could be already connected
+			// so they need to be added as Contro objects
+			let gps = navigator.getGamepads();
+			for (let gp of gps) {
+				if (gp) this._onConnect(gp);
+			}
+		}
+
+		swap(indexA, indexB) {
+			let tmp = this[indexA];
+			this[indexA] = this[indexB];
+			this[indexB] = tmp;
+			if (indexA == 0 || indexB == 0) {
+				$.contro = this[0];
+				if (!$._q5 && $._isGlobal) {
+					window.contro = this[0];
+				}
+			}
+		}
+
+		remove(index) {
+			this[index] = null;
+		}
+
+		onConnect(gamepad) {
+			return true;
+		}
+
+		onDisconnect(gamepad) {
+			return false;
+		}
+
+		onChange(index) {}
+
+		_onConnect(gp) {
+			if (!gp) return;
+			for (let i = 0; i < this.length; i++) {
+				if (gp.index == this[i].gamepad?.index) {
+					this[i].connected = true;
+					log('contros[' + i + '] reconnected: ' + gp.id);
+					return;
+				}
+			}
+			log(gp);
+			if (this.onConnect(gp)) {
+				let c = new $.Contro(gp);
+
+				// get the index of the next available slot
+				let index = 0;
+				for (let i = 0; i <= this.length; i++) {
+					if (!this[i]) {
+						index = i;
+						break;
+					}
+				}
+				this[index] = c;
+				log('contros[' + index + '] connected: ' + gp.id);
+				if (index == 0) {
+					$.contro = c;
+					if ($._isGlobal) window.contro = c;
+				}
+				this.onChange(index);
+			}
+		}
+
+		_onDisconnect(gp) {
+			if (!gp) return;
+			for (let i = 0; i < this.length; i++) {
+				if (this[i].gamepad?.index === gp.index) {
+					this[i].connected = false;
+					log('contros[' + i + '] disconnected: ' + gp.id);
+					if (this.onDisconnect(gp)) {
+						this.remove(i);
+						this.onChange(i);
+					} else this[i]._reset();
+					return;
+				}
+			}
+		}
+
+		/*
+		 * Updates the state of all controllers.
+		 */
+		_update() {
+			for (let c of this) {
+				if (c.connected) c._update();
+			}
+		}
+	};
+
+	this.contros = new $._Contros();
+
+	this.controllers = $.contros;
+
+	this.contro = new $.Contro('mock0');
+
+	this.getFPS ??= () => $.q5play._fps;
+
+	let fpsHistory = new Array(180).fill(60),
+		fpsPos = 0,
+		fpsMin = 60,
+		fpsMax = 240;
+	let statsColor = $.color('lime');
+
+	$.renderStats = () => {
+		let rs = $.q5play._renderStats;
+
+		let fps = $.frameRate();
+		if (fps > 55) fps = $.getFPS();
+
+		// Update FPS history using circular buffer
+		fpsHistory[fpsPos] = fps;
+		fpsPos = (fpsPos + 1) % fpsHistory.length;
+
+		// Update stats every 30 frames
+		if ($.frameCount % 30 == 1) {
+			let min = Infinity,
+				max = 0,
+				sum = 0;
+			for (let fps of fpsHistory) {
+				min = Math.min(min, fps);
+				max = Math.max(max, fps);
+				sum += fps;
+			}
+			$.q5play.fpsMin = Math.round(min);
+			$.q5play.fpsMax = Math.round(max);
+			$.q5play.fpsAvg = Math.round(sum / fpsHistory.length);
+
+			fpsMin = Math.floor(min / 20) * 20;
+			fpsMax = Math.ceil(max / 20) * 20;
+		}
+
+		// Update stats every 10 frames
+		if ($.frameCount % 10 == 1) {
+			// Calculate min FPS from last 10 frames
+			let recentMin = Infinity;
+			for (let i = 0; i < 10; i++) {
+				const idx = (fpsPos - i + fpsHistory.length) % fpsHistory.length;
+				recentMin = Math.min(recentMin, fpsHistory[idx]);
+			}
+
+			// Update color based on recent performance
+			statsColor = recentMin > 55 ? $.color('lime') : recentMin > 25 ? $.color('orange') : $.color('red');
+		}
+
+		// Draw background and stats
+		$.push();
+		$.fill(0, 0, 0, $._colorFormat / 2);
+		$.rectMode($.CORNER);
+		$.rect(rs.x, rs.y, rs.chartWidth + 30, rs.gap * 3 + rs.chartHeight);
+
+		$.fill(statsColor);
+		$.textAlign($.LEFT, $.TOP);
+		$.textSize(rs.fontSize);
+		if (rs.font) $.textFont(rs.font);
+
+		let x = rs.x + 6,
+			y = rs.y + 2;
+		$.text('q5play ' + $.q5play.version, x, y);
+		$.text('sprites ' + $.q5play.spritesDrawn, x, y + rs.gap);
+
+		// Draw chart
+		const chartX = x + 25;
+		const chartY = y + rs.gap * 2;
+		const range = fpsMax - fpsMin;
+
+		// Draw axis labels
+		$.textAlign($.RIGHT);
+		$.textSize(rs.fontSize * 0.8);
+		$.text(fpsMax, chartX - 5, chartY);
+		$.text('FPS', chartX - 5, chartY + rs.chartHeight / 2);
+		$.text(fpsMin, chartX - 5, chartY + rs.chartHeight);
+
+		// Plot FPS line
+		$.noFill();
+		$.stroke(statsColor);
+		$.strokeWeight(1.1);
+		$.beginShape();
+		const len = fpsHistory.length;
+		const startIdx = fpsPos % len;
+
+		for (let i = 0; i < len; i++) {
+			const idx = (startIdx + i) % len;
+			const px = chartX + (i * rs.chartWidth) / len;
+			const py = chartY + rs.chartHeight - ((fpsHistory[idx] - fpsMin) * rs.chartHeight) / range;
+			$.vertex(px, py);
+		}
+		$.endShape();
+
+		$.pop();
+	};
+
+	function transformPoint(xf, v) {
+		let x = xf.p.x + xf.q.c * v.x - xf.q.s * v.y,
+			y = xf.p.y + xf.q.s * v.x + xf.q.c * v.y;
+		v.x = x;
+		v.y = y;
+	}
+
+	let debugGreen = $.color(0, $._colorFormat, 0, $._colorFormat * 0.9);
+
+	let drawCmds = new DebugDrawCommandBuffer();
+
+	let drawQueue = [];
+
+	$._syncWorld = () => {
+		drawQueue = [];
+		b2World_Draw(wID, drawCmds.GetDebugDraw());
+		let cmdPtr = drawCmds.GetCommandsData();
+		let cmdSize = drawCmds.GetCommandsSize();
+		let cmdStride = drawCmds.GetCommandStride();
+
+		// Collect commands with their associated sprites
+		let offset = cmdPtr;
+		let s;
+
+		for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
+			let uid = Box2D.HEAPU32[(offset + 4) >> 2];
+			s = $.q5play.sprites[uid];
+
+			if (s === undefined) {
+				continue;
+			}
+
+			let type = Box2D.HEAPU8[offset];
+
+			if (!s.visible || type == 7) {
+				continue;
+			}
+
+			let vertexCount = Box2D.HEAPU16[(offset + 8) >> 1];
+
+			let dataLen = 4;
+			if (type == 1) dataLen = 5 + vertexCount * 2;
+			else if (type == 3 || type == 4) dataLen = 5;
+			let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
+
+			// low performance cost to always sync position
+			// actually way better than retrieving it when needed
+			s._posX = data[0] * meterSize;
+			s._posY = data[1] * meterSize;
+
+			s._velSynced = false;
+			s._vel._magCached = false;
+
+			if (s._hasImagery) {
+				s._rotation = Math.atan2(data[2], data[3]) * $._RADTODEG;
+			}
+
+			// if (!this._syncedToFrameRate) {
+			// 	for (let s of $.allSprites) s._syncWithPhysicsBody();
+			// }
+
+			if (!s._hasImagery || s.debug) {
+				drawQueue.push({ type, sprite: s, data, vertexCount });
+			}
+		}
+	};
+
+	$._debugDraw = () => {
+		$.scale(meterSize);
+		let ogStroke = $._getStrokeIdx(),
+			strokeChanged = false,
+			ogStrokeWeight = $.strokeWeight() / meterSize;
+		$.strokeWeight(ogStrokeWeight);
+
+		// Sort by layer
+		drawQueue.sort((a, b) => a.sprite.layer - b.sprite.layer);
+
+		let v = { x: 0, y: 0 };
+		let xf = {
+			p: { x: 0, y: 0 },
+			q: { s: 0, c: 1 }
+		};
+		let rr;
+
+		for (let cmd of drawQueue) {
+			let s = cmd.sprite;
+
+			if (!s.debug) {
+				$.fill(s.fill);
+				if (s.stroke) {
+					$.stroke(s.stroke);
+					strokeChanged = true;
+				} else if (strokeChanged) {
+					$.stroke(ogStroke);
+					strokeChanged = false;
+				}
+			} else {
+				$.noFill();
+				$.stroke(debugGreen);
+				strokeChanged = true;
+			}
+
+			xf.p.x = cmd.data[0];
+			xf.p.y = cmd.data[1];
+			xf.q.s = cmd.data[2];
+			xf.q.c = cmd.data[3];
+
+			if (cmd.data.length >= 4) rr = cmd.data[4];
+			else rr = 0;
+
+			// draw a polygon
+			if (cmd.type == 1) {
+				if (rr > 0) {
+					$._setStrokeIdx($._getFillIdx());
+					$.strokeWeight(rr * 2);
+					$.strokeJoin('round');
+				} else {
+					$.strokeJoin('none');
+				}
+				$.beginShape();
+				let len = 5 + cmd.vertexCount * 2;
+				for (let i = 5; i < len; i += 2) {
+					v.x = cmd.data[i];
+					v.y = cmd.data[i + 1];
+					transformPoint(xf, v);
+					$.vertex(v.x, v.y);
+				}
+				$.endShape(true);
+				if (rr > 0) {
+					$.strokeWeight(ogStrokeWeight);
+					$._setStrokeIdx(ogStroke);
+				}
+				$.q5play.spritesDrawn++;
+			}
+			// draw a circle
+			else if (cmd.type == 3) {
+				$.circle(cmd.data[0], cmd.data[1], cmd.data[4] * 2);
+				$.q5play.spritesDrawn++;
+			}
+			// draw a capsule
+			else if (cmd.type == 4) {
+				if ($.capsule) {
+					$.capsule(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3], cmd.data[4]);
+				} else {
+					$.strokeJoin('round');
+					$.strokeWeight(cmd.data[4] * 2);
+					$.line(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3]);
+					$.strokeWeight(ogStrokeWeight);
+				}
+			}
+			// draw a line segment
+			else if (cmd.type == 5) {
+				$.line(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3]);
+			}
+
+			// draw a triangle at the shape's center to indicate rotation
+			if (s.debug && cmd.type < 5) {
+				$._setFillIdx($._getStrokeIdx());
+				$._doFill();
+				$.noStroke();
+				$.beginShape();
+				let a = 0.05,
+					b = 0.03;
+				let tri = [-b, -b, b, -b, 0, a];
+				for (let i = 0; i < 6; i += 2) {
+					v.x = tri[i];
+					v.y = tri[i + 1];
+					transformPoint(xf, v);
+					$.vertex(v.x, v.y);
+				}
+				$.endShape(true);
+			}
+
+			// TODO: draw sprite text
+			// if (!s.debug && this.text !== undefined) {
+			// 	$.textAlign($.CENTER, $.CENTER);
+			// 	$.fill(this._textFill);
+			// 	if (this._textStrokeWeight) $.strokeWeight(this._textStrokeWeight);
+			// 	if (this._textStroke) $.stroke(this._textStroke);
+			// 	else $.noStroke();
+			// 	$.textSize(this.textSize);
+			// 	$.text(this.text, 0, 0);
+			// }
+		}
+
+		drawCmds.ClearCommands();
+		$.resetMatrix();
+	};
+
+	// switch (cmd.type) {
+	// 	case 0:
+	// 		this.drawPolygon(cmd);
+	// 		break;
+	// 	case 1:
+	// 		this.drawSolidPolygon(cmd);
+	// 		break;
+	// 	case 2:
+	// 		this.drawCircle(cmd);
+	// 		break;
+	// 	case 3:
+	// 		this.drawSolidCircle(cmd);
+	// 		break;
+	// 	case 4:
+	// 		this.drawSolidCapsule(cmd);
+	// 		break;
+	// 	case 5:
+	// 		this.drawSegment(cmd);
+	// 		break;
+	// 	case 6:
+	// 		this.drawTransform(cmd);
+	// 		break;
+	// 	case 7:
+	// 		this.drawPoint(cmd);
+	// 		break;
+	// 	case 8:
+	// 		this.drawString(cmd);
+	// 		break;
+	// }
+
+	// prettier-ignore
+	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','loadAni','loadAnimation'];
+
+	// manually propagate q5play stuff to the global window object
+	if ($._isGlobal) {
+		for (let p of q5playGlobals) {
+			window[p] = $[p];
+		}
+	}
+}
+
+// called once after setup
+function q5playPostSetup() {
+	const $ = this;
+
+	if ($._isGlobal && window.update) {
+		$.update = window.update;
+		// p5.js won't run the draw loop without a draw function defined
+		if (!$._q5) window.draw = () => {};
+	}
+
+	this.update ??= () => {};
+
+	$._setupDone = true;
+}
+
+// called before each draw function call
+function q5playPreDraw() {
+	const $ = this;
+	if (!$._q5) {
+		$.q5play._preDrawFrameTime = performance.now();
+	}
+	$.q5play.spritesDrawn = 0;
+
+	$.mouse._update();
+	$.contros._update();
+
+	$.update();
+
+	if ($.allSprites._autoUpdate) {
+		$.allSprites.update();
+	}
+	$.allSprites._autoUpdate ??= true;
+
+	// TODO: cull with shape casting
+	// if ($.allSprites.autoCull) {
+	// 	$.allSprites.cull(10000);
+	// }
+
+	if ($.world.autoStep && $.world.timeScale > 0) {
+		$.world.physicsUpdate();
+		$._syncWorld();
+	}
+	$.world.autoStep ??= true;
+
+	if ($.camera.__pos.x != 0 || $.camera.__pos.y != 0 || $.camera._zoom != 1) {
+		$.camera.on();
+	}
+}
+
+// called after each draw function call
+function q5playPostDraw() {
+	const $ = this;
+	$.q5play._inPostDraw = true;
+
+	if ($.allSprites._autoDraw) {
+		let ogImgMode = $._imageMode || $._getImageMode();
+		$.imageMode($.CENTER);
+
+		$.allSprites.draw();
+		$._debugDraw();
+
+		$.imageMode(ogImgMode);
+	}
+	$.allSprites._autoDraw ??= true;
+
+	if ($.camera.isActive) $.camera.off();
+
+	$.allSprites.postDraw();
+
+	if ($.q5play.renderStats) $.renderStats();
+
+	for (let k in $.kb) {
+		if (k == 'holdThreshold') continue;
+		if ($.kb[k] < 0) $.kb[k] = 0;
+		else if ($.kb[k] > 0) $.kb[k]++;
+	}
+
+	for (let i = 0; i < $.touches.length; i++) {
+		let t = $.touches[i];
+		t.duration++;
+		if (t._dragFrame) {
+			t.drag++;
+			t._dragFrame = false;
+		} else if (t.drag < 0) {
+			t.drag = 0;
+		}
+		if (t.duration <= 0) {
+			$.touches.splice(i, 1);
+			i--;
+		}
+	}
+
+	let m = $.mouse;
+	let msm = $.world.mouseSprite?.mouse;
+
+	for (let btn of ['left', 'center', 'right']) {
+		if (m[btn] < 0) m[btn] = 0;
+		else if (m[btn] > 0) m[btn]++;
+		if (msm?.hover) msm[btn] = m[btn];
+
+		if (m._dragFrame[btn]) {
+			m.drag[btn]++;
+			if (msm) msm.drag[btn] = m.drag[btn];
+			m._dragFrame[btn] = false;
+		} else if (m.drag[btn] < 0) {
+			m.drag[btn] = 0;
+			if (msm) msm.drag[btn] = 0;
+		}
+	}
+
+	if ($.world.mouseTracking && $.mouse.isActive) {
+		let sprites = $.world.getMouseSprites();
+
+		for (let i = 0; i < sprites.length; i++) {
+			let s = sprites[i];
+			if (i == 0) s.mouse.hover++;
+			else if (s.mouse.hover > 0) s.mouse.hover = -1;
+			else if (s.mouse.hover < 0) s.mouse.hover = 0;
+		}
+
+		// if the user is not pressing any mouse buttons
+		if (m.left <= 0 && m.center <= 0 && m.right <= 0) {
+			$.world.mouseSprite = null;
+		}
+
+		let ms = $.world.mouseSprite;
+
+		let isDragging = m.drag.left > 0 || m.drag.center > 0 || m.drag.right > 0;
+
+		for (let s of $.world.mouseSprites) {
+			// if the mouse stopped hovering over the sprite
+			if (!sprites.includes(s)) {
+				let sm = s.mouse;
+				if (sm.hover > 0) {
+					sm.hover = -1;
+					sm.left = sm.center = sm.right = 0;
+				}
+				// if mouse is not dragging and the sprite is the current mouse sprite
+				if (!isDragging && s == ms) $.world.mouseSprite = ms = null;
+			}
+		}
+		if (ms) {
+			// if the user is dragging on a sprite, but not currently hovering
+			// over it, the mouse sprite should still be added to the mouseSprites array
+			if (!sprites.includes(ms)) sprites.push(ms);
+			msm.x = ms.x - m.x;
+			msm.y = ms.y - m.y;
+		}
+		$.world.mouseSprites = sprites;
+	}
+
+	if (!$._q5) {
+		$.q5play._postDrawFrameTime = performance.now();
+		$.q5play._fps = Math.round(1000 / ($.q5play._postDrawFrameTime - $.q5play._preDrawFrameTime)) || 1;
+	}
+	$.q5play._inPostDraw = false;
+}
+
+Q5.addHook('presetup', q5playPreSetup);
+Q5.addHook('postsetup', q5playPostSetup);
+Q5.addHook('predraw', q5playPreDraw);
+Q5.addHook('postdraw', q5playPostDraw);

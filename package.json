@@ -1,0 +1,25 @@
+{
+	"name": "q5play",
+	"version": "4.0.0",
+	"author": "quinton-ashley",
+	"license": "q5play License",
+	"description": "JavaScript game engine that uses q5.js for graphics and Box2D for physics.",
+	"main": "q5play.js",
+	"homepage": "https://q5play.org",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/q5play/q5play.git"
+	},
+	"scripts": {
+		"dist": "cp q5play.js ../../web/q5play-web/q5play.js",
+		"multi": "ws --https --cors.embedder-policy require-corp --cors.opener-policy same-origin --directory .",
+		"relink": "npm link q5 ../../pkg/q5",
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"v": "npm version patch --force",
+		"V": "npm version minor --force"
+	},
+	"dependencies": {
+		"box2d3-wasm": "^5.1.2",
+		"q5": "^3.5.2"
+	}
+}
