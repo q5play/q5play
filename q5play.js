@@ -111,6 +111,8 @@ async function q5playPreSetup() {
 		b2Shape_GetFriction,
 		b2Shape_SetRestitution,
 		b2Shape_GetRestitution,
+		b2Shape_GetSurfaceMaterial,
+		b2Shape_SetSurfaceMaterial,
 		b2Shape_GetFilter,
 		b2Shape_SetFilter,
 		b2Shape_EnableSensorEvents,
@@ -358,12 +360,8 @@ async function q5playPreSetup() {
 	// scale from box2d coordinates to q5 coordinates
 	const scaleFrom = (x) => ({ x: x * meterSize, y: y * meterSize });
 
-	// TODO: get these from the box2d library
-	// const linearSlop = pl.Settings.linearSlop;
-	// const angularSlop = pl.Settings.angularSlop / 60;
-
-	const linearSlop = 0.005;
-	const angularSlop = 0.000582;
+	const linearSlop = 0.005,
+		angularSlop = 0.000582;
 
 	const isSlop = (val) => Math.abs(val) <= linearSlop;
 	const fixRound = (val) => {
@@ -382,13 +380,15 @@ async function q5playPreSetup() {
 		return (Math.abs(dist1) < Math.abs(dist2) ? dist1 : dist2) || 0;
 	};
 
+	let wID,
+		usePhysics = true,
+		timeScale = 1,
+		shapeMap = {};
+
 	const eventTypes = {
 		_collisions: ['_collides', '_colliding', '_collided'],
 		_overlappers: ['_overlaps', '_overlapping', '_overlapped']
 	};
-
-	let usePhysics = true;
-	let timeScale = 1;
 
 	$.DYN = $.DYNAMIC = 'dynamic';
 	$.STA = $.STATIC = 'static';
@@ -396,16 +396,100 @@ async function q5playPreSetup() {
 
 	let b2BodyTypes = [b2BodyType.b2_dynamicBody, b2BodyType.b2_staticBody, b2BodyType.b2_kinematicBody];
 
-	// let shapeTypes = ['box', 'circle', 'segment', 'capsule', 'chain', 'polygon];
-
 	const Shape = class {
-		constructor(type, id, def) {
-			this.type = type;
+		constructor(sprite) {
+			this.sprite = sprite;
+		}
+
+		init(id, type) {
+			// Box2D shape ID pointer object
 			this.id = id;
-			for (let prop in def) {
-				let val = def[prop];
-				if (typeof val != 'function') this[prop] = val;
+
+			// ['box', 'circle', 'segment', 'capsule', 'chain', 'polygon]
+			this.type = type;
+		}
+
+		delete() {
+			b2DestroyShape(this.id);
+		}
+
+		enableContactEvents(val = true) {
+			if (!this.areContactEventsEnabled) {
+				b2Shape_EnableContactEvents(this.id, val);
+				this.areContactEventsEnabled = val;
 			}
+		}
+
+		enableSensorEvents(val = true) {
+			if (!this.areSensorEventsEnabled) {
+				b2Shape_EnableSensorEvents(this.id, val);
+				this.areSensorEventsEnabled = val;
+			}
+		}
+
+		get density() {
+			return this._density;
+		}
+		set density(val) {
+			this._density = val;
+			b2Shape_SetDensity(this.id, val);
+		}
+	};
+
+	const Sensor = class extends Shape {
+		constructor(sprite) {
+			super(sprite);
+			this._isSensor = true;
+			this._isCollider = false;
+			this._density = 0;
+		}
+	};
+
+	const Collider = class extends Shape {
+		constructor(sprite) {
+			super(sprite);
+			this._isSensor = false;
+			this._isCollider = true;
+
+			this._density = sprite.density || 1;
+			this._friction = sprite.friction || 0.5;
+			this._restitution = sprite.bounciness || 0;
+			this._rollingResistance = 0;
+			this._tangentSpeed = 0;
+		}
+
+		get bounciness() {
+			return this._restitution;
+		}
+		set bounciness(val) {
+			this._restitution = val;
+			b2Shape_SetRestitution(this.id, val);
+		}
+
+		get friction() {
+			return this._friction;
+		}
+		set friction(val) {
+			this._friction = val;
+			b2Shape_SetFriction(this.id, val);
+		}
+
+		get rollingResistance() {
+			return this._rollingResistance;
+		}
+		set rollingResistance(val) {
+			const material = b2Shape_GetSurfaceMaterial(this.id);
+			material.rollingResistance = this._rollingResistance = val;
+			b2Shape_SetSurfaceMaterial(this.id, material);
+		}
+
+		get surfaceSpeed() {
+			return this._tangentSpeed;
+		}
+		set surfaceSpeed(val) {
+			const material = b2Shape_GetSurfaceMaterial(this.id);
+			material.tangentSpeed = this._tangentSpeed = val;
+			b2Shape_SetSurfaceMaterial(this.id, material);
 		}
 	};
 
@@ -698,11 +782,10 @@ async function q5playPreSetup() {
 			};
 
 			this.watch;
-
 			this.mod = {};
 
 			this._deleted = false;
-			this._life = 2147483647;
+			this._life = Infinity;
 			this._visible = true;
 			this._pixelPerfect = false;
 			this._aniChangeCount = 0;
@@ -820,6 +903,9 @@ async function q5playPreSetup() {
 			this._physicsEnabled = true;
 
 			this._shapes = [];
+			this.colliders = [];
+			this.sensors = [];
+			this._hasSensors = false;
 
 			x ??= group.x;
 			if (x === undefined) {
@@ -940,27 +1026,7 @@ async function q5playPreSetup() {
 				}
 			});
 
-			this._offset = {
-				_x: 0,
-				_y: 0,
-				get x() {
-					return this._x;
-				},
-				set x(val) {
-					if (val == this._x) return;
-					if (_this.watch) _this.mod[21] = true;
-					_this._offsetCenterBy(val - this._x, 0);
-				},
-				get y() {
-					return this._y;
-				},
-				set y(val) {
-					if (val == this._y) return;
-					if (_this.watch) _this.mod[21] = true;
-					_this._offsetCenterBy(0, val - this._y);
-				}
-			};
-
+			this.fixedCenterOfMass = true;
 			this._massUndef = true;
 			if (w === undefined) {
 				this._dimensionsUndef = true;
@@ -1098,20 +1164,14 @@ async function q5playPreSetup() {
 				return;
 			}
 
+			if (this.watch) this.mod[19] = true;
+
+			let center;
+			if (this.fixedCenterOfMass) center = b2Body_GetLocalCenterOfMass(this.bdID);
+
 			this._add(false, ...arguments);
 
-			// TODO: reset mass
-			// if (this.watch) this.mod[19] = true;
-			// let com = new b2Vec2(this.body.getLocalCenter());
-
-			// this._shapeIDs = b2Body_GetShapes(this.bdID, b2Body_GetShapeCount(this.bdID));
-
-			// reset the center of mass to the sprite's center
-			// this.body.setMassData({
-			// 	mass: this.body.getMass(),
-			// 	center: com,
-			// 	I: this.body.getInertia()
-			// });
+			if (this.fixedCenterOfMass) this._fixCenterOfMass(center);
 		}
 
 		addSensor(offsetX, offsetY, w, h) {
@@ -1119,8 +1179,19 @@ async function q5playPreSetup() {
 				console.error("Can't add sensors to a sprite that was deleted.");
 				return;
 			}
+
+			let center;
+			if (this.fixedCenterOfMass) center = b2Body_GetLocalCenterOfMass(this.bdID);
+
 			this._add(true, ...arguments);
-			this._hasSensors = true;
+
+			if (this.fixedCenterOfMass) this._fixCenterOfMass(center);
+		}
+
+		_fixCenterOfMass(center) {
+			const data = b2Body_GetMassData(this.bdID);
+			data.center = center;
+			b2Body_SetMassData(this.bdID, data);
 		}
 
 		// adds a collider or sensor to the sprite
@@ -1128,18 +1199,42 @@ async function q5playPreSetup() {
 		_add(isSensor, a0, a1, a2, a3, a4) {
 			let offsetX, offsetY, w, h, path;
 			let rr; // rounded radius
-			let shape, shapeID, geom;
-			let vertexMode, originMode;
+			let id, geo, vertexMode, originMode;
 			let shapes = this._shapes;
+			// Track how many shapes existed before
+			let startingShapeCount = shapes.length;
+			let bdID = this.bdID;
+
+			let shape;
 
 			let shapeDef = new b2DefaultShapeDef();
-			shapeDef.density = this.density || 1;
-			shapeDef.material.friction = this.friction || 0.5;
-			shapeDef.material.restitution = this.bounciness || 0;
 			shapeDef.isSensor = isSensor;
+			shapeDef.enableCustomFiltering = true;
 
-			// workaround to know which sprite the shape belongs to
-			shapeDef.material.customColor = this._uid;
+			if (isSensor) shape = new Sensor(this);
+			else {
+				shape = new Collider(this);
+
+				shapeDef.material.friction = shape._friction;
+				shapeDef.material.restitution = shape._restitution;
+				shapeDef.material.rollingResistance = shape._rollingResistance;
+				shapeDef.material.tangentSpeed = shape._tangentSpeed;
+			}
+
+			shapeDef.density = shape._density;
+
+			// workaround that packs:
+			// - sprite's unique ID
+			// - sensor flag
+			// - first shape flag
+			// into a single unsigned 32-bit integer, customColor,
+			// the only custom property Box2D exposes in debug draw
+			const pack24 = this._uid,
+				pack25 = isSensor ? 1 : 0,
+				pack26 = startingShapeCount === 0 ? 1 : 0,
+				packedData = (pack26 << 26) | (pack25 << 25) | pack24;
+			// could use other bits for other flags later
+			shapeDef.material.customColor = packedData;
 
 			if (a2 !== undefined) {
 				offsetX = a0;
@@ -1301,37 +1396,40 @@ async function q5playPreSetup() {
 
 				if (isPolygon) {
 					let hull = b2ComputeHull(vecs);
-					geom = b2MakePolygon(hull, 0);
+					geo = b2MakePolygon(hull, 0);
 
-					shapeID = b2CreatePolygonShape(this.bdID, shapeDef, geom);
-					shapes.push(new Shape(5, shapeID, shapeDef));
+					id = b2CreatePolygonShape(bdID, shapeDef, geo);
+					shape.init(id, 5);
 				} else {
 					if (vecs.length == 2) {
 						if (!rr) {
-							geom = new b2Segment();
-							geom.point1 = vecs[0];
-							geom.point2 = vecs[1];
-
-							shapeID = b2CreateSegmentShape(this.bdID, shapeDef, geom);
-							shapes.push(new Shape(2, shapeID, shapeDef));
+							geo = new b2Segment();
+							geo.point1 = vecs[0];
+							geo.point2 = vecs[1];
+							id = b2CreateSegmentShape(bdID, shapeDef, geo);
+							shape.init(id, 2);
 						} else {
-							geom = new b2Capsule();
-							geom.center1 = vecs[0];
-							geom.center2 = vecs[1];
-							geom.radius = rr / meterSize;
-							shapeID = b2CreateCapsuleShape(this.bdID, shapeDef, geom);
-							shapes.push(new Shape(3, shapeID, shapeDef));
+							geo = new b2Capsule();
+							geo.center1 = vecs[0];
+							geo.center2 = vecs[1];
+							geo.radius = rr / meterSize;
+							id = b2CreateCapsuleShape(bdID, shapeDef, geo);
+							shape.init(id, 3);
 						}
 					} else if (this._phys != 1) {
-						// make capsules
+						// create several capsules to approximate a hollow shape (closed chain)
 						for (let i = 1; i < vecs.length; i++) {
-							geom = new b2Capsule();
-							geom.center1 = vecs[i - 1];
-							geom.center2 = vecs[i];
-							geom.radius = 0.12;
-							shapeID = b2CreateCapsuleShape(this.bdID, shapeDef, geom);
-							shapes.push(new Shape(3, shapeID, shapeDef));
+							geo = new b2Capsule();
+							geo.center1 = vecs[i - 1];
+							geo.center2 = vecs[i];
+							geo.radius = 0.12;
+							id = b2CreateCapsuleShape(bdID, shapeDef, geo);
+							let shapePart = new Collider(this);
+							shape.init(id, 3);
+							shapes.push(shapePart);
+							shapeMap[id.index1] = shapePart;
 						}
+						shape = null;
 						this.isSuperFast = true;
 					} else {
 						let chainDef = new b2DefaultChainDef();
@@ -1339,8 +1437,8 @@ async function q5playPreSetup() {
 						chainDef.isLoop = vecs.isLoop;
 						chainDef.SetMaterials([{ customColor: this._uid }]);
 
-						shapeID = b2CreateChain(this.bdID, chainDef);
-						shapes.push(new Shape(4, shapeID, chainDef));
+						id = b2CreateChain(bdID, chainDef);
+						shape.init(id, 4);
 					}
 				}
 			} else {
@@ -1348,34 +1446,25 @@ async function q5playPreSetup() {
 				h ??= w;
 
 				if (a3 === undefined) {
-					geom = new b2Circle();
-					geom.center = scaleTo(offsetX, offsetY);
-					geom.radius = (w * 0.5) / meterSize;
+					geo = new b2Circle();
+					geo.center = scaleTo(offsetX, offsetY);
+					geo.radius = (w * 0.5) / meterSize;
 
-					shapeID = b2CreateCircleShape(this.bdID, shapeDef, geom);
-					shape = new Shape(1, shapeID, shapeDef);
-					shape.radius = geom.radius;
-					shape.offset = geom.center;
-					shapes.push(shape);
+					id = b2CreateCircleShape(bdID, shapeDef, geo);
+					shape.init(id, 1);
 				} else {
 					let offset = scaleTo(offsetX, offsetY);
 					let hw = (w * 0.5) / meterSize;
 					let hh = (h * 0.5) / meterSize;
 					rr /= meterSize;
 
-					if (!rr) geom = b2MakeOffsetBox(hw, hh, offset, ZERO_ROT);
+					if (!rr) geo = b2MakeOffsetBox(hw, hh, offset, ZERO_ROT);
 					else {
-						geom = b2MakeOffsetRoundedBox(Math.max(hw - rr, 0.001), Math.max(hh - rr, 0.001), offset, ZERO_ROT, rr);
+						geo = b2MakeOffsetRoundedBox(Math.max(hw - rr, 0.001), Math.max(hh - rr, 0.001), offset, ZERO_ROT, rr);
 					}
 
-					shapeID = b2CreatePolygonShape(this.bdID, shapeDef, geom);
-
-					shape = new Shape(0, shapeID, shapeDef);
-					shape.hw = hw;
-					shape.hh = hh;
-					shape.rr = rr;
-					shape.offset = offset;
-					shapes.push(shape);
+					id = b2CreatePolygonShape(bdID, shapeDef, geo);
+					shape.init(id, 0);
 				}
 
 				// TODO: use AABB to get extents for multiple shapes
@@ -1384,88 +1473,35 @@ async function q5playPreSetup() {
 				this._h = h;
 				this._hh = h * 0.5;
 			}
+
+			if (shape) {
+				shapes.push(shape);
+				shapeMap[id.index1] = shape;
+			}
+
+			// Categorize all newly created shapes into colliders or sensors arrays
+			for (let i = startingShapeCount; i < shapes.length; i++) {
+				let newShape = shapes[i];
+				if (newShape._isSensor) {
+					this.sensors.push(newShape);
+					this._hasSensors = true;
+				} else {
+					this.colliders.push(newShape);
+				}
+			}
 		}
 
 		deleteColliders() {
-			this._deleteContacts(0);
-			this._deleteFixtures(0);
+			for (let collider of this.colliders) {
+				collider.delete();
+			}
 		}
 
 		deleteSensors() {
-			this._deleteContacts(1);
-			this._deleteFixtures(1);
+			for (let sensor of this.sensors) {
+				sensor.delete();
+			}
 			this._hasSensors = false;
-		}
-
-		/*
-		 * removes sensors or colliders or both
-		 * @param type can be undefined, 0, or 1
-		 * undefined removes both
-		 * 0 removes colliders
-		 * 1 removes sensors
-		 */
-		_deleteFixtures(type) {
-			let prevFxt;
-			for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
-				if (type === undefined || fxt.m_isSensor == type) {
-					let _fxt = fxt.m_next;
-					fxt.destroyProxies($.world.m_broadPhase);
-					if (!prevFxt) {
-						this.body.m_fixtureList = _fxt;
-					} else {
-						prevFxt.m_next = _fxt;
-					}
-				} else {
-					prevFxt = fxt;
-				}
-			}
-		}
-
-		/*
-		 * Removes contacts
-		 * @param type can be undefined, 0, or 1
-		 * undefined removes both
-		 * 0 removes colliders
-		 * 1 removes sensors
-		 */
-		_deleteContacts(type) {
-			if (!this.body) return;
-			let ce = this.body.m_contactList;
-			while (ce) {
-				let con = ce.contact;
-				ce = ce.next;
-				if (type === undefined || con.m_fixtureA.m_isSensor == type) {
-					$.world.destroyContact(con);
-				}
-			}
-		}
-
-		_offsetCenterBy(x, y) {
-			if (!x && !y) return;
-
-			this._offset._x += x;
-			this._offset._y += y;
-
-			if (!this.body) return;
-
-			let off = scaleTo(x, y);
-			this.__offsetCenterBy(off.x, off.y);
-		}
-
-		__offsetCenterBy(x, y) {
-			for (let fxt = this.body.m_fixtureList; fxt; fxt = fxt.m_next) {
-				let shape = fxt.m_shape;
-				if (shape.m_type != 'circle') {
-					let vertices = shape.m_vertices;
-					for (let v of vertices) {
-						v.x += x;
-						v.y += y;
-					}
-				} else {
-					shape.m_p.x += x;
-					shape.m_p.y += y;
-				}
-			}
 		}
 
 		/*
@@ -1521,21 +1557,21 @@ async function q5playPreSetup() {
 		}
 
 		get allowSleeping() {
-			return this.body?.isSleepingAllowed();
+			return b2Body_IsSleepEnabled(this.bdID);
 		}
 		set allowSleeping(val) {
 			if (this.watch) this.mod[5] = true;
-			if (this.body) this.body.setSleepingAllowed(val);
+			b2Body_EnableSleep(this.bdID, val);
 		}
 
 		get bounciness() {
-			if (!this._shapes.length) return 0;
-			return b2Shape_GetRestitution(this._shapes[0].id);
+			if (!this.colliders.length) return 0;
+			return this.colliders[0].bounciness;
 		}
 		set bounciness(val) {
 			if (this.watch) this.mod[7] = true;
-			for (let shape of this._shapes) {
-				b2Shape_SetRestitution(shape.id, val);
+			for (let collider of this.colliders) {
+				collider.bounciness = val;
 			}
 		}
 
@@ -1628,6 +1664,12 @@ async function q5playPreSetup() {
 		set strokeWeight(val) {
 			if (this.watch) this.mod[30] = true;
 			this._strokeWeight = val;
+
+			const sw = val * meterSize,
+				hsw = sw * 0.5,
+				qsw = sw * 0.25,
+				hswScaled = val * 0.5;
+			this._strokeWeightData = [sw, hsw, qsw, hswScaled];
 		}
 
 		get textColor() {
@@ -1706,17 +1748,17 @@ async function q5playPreSetup() {
 			if (!val || this._deleted) return;
 			if (this.watch) this.mod[23] = true;
 			this._deleted = true;
-			this._remove();
+			this._delete();
 		}
 
 		get density() {
 			if (!this._shapes.length) return 1;
-			return b2Shape_GetDensity(this._shapes[0].id);
+			return this._shapes[0].density;
 		}
 		set density(val) {
 			if (this.watch) this.mod[11] = true;
 			for (let shape of this._shapes) {
-				b2Shape_SetDensity(shape.id, val, true);
+				shape.density = val;
 			}
 		}
 
@@ -1762,11 +1804,11 @@ async function q5playPreSetup() {
 		}
 
 		get drag() {
-			return this.body?.getLinearDamping();
+			return b2Body_GetLinearDamping(this.bdID);
 		}
 		set drag(val) {
 			if (this.watch) this.mod[13] = true;
-			if (this.body) this.body.setLinearDamping(val);
+			b2Body_SetLinearDamping(this.bdID, val);
 		}
 
 		get draw() {
@@ -1778,13 +1820,13 @@ async function q5playPreSetup() {
 		}
 
 		get friction() {
-			if (!this._shapes.length) return 0.5;
-			return b2Shape_GetFriction(this._shapes[0].id);
+			if (!this.colliders.length) return 0.5;
+			return this.colliders[0].friction;
 		}
 		set friction(val) {
 			if (this.watch) this.mod[14] = true;
-			for (let shape of this._shapes) {
-				b2Shape_SetFriction(shape.id, val);
+			for (let collider of this.colliders) {
+				collider.friction = val;
 			}
 		}
 
@@ -1852,57 +1894,34 @@ async function q5playPreSetup() {
 		}
 
 		get mass() {
-			return this.body?.getMass();
+			return b2Body_GetMass(this.bdID);
 		}
 		set mass(val) {
 			if (this.watch) this.mod[19] = true;
-			const com = new b2Vec2(this.body.getLocalCenter());
-			const t = { I: 0, center: com, mass: 0 };
-			this.body.getMassData(t);
-			t.mass = val > 0 ? val : 0.00000001;
-			this.body.setMassData(t);
+			const data = b2Body_GetMassData(this.bdID);
+			data.mass = val > 0 ? val : 0.00000001;
+			b2Body_SetMassData(this.bdID, data);
 			delete this._massUndef;
 		}
 
 		resetMass() {
-			if (!this.body) return;
-			let com = new b2Vec2(this.body.getLocalCenter());
-
 			if (this.watch) this.mod[19] = true;
-			this.body.resetMassData();
+			const center = b2Body_GetLocalCenterOfMass(this.bdID);
+			b2Body_ApplyMassFromShapes(this.bdID);
 
-			// reset the center of mass to the sprite's center
-			this.body.setMassData({
-				mass: this.body.getMass(),
-				center: com,
-				I: this.body.getInertia()
-			});
+			const data = b2Body_GetMassData(this.bdID);
+			data.center = center;
+			b2Body_SetMassData(this.bdID, data);
 		}
 
-		resetCenterOfMass() {
-			if (this.watch) this.mod[19] = true;
-			this.body.resetMassData();
-
-			let { x, y } = this.body.getLocalCenter();
-			if (x == 0 && y == 0) return;
-			this.__offsetCenterBy(-x, -y);
-
-			// again? yes, to set local center to (0, 0)
-			this.body.resetMassData();
-
-			let pos = this.body.getPosition();
-			this.body.setPosition({ x: pos.x + x, y: pos.y + y });
+		get centerOfMass() {
+			const data = b2Body_GetMassData(this.bdID);
+			return data.center;
 		}
-
-		get offset() {
-			return this._offset;
-		}
-		set offset(val) {
-			val.x ??= this._offset._x;
-			val.y ??= this._offset._y;
-			if (val.x == this._offset._x && val.y == this._offset._y) return;
-			if (this.watch) this.mod[21] = true;
-			this._offsetCenterBy(val.x - this._offset._x, val.y - this._offset._y);
+		set centerOfMass(val) {
+			const data = b2Body_GetMassData(this.bdID);
+			data.center = scaleTo(val[0] ?? val.x, val[1] ?? val.y);
+			b2Body_SetMassData(this.bdID, data);
 		}
 
 		get opacity() {
@@ -1935,6 +1954,17 @@ async function q5playPreSetup() {
 			this._pixelPerfect = val;
 		}
 
+		get rollingResistance() {
+			if (!this.colliders.length) return 0;
+			return this.colliders[0].rollingResistance;
+		}
+		set rollingResistance(val) {
+			if (this.watch) this.mod[43] = true;
+			for (let collider of this.colliders) {
+				collider.rollingResistance = val;
+			}
+		}
+
 		get rotation() {
 			if (!this._physicsEnabled || !usePhysics) return this._rotation || 0;
 			let val = b2Body_GetRotation(this.bdID).GetAngle();
@@ -1951,21 +1981,21 @@ async function q5playPreSetup() {
 		}
 
 		get rotationDrag() {
-			return this.body?.getAngularDamping();
+			return b2Body_GetAngularDamping(this.bdID);
 		}
 		set rotationDrag(val) {
 			if (this.watch) this.mod[24] = true;
-			this.body.setAngularDamping(val);
+			b2Body_SetAngularDamping(this.bdID, val);
 		}
 
 		get rotationLock() {
-			return this.body?.isFixedRotation();
+			return b2Body_IsFixedRotation(this.bdID);
 		}
 		set rotationLock(val) {
 			if (this.watch) this.mod[25] = true;
-			let mass = this.mass;
-			this.body.setFixedRotation(val);
-			this.mass = mass;
+			// let mass = this.mass;
+			b2Body_SetFixedRotation(this.bdID, val);
+			// this.mass = mass;
 		}
 
 		get rotationSpeed() {
@@ -1988,41 +2018,26 @@ async function q5playPreSetup() {
 		 * @param scalers {x, y}
 		 */
 		_resizeShapes(scalars) {
-			let geom;
+			let geo;
 
+			// TODO: rewrite to use Shape class
 			for (let shape of this._shapes) {
 				if (shape.type == 0) {
 					shape.hw *= scalars.x;
 					shape.hh *= scalars.y;
 					shape.offset.x *= scalars.x;
 					shape.offset.y *= scalars.y;
-					geom = b2MakeOffsetBox(shape.hw, shape.hh, shape.offset, ZERO_ROT);
-					b2Shape_SetPolygon(shape.id, geom);
+					geo = b2MakeOffsetBox(shape.hw, shape.hh, shape.offset, ZERO_ROT);
+					b2Shape_SetPolygon(shape.id, geo);
 				} else if (shape.type == 1) {
 					if (scalars.x != 1) shape.radius *= scalars.x;
 					else shape.radius *= scalars.y;
-					geom = new b2Circle();
-					geom.center = shape.offset;
-					geom.radius = shape.radius;
-					b2Shape_SetCircle(shape.id, geom);
+					geo = new b2Circle();
+					geo.center = shape.offset;
+					geo.radius = shape.radius;
+					b2Shape_SetCircle(shape.id, geo);
 				}
 			}
-
-			// for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
-			// 	if (fxt.m_isSensor) continue;
-			// 	let sh = fxt.m_shape;
-			// 	if (sh.m_type == 'circle') {
-			// 		if (scalars.x != 1) sh.m_radius *= scalars.x;
-			// 		else sh.m_radius *= scalars.y;
-			// 	} else {
-			// 		for (let vert of sh.m_vertices) {
-			// 			vert.x *= scalars.x;
-			// 			vert.y *= scalars.y;
-			// 		}
-			// 	}
-			// }
-			// if (this._widthUndef || this._heightUndef) this.resetMass();
-			// this.body.synchronizeFixtures();
 		}
 
 		get scale() {
@@ -2059,30 +2074,29 @@ async function q5playPreSetup() {
 		}
 
 		get sleeping() {
-			if (this.body) return !this.body.isAwake();
-			return undefined;
+			return !b2Body_IsAwake(this.bdID);
 		}
 		set sleeping(val) {
-			if (!this.body) return;
 			if (this.watch) this.mod[28] = true;
-			this.body.setAwake(!val);
+			b2Body_SetAwake(this.bdID, !val);
 		}
 
 		get speed() {
 			return this._vel.mag();
 		}
 		set speed(val) {
+			if (!val) this._setVel(0, 0);
+			else {
+				const mag = this._vel.mag();
+				if (mag > 0) {
+					this._setVel((this._vel.x / mag) * val, (this._vel.y / mag) * val);
+				} else {
+					const dir = this._vel.direction();
+					this._setVel($.cos(dir) * val, $.sin(dir) * val);
+				}
+			}
 			this._vel._mag = val;
 			this._vel._magCached = true;
-
-			if (!val) return this._setVel(0, 0);
-			const mag = this._vel.mag();
-			if (mag > 0) {
-				this._setVel((this._vel.x / mag) * val, (this._vel.y / mag) * val);
-			} else {
-				const dir = this._vel.direction();
-				this._setVel($.cos(dir) * val, $.sin(dir) * val);
-			}
 		}
 
 		setSpeedAndDirection(speed, direction) {
@@ -2090,6 +2104,17 @@ async function q5playPreSetup() {
 			this._vel._mag = speed;
 			this._vel._direction = direction;
 			this._vel._magCached = this._vel._directionCached = true;
+		}
+
+		get surfaceSpeed() {
+			if (!this.colliders.length) return 0;
+			return this.colliders[0].surfaceSpeed;
+		}
+		set surfaceSpeed(val) {
+			if (this.watch) this.mod[44] = true;
+			for (let collider of this.colliders) {
+				collider.surfaceSpeed = val;
+			}
 		}
 
 		get tint() {
@@ -2173,7 +2198,7 @@ async function q5playPreSetup() {
 		set y(val) {
 			this._posY = val;
 
-			if (_this._physicsEnabled) {
+			if (this._physicsEnabled) {
 				let pos = scaleTo(this.x, val);
 				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
 			}
@@ -2186,8 +2211,8 @@ async function q5playPreSetup() {
 			if (this._physicsEnabled) {
 				b2Body_SetTransform(this.bdID, scaleTo(val.x, val.y), b2Body_GetRotation(this.bdID));
 			}
-			this._posX = val.x;
-			this._posY = val.y;
+			this._posX = val[0] ?? val.x;
+			this._posY = val[1] ?? val.y;
 		}
 
 		get position() {
@@ -2363,7 +2388,7 @@ async function q5playPreSetup() {
 			return this._vel;
 		}
 		set vel(val) {
-			this._setVel(val.x, val.y);
+			this._setVel(val[0] ?? val.x, val[1] ?? val.y);
 			this._vel._magCached = this._vel._directionCached = false;
 		}
 
@@ -2384,12 +2409,11 @@ async function q5playPreSetup() {
 		}
 
 		get gravityScale() {
-			return this.body?.getGravityScale();
+			return b2Body_GetGravityScale(this.bdID);
 		}
 		set gravityScale(val) {
-			if (!this.body) return;
 			if (this.watch) this.mod[42] = true;
-			this.body.setGravityScale(val);
+			b2Body_SetGravityScale(this.bdID, val);
 		}
 
 		_update() {
@@ -2399,7 +2423,7 @@ async function q5playPreSetup() {
 
 		_step() {
 			this.life -= timeScale;
-			if (this._life != 2147483647 && this._life <= 0) {
+			if (this._life <= 0) {
 				this.delete();
 			} else if (!this._physicsEnabled || !usePhysics) {
 				this._posX += this._velX * timeScale;
@@ -2426,10 +2450,11 @@ async function q5playPreSetup() {
 		//  group -> group
 		__step() {
 			// for each type of collision and overlap event
-			let a = this;
+			const a = this;
 			let b;
-			for (let event in eventTypes) {
-				for (let k in this[event]) {
+			for (const event in eventTypes) {
+				const ledgerA = a[event];
+				for (const k in ledgerA) {
 					if (k >= 1000) {
 						// if a is group or a is sprite and a._uid >= k
 						if (a._isGroup || a._uid >= k) continue;
@@ -2440,24 +2465,27 @@ async function q5playPreSetup() {
 						b = $.q5play.groups[k];
 					}
 
-					let v = a[event][k] + 1;
+					const ledgerB = b[event];
+
+					const v = ledgerA[k] + 1;
 					if (!b || v == 0 || v == -2) {
-						delete a[event][k];
-						if (b) delete b[event][a._uid];
+						delete ledgerA[k];
+						if (b) delete ledgerB[a._uid];
 						continue;
 					}
-					this[event][k] = v;
-					b[event][a._uid] = v;
+					ledgerA[k] = v;
+					ledgerB[a._uid] = v;
 				}
 			}
 		}
 
 		___step() {
-			let a = this;
+			const a = this;
 			let b, contactType, shouldOverlap, cb;
 			let checkCollisions = true;
-			for (let event in eventTypes) {
-				for (let k in this[event]) {
+			for (const event in eventTypes) {
+				const ledgerA = a[event];
+				for (const k in ledgerA) {
 					if (k >= 1000) {
 						if (a._isGroup || a._uid >= k) continue;
 						b = $.q5play.sprites[k];
@@ -2475,28 +2503,30 @@ async function q5playPreSetup() {
 						continue;
 					}
 
-					let v = a[event][k];
+					const v = ledgerA[k];
 					for (let i = 0; i < 3; i++) {
 						if (i == 0 && v != 1 && v != -3) continue;
 						if (i == 1 && v == -1) continue;
 						if (i == 2 && v >= 1) continue;
 						contactType = eventTypes[event][i];
 
-						let la = $.q5play[contactType][a._uid];
+						const ledger = $.q5play[contactType];
+
+						const la = ledger[a._uid];
 						if (la) {
 							cb = la[b._uid];
 							if (cb) cb.call(a, a, b, v);
-							for (let g of b.groups) {
+							for (const g of b.groups) {
 								cb = la[g._uid];
 								if (cb) cb.call(a, a, b, v);
 							}
 						}
 
-						let lb = $.q5play[contactType][b._uid];
+						const lb = ledger[b._uid];
 						if (lb) {
 							cb = lb[a._uid];
 							if (cb) cb.call(b, b, a, v);
-							for (let g of a.groups) {
+							for (const g of a.groups) {
 								cb = lb[g._uid];
 								if (cb && (!la || cb != la[g._uid])) {
 									cb.call(b, b, a, v);
@@ -2600,10 +2630,6 @@ async function q5playPreSetup() {
 		__draw() {
 			let g = this.ani || this._img;
 
-			if (this._offset._x || this._offset._y) {
-				$.translate(this._offset._x, this._offset._y);
-			}
-
 			let shouldScale = g._scale._avg != 1;
 
 			if (shouldScale) $.scale(g._scale._x, g._scale._y);
@@ -2657,62 +2683,15 @@ async function q5playPreSetup() {
 		}
 
 		applyForce(amount, origin) {
-			if (!this.body) return;
 			let { forceVector, poa } = this._parseForceArgs(...arguments);
-			if (!poa) this.body.applyForceToCenter(forceVector);
-			else this.body.applyForce(forceVector, poa);
+			if (!poa) b2Body_ApplyForceToCenter(this.bdID, forceVector, true);
+			else b2Body_ApplyForce(this.bdID, forceVector, poa, true);
 		}
 
-		applyForceScaled(amount, origin) {
-			if (!this.body) return;
-			let { forceVector, poa } = this._parseForceArgs(...arguments);
-			forceVector.mul(this.mass);
-			if (!poa) this.body.applyForceToCenter(forceVector);
-			else this.body.applyForce(forceVector, poa);
-		}
-
-		attractTo(x, y, force, radius, easing) {
-			if (!this.body || this._phys != 0) {
-				console.error('attractTo can only be used on sprites with dynamic colliders');
-				return;
-			}
-			if (typeof x != 'number') {
-				let obj = x;
-				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
-				force = y;
-				y = obj.y;
-				x = obj.x;
-			}
-			if (this.x == x && this.y == y) return;
-
-			let a = y - this.y;
-			let b = x - this.x;
-			let c = Math.sqrt(a * a + b * b);
-
-			let percent = force / c;
-
-			let forceVector = new b2Vec2(b * percent, a * percent);
-			this.body.applyForceToCenter(forceVector);
-		}
-
-		repelFrom(x, y, force, radius, easing) {
-			if (!this.body || this._phys != 0) {
-				console.error('repelFrom can only be used on sprites with dynamic colliders');
-				return;
-			}
-			if (typeof x != 'number') {
-				let obj = x;
-				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
-				force = y;
-				y = obj.y;
-				x = obj.x;
-			}
-			this.attractTo(x, y, -force, radius, easing);
-		}
+		// TODO applyForceScaled possible in Box2D v3?
 
 		applyTorque(val) {
-			if (!this.body) return;
-			this.body.applyTorque(val);
+			b2Body_ApplyTorque(this.bdID, val, true);
 		}
 
 		angleTo(x, y) {
@@ -2749,13 +2728,12 @@ async function q5playPreSetup() {
 			return minAngleDist(ang, this._rotation);
 		}
 
-		remove() {
+		delete() {
 			this.deleted = true;
 		}
 
-		_remove() {
-			if (this.body) b2DestroyBody(this.bdID);
-			this.body = false;
+		_delete() {
+			b2DestroyBody(this.bdID);
 
 			// when deleted from the world also remove all the sprite
 			// from all its groups
@@ -2803,6 +2781,9 @@ async function q5playPreSetup() {
 		_ensureCollide(target, cb, type) {
 			if (this._hasOverlap[target._uid] !== false) {
 				this._hasOverlap[target._uid] = false;
+				for (let collider of this.colliders) {
+					collider.enableContactEvents();
+				}
 			}
 			if (target._hasOverlap[this._uid] !== false) {
 				target._hasOverlap[this._uid] = false;
@@ -2810,6 +2791,13 @@ async function q5playPreSetup() {
 					for (let s of target) {
 						s._hasOverlap[this._uid] = false;
 						this._hasOverlap[s._uid] = false;
+						for (let collider of s.colliders) {
+							collider.enableContactEvents();
+						}
+					}
+				} else {
+					for (let collider of target.colliders) {
+						collider.enableContactEvents();
 					}
 				}
 			}
@@ -2868,11 +2856,9 @@ async function q5playPreSetup() {
 			}
 
 			if (!this._hasOverlap[target._uid]) {
-				this._removeContactsWith(target);
 				this._hasOverlap[target._uid] = true;
 			}
 			if (!target._hasOverlap[this._uid]) {
-				target._removeContactsWith(this);
 				target._hasOverlap[this._uid] = true;
 				if (target._isGroup) {
 					for (let s of target) {
@@ -2910,66 +2896,12 @@ async function q5playPreSetup() {
 			return this._overlappers[target._uid] <= -1;
 		}
 
-		_removeContactsWith(target) {
-			if (target._isGroup) {
-				for (let s of target) {
-					this._removeContactsWith(s);
-				}
-			} else {
-				this.__removeContactsWith(target);
-			}
-		}
-
-		__removeContactsWith(o) {
-			if (!this.body) return;
-			for (let ce = this.body.getContactList(); ce; ce = ce.next) {
-				let c = ce.contact;
-				if (c.m_fixtureA.m_body.sprite._uid == o._uid || c.m_fixtureB.m_body.sprite._uid == o._uid) {
-					$.world.destroyContact(c);
-				}
-			}
-		}
-
-		/*
-		 * Internal method called anytime a new sensor is created. Ensures
-		 * that sensors are moved to the back of the fixture list.
-		 */
-		_sortFixtures() {
-			let colliders = null;
-			let sensors = null;
-			let lastColl, lastSens;
-			for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
-				if (fxt.m_isSensor) {
-					if (!sensors) sensors = fxt;
-					else sensors.m_next = fxt;
-					lastSens = fxt;
-				} else {
-					if (!colliders) colliders = fxt;
-					else colliders.m_next = fxt;
-					lastColl = fxt;
-				}
-			}
-			if (sensors) lastSens.m_next = null;
-			if (colliders) lastColl.m_next = sensors;
-			this.body.m_fixtureList = colliders || sensors;
-		}
-
 		addDefaultSensors() {
-			let shape;
-			if (this.body && this.fixtureList) {
-				for (let fxt = this.fixtureList; fxt; fxt = fxt.getNext()) {
-					if (fxt.m_isSensor) continue;
-					shape = fxt.m_shape;
-					this.body.createFixture({
-						shape: shape,
-						isSensor: true
-					});
-				}
-				this._sortFixtures();
-			} else {
-				this.addSensor();
+			// TODO
+			for (let collider of this.colliders) {
+				log(collider);
 			}
-			this._hasSensors = true;
+			// this._hasSensors = true;
 		}
 
 		distanceTo(o) {
@@ -3021,7 +2953,9 @@ async function q5playPreSetup() {
 		visible: 'boolean', // 39
 		w: 'number', // 40 (width)
 		opacity: 'number', // 41
-		gravityScale: 'number' // 42
+		gravityScale: 'number', // 42
+		rollingResistance: 'number', // 43
+		surfaceSpeed: 'number' // 44
 	};
 
 	$.Sprite.props = Object.keys($.Sprite.propTypes);
@@ -3959,6 +3893,9 @@ async function q5playPreSetup() {
 				for (let s of this) {
 					s._hasOverlap[target._uid] = false;
 					target._hasOverlap[s._uid] = false;
+					for (let collider of s.colliders) {
+						collider.enableContactEvents();
+					}
 					// if this group is the same group as the target
 					if (this._uid == target._uid) {
 						for (let s2 of target) {
@@ -3970,10 +3907,16 @@ async function q5playPreSetup() {
 			}
 			if (target._hasOverlap[this._uid] !== false) {
 				target._hasOverlap[this._uid] = false;
+				for (let collider of target.colliders) {
+					collider.enableContactEvents();
+				}
 				if (target._isGroup) {
 					for (let s of target) {
 						s._hasOverlap[this._uid] = false;
 						this._hasOverlap[s._uid] = false;
+						for (let collider of s.colliders) {
+							collider.enableContactEvents();
+						}
 						for (let s2 of this) {
 							s._hasOverlap[s2._uid] = false;
 							s2._hasOverlap[s._uid] = false;
@@ -4040,7 +3983,6 @@ async function q5playPreSetup() {
 				}
 			}
 			if (this._hasOverlap[target._uid] != true) {
-				this._removeContactsWith(target);
 				this._hasOverlap[target._uid] = true;
 				for (let s of this) {
 					s._hasOverlap[target._uid] = true;
@@ -4055,7 +3997,6 @@ async function q5playPreSetup() {
 				}
 			}
 			if (target._hasOverlap[this._uid] != true) {
-				target._removeContactsWith(this);
 				target._hasOverlap[this._uid] = true;
 				if (target._isGroup) {
 					for (let s of target) {
@@ -4095,12 +4036,6 @@ async function q5playPreSetup() {
 			this._ensureOverlap(target);
 			if (callback) this._setContactCB(target, callback, 1, 2);
 			return this._overlappers[target._uid] <= -1;
-		}
-
-		_removeContactsWith(o) {
-			for (let s of this) {
-				s._removeContactsWith(o);
-			}
 		}
 
 		applyForce() {
@@ -4318,8 +4253,8 @@ async function q5playPreSetup() {
 
 						if (!stillInContact) {
 							let b;
-							if (b_uid >= 1000) b = $.p5play.sprites[b_uid];
-							else b = $.p5play.groups[b_uid];
+							if (b_uid >= 1000) b = $.q5play.sprites[b_uid];
+							else b = $.q5play.groups[b_uid];
 							if (b) {
 								a[eventType][b_uid] = -2;
 								b[eventType][a._uid] = -2;
@@ -4467,24 +4402,38 @@ async function q5playPreSetup() {
 	$.Visuals.prototype.addAni = $.Group.prototype.addAni = $.Sprite.prototype.addAni;
 	$.Visuals.prototype.addAnis = $.Group.prototype.addAnis = $.Sprite.prototype.addAnis;
 
-	let wID = 1;
+	function shouldCollide(that) {
+		// should this and that produce a contact event?
+		let a = this;
+		let b = that;
+
+		// sensors overlap (returning true doesn't mean they will collide it means
+		// they're included in begin contact and end contact events)
+		if (a.m_isSensor && b.m_isSensor) return true;
+		// ignore contact events between a sensor and a non-sensor
+		if (a.m_isSensor || b.m_isSensor) return false;
+		// else test if the two non-sensor colliders should overlap
+
+		a = a.m_body.sprite;
+		b = b.m_body.sprite;
+
+		let shouldOverlap = a._hasOverlap[b._uid] ?? b._hasOverlap[a._uid];
+
+		// if `a` has an overlap enabled with `b` their colliders should
+		// not produce a contact event, the overlap contact event should
+		// only be produced between their sensors
+		if (shouldOverlap) return false;
+		return true;
+	}
 
 	this.World = class {
 		constructor() {
+			this.mod = {};
+
 			const worldDef = b2DefaultWorldDef();
 			worldDef.gravity.Set(0, 0);
 
 			this.wID = wID = b2CreateWorld(worldDef);
-
-			// this.taskSystem = new TaskSystem(navigator.hardwareConcurrency);
-			// this.wID = wID = b2CreateThreadedWorld(worldDef, this.taskSystem);
-
-			this.mod = {};
-
-			this.contacts = [];
-			// TODO: add contact listeners
-			// this.on('begin-contact', this._beginContact);
-			// this.on('end-contact', this._endContact);
 
 			let _this = this;
 			this._gravity = {
@@ -4529,6 +4478,106 @@ async function q5playPreSetup() {
 			this.autoStep = true;
 
 			this.step = this.physicsUpdate;
+
+			b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
+				const shapeA = shapeMap[shapeIdA.index1],
+					shapeB = shapeMap[shapeIdB.index1],
+					isSensorA = shapeA.isSensor,
+					isSensorB = shapeB.isSensor,
+					spriteA = shapeA.sprite,
+					spriteB = shapeB.sprite;
+
+				// If both shapes are sensors, generate overlap events,
+				// or if both are colliders that shouldn't overlap,
+				// generate collision events.
+				// Otherwise, this returns false to ignore
+				// contact between sensors and colliders, also
+				// to let colliders pass through each other.
+				return (
+					(isSensorA && isSensorB) ||
+					(!isSensorA && !isSensorB && !(spriteA._hasOverlap[spriteB._uid] ?? spriteB._hasOverlap[spriteA._uid]))
+				);
+			});
+		}
+
+		_processContactEvents(t, events) {
+			for (let i = 0; i < events.beginCount; i++) {
+				const evt = events.GetBeginEvent(i),
+					shapeA = shapeMap[evt.shapeIdA.index1],
+					shapeB = shapeMap[evt.shapeIdB.index1],
+					a = shapeA.sprite,
+					b = shapeB.sprite,
+					ledgerA = a[t],
+					ledgerB = b[t];
+
+				ledgerA[b._uid] = 0;
+				ledgerB[a._uid] = 0;
+
+				for (const g of b.groups) {
+					if (!ledgerA[g._uid] || ledgerA[g._uid] < 0) {
+						ledgerA[g._uid] = 0;
+						g[t][a._uid] = 0;
+					}
+				}
+
+				for (const g of a.groups) {
+					if (!ledgerB[g._uid] || ledgerB[g._uid] < 0) {
+						ledgerB[g._uid] = 0;
+						g[t][b._uid] = 0;
+					}
+					for (const g2 of b.groups) {
+						if (!g[t][g2._uid] || g[t][g2._uid] < 0) {
+							g[t][g2._uid] = 0;
+							g2[t][g._uid] = 0;
+						}
+					}
+				}
+			}
+
+			for (let i = 0; i < events.endCount; i++) {
+				const evt = events.GetEndEvent(i),
+					shapeA = shapeMap[evt.shapeIdA.index1],
+					shapeB = shapeMap[evt.shapeIdB.index1],
+					a = shapeA.sprite,
+					b = shapeB.sprite,
+					ledgerA = a[t],
+					ledgerB = b[t];
+
+				ledgerA[b._uid] = ledgerA[b._uid] != 0 ? -2 : -4;
+				ledgerB[a._uid] = ledgerB[a._uid] != 0 ? -2 : -4;
+
+				for (const g of b.groups) {
+					let inContact = false;
+					for (const s of g) {
+						if (s[t][a._uid] >= 0) {
+							inContact = true;
+							break;
+						}
+					}
+					if (!inContact) {
+						g[t][a._uid] = g[t][a._uid] != 0 ? -2 : -4;
+						ledgerA[g._uid] = ledgerA[g._uid] != 0 ? -2 : -4;
+					}
+				}
+
+				for (const g of a.groups) {
+					let inContact = false;
+					for (const s of g) {
+						if (s[t][b._uid] >= 0) {
+							inContact = true;
+							break;
+						}
+					}
+					if (!inContact) {
+						g[t][b._uid] = g[t][b._uid] != 0 ? -2 : -4;
+						ledgerB[g._uid] = ledgerB[g._uid] != 0 ? -2 : -4;
+						for (const g2 of b.groups) {
+							g[t][g2._uid] = g[t][g2._uid] != 0 ? -2 : -4;
+							g2[t][g._uid] = g2[t][g._uid] != 0 ? -2 : -4;
+						}
+					}
+				}
+			}
 		}
 
 		get profile() {
@@ -4597,6 +4646,12 @@ async function q5playPreSetup() {
 			b2World_Step(wID, timeStep, this.subSteps);
 			this.taskSystem?.ClearTasks();
 
+			const collideEvents = b2World_GetContactEvents(wID),
+				overlapEvents = b2World_GetSensorEvents(wID);
+
+			this._processContactEvents('_collisions', collideEvents);
+			this._processContactEvents('_overlappers', overlapEvents);
+
 			this.physicsTime += timeStep;
 
 			let sprites = Object.values($.q5play.sprites);
@@ -4606,10 +4661,10 @@ async function q5playPreSetup() {
 			for (let g of groups) g._step();
 
 			for (let s of sprites) {
-				if (s._enableContactEvents) s.___step();
+				s.___step();
 			}
 			for (let g of groups) {
-				if (g._enableContactEvents) g.___step();
+				g.___step();
 			}
 
 			if (this.autoStep) this.autoStep = null;
@@ -4690,124 +4745,6 @@ async function q5playPreSetup() {
 				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
 			}
 			return sprites;
-		}
-
-		/*
-		 * Sets contact trackers to 0, after the world's super.step()
-		 * they will be increased to 1.
-		 */
-		_beginContact(contact) {
-			// Get both fixtures
-			let a = contact.m_fixtureA;
-			let b = contact.m_fixtureB;
-			let t = '_collisions';
-			if (a.m_isSensor) t = '_overlappers';
-			a = a.m_body.sprite;
-			b = b.m_body.sprite;
-
-			a[t][b._uid] = 0;
-			b[t][a._uid] = 0;
-
-			for (let g of b.groups) {
-				if (!a[t][g._uid] || a[t][g._uid] < 0) {
-					a[t][g._uid] = 0;
-					g[t][a._uid] = 0;
-				}
-			}
-
-			for (let g of a.groups) {
-				if (!b[t][g._uid] || b[t][g._uid] < 0) {
-					b[t][g._uid] = 0;
-					g[t][b._uid] = 0;
-				}
-				for (let g2 of b.groups) {
-					if (!g[t][g2._uid] || g[t][g2._uid] < 0) {
-						g[t][g2._uid] = 0;
-						g2[t][g._uid] = 0;
-					}
-				}
-			}
-		}
-
-		/*
-		 * If contact ended between sprites that where previously in contact,
-		 * then their contact trackers are set to -2 which will be incremented
-		 * to -1 on the next physics update.
-		 *
-		 * However, if contact begins and ends on the same frame, then the contact
-		 * trackers are set to -4 and incremented to -3 on the next physics update.
-		 */
-		_endContact(contact) {
-			let a = contact.m_fixtureA;
-			let b = contact.m_fixtureB;
-			let contactType = '_collisions';
-			if (a.m_isSensor) contactType = '_overlappers';
-			a = a.m_body.sprite;
-			b = b.m_body.sprite;
-
-			a[contactType][b._uid] = a[contactType][b._uid] != 0 ? -2 : -4;
-			b[contactType][a._uid] = b[contactType][a._uid] != 0 ? -2 : -4;
-
-			for (let g of b.groups) {
-				let inContact = false;
-				for (let s of g) {
-					if (s[contactType][a._uid] >= 0) {
-						inContact = true;
-						break;
-					}
-				}
-				if (!inContact) {
-					g[contactType][a._uid] = g[contactType][a._uid] != 0 ? -2 : -4;
-					a[contactType][g._uid] = a[contactType][g._uid] != 0 ? -2 : -4;
-				}
-			}
-
-			for (let g of a.groups) {
-				let inContact = false;
-				for (let s of g) {
-					if (s[contactType][b._uid] >= 0) {
-						inContact = true;
-						break;
-					}
-				}
-				if (!inContact) {
-					g[contactType][b._uid] = g[contactType][b._uid] != 0 ? -2 : -4;
-					b[contactType][g._uid] = b[contactType][g._uid] != 0 ? -2 : -4;
-					for (let g2 of b.groups) {
-						g[contactType][g2._uid] = g[contactType][g2._uid] != 0 ? -2 : -4;
-						g2[contactType][g._uid] = g2[contactType][g._uid] != 0 ? -2 : -4;
-					}
-				}
-			}
-		}
-
-		/*
-		 * Used internally to find contact callbacks.
-		 *
-		 * @param type is the eventType of contact callback to find
-		 * @param s0 is the first sprite
-		 * @param s1 is the second sprite
-		 */
-		_findContact(type, s0, s1) {
-			let cb = s0[type][s1._uid];
-			if (cb) return cb;
-
-			for (let g1 of s1.groups) {
-				cb = s0[type][g1._uid];
-				if (cb) return cb;
-			}
-
-			for (let g0 of s0.groups) {
-				cb = g0[type][s1._uid];
-				if (cb) return cb;
-
-				for (let g1 of s1.groups) {
-					if (g0._uid != g1._uid) continue;
-					cb = g0[type][g1._uid];
-					if (cb) return cb;
-				}
-			}
-			return false;
 		}
 
 		get allowSleeping() {
@@ -5053,32 +4990,6 @@ async function q5playPreSetup() {
 			}
 		}
 	}; //end camera class
-
-	// TODO
-
-	function shouldCollide(that) {
-		// should this and that produce a contact event?
-		let a = this;
-		let b = that;
-
-		// sensors overlap (returning true doesn't mean they will collide it means
-		// they're included in begin contact and end contact events)
-		if (a.m_isSensor && b.m_isSensor) return true;
-		// ignore contact events between a sensor and a non-sensor
-		if (a.m_isSensor || b.m_isSensor) return false;
-		// else test if the two non-sensor colliders should overlap
-
-		a = a.m_body.sprite;
-		b = b.m_body.sprite;
-
-		let shouldOverlap = a._hasOverlap[b._uid] ?? b._hasOverlap[a._uid];
-
-		// if `a` has an overlap enabled with `b` their colliders should
-		// not produce a contact event, the overlap contact event should
-		// only be produced between their sensors
-		if (shouldOverlap) return false;
-		return true;
-	}
 
 	this.Tiles = class {
 		constructor(tiles, x, y, w, h) {
@@ -5870,14 +5781,6 @@ async function q5playPreSetup() {
 		return img; // return the p5 graphics object
 	};
 
-	this.createSprite = function () {
-		return new $.Sprite(...arguments);
-	};
-
-	this.createGroup = function () {
-		return new $.Group(...arguments);
-	};
-
 	this.loadAni = function () {
 		return new $.Ani(...arguments);
 	};
@@ -6071,7 +5974,6 @@ async function q5playPreSetup() {
 					lh.endsWith('stackblitz.io') ||
 					lh.endsWith('glitch.me') ||
 					lh.endsWith('replit.dev') ||
-					lh.endsWith('codehs.com') ||
 					lh.endsWith('openprocessing.org') ||
 					location.origin.endsWith('preview.p5js.org')
 				) {
@@ -7513,7 +7415,8 @@ main {
 		v.y = y;
 	}
 
-	let debugGreen = $.color(0, $._colorFormat, 0, $._colorFormat * 0.9);
+	const debugGreen = $.color(0, $._colorFormat, 0, $._colorFormat * 0.9),
+		debugYellow = $.color($._colorFormat, $._colorFormat, 0, $._colorFormat * 0.9);
 
 	let drawCmds = new DebugDrawCommandBuffer();
 
@@ -7531,7 +7434,13 @@ main {
 		let s;
 
 		for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
-			let uid = Box2D.HEAPU32[(offset + 4) >> 2];
+			// workaround that unpacks data from
+			// the shape material's customColor
+			const customColor = Box2D.HEAPU32[(offset + 4) >> 2],
+				uid = customColor & 0xffffff,
+				isSensor = (customColor >>> 25) & 0x1,
+				isFirstShape = (customColor >>> 26) & 0x1;
+
 			s = $.q5play.sprites[uid];
 
 			if (s === undefined) {
@@ -7568,17 +7477,24 @@ main {
 			// }
 
 			if (!s._hasImagery || s.debug) {
-				drawQueue.push({ type, sprite: s, data, vertexCount });
+				drawQueue.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
 			}
 		}
 	};
 
 	$._debugDraw = () => {
 		$.scale(meterSize);
+
 		let ogStroke = $._getStrokeIdx(),
 			strokeChanged = false,
-			ogStrokeWeight = $.strokeWeight() / meterSize;
-		$.strokeWeight(ogStrokeWeight);
+			strokeWeightChanged = false;
+
+		let swData = $._getStrokeWeight();
+		let ogSW = [...swData];
+		for (let i = 0; i < swData.length; i++) {
+			swData[i] /= meterSize;
+		}
+		$._setStrokeWeight(swData);
 
 		// Sort by layer
 		drawQueue.sort((a, b) => a.sprite.layer - b.sprite.layer);
@@ -7591,20 +7507,30 @@ main {
 		let rr;
 
 		for (let cmd of drawQueue) {
-			let s = cmd.sprite;
+			const s = cmd.sprite,
+				isSensor = cmd.isSensor,
+				isFirstShape = cmd.isFirstShape;
 
 			if (!s.debug) {
+				if (isSensor) continue;
 				$.fill(s.fill);
 				if (s.stroke) {
 					$.stroke(s.stroke);
 					strokeChanged = true;
 				} else if (strokeChanged) {
-					$.stroke(ogStroke);
+					$._setStrokeIdx(ogStroke);
 					strokeChanged = false;
+				}
+				if (s._strokeWeight != undefined) {
+					$._setStrokeWeight(s._strokeWeightData);
+					strokeWeightChanged = true;
+				} else if (strokeWeightChanged) {
+					$._setStrokeWeight(swData);
+					strokeWeightChanged = false;
 				}
 			} else {
 				$.noFill();
-				$.stroke(debugGreen);
+				$.stroke(isSensor ? debugYellow : debugGreen);
 				strokeChanged = true;
 			}
 
@@ -7635,15 +7561,13 @@ main {
 				}
 				$.endShape(true);
 				if (rr > 0) {
-					$.strokeWeight(ogStrokeWeight);
+					$.strokeWeight(swScaled);
 					$._setStrokeIdx(ogStroke);
 				}
-				$.q5play.spritesDrawn++;
 			}
 			// draw a circle
 			else if (cmd.type == 3) {
 				$.circle(cmd.data[0], cmd.data[1], cmd.data[4] * 2);
-				$.q5play.spritesDrawn++;
 			}
 			// draw a capsule
 			else if (cmd.type == 4) {
@@ -7653,7 +7577,7 @@ main {
 					$.strokeJoin('round');
 					$.strokeWeight(cmd.data[4] * 2);
 					$.line(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3]);
-					$.strokeWeight(ogStrokeWeight);
+					$.strokeWeight(swScaled);
 				}
 			}
 			// draw a line segment
@@ -7661,22 +7585,25 @@ main {
 				$.line(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3]);
 			}
 
-			// draw a triangle at the shape's center to indicate rotation
-			if (s.debug && cmd.type < 5) {
-				$._setFillIdx($._getStrokeIdx());
-				$._doFill();
-				$.noStroke();
-				$.beginShape();
-				let a = 0.05,
-					b = 0.03;
-				let tri = [-b, -b, b, -b, 0, a];
-				for (let i = 0; i < 6; i += 2) {
-					v.x = tri[i];
-					v.y = tri[i + 1];
-					transformPoint(xf, v);
-					$.vertex(v.x, v.y);
+			if (isFirstShape) {
+				$.q5play.spritesDrawn++;
+				// draw a triangle at the shape's center to indicate rotation
+				if (s.debug && cmd.type < 5) {
+					$._setFillIdx($._getStrokeIdx());
+					$._doFill();
+					$.noStroke();
+					$.beginShape();
+					let a = 0.05,
+						b = 0.03;
+					let tri = [-b, -b, b, -b, 0, a];
+					for (let i = 0; i < 6; i += 2) {
+						v.x = tri[i];
+						v.y = tri[i + 1];
+						transformPoint(xf, v);
+						$.vertex(v.x, v.y);
+					}
+					$.endShape(true);
 				}
-				$.endShape(true);
 			}
 
 			// TODO: draw sprite text
@@ -7693,6 +7620,8 @@ main {
 
 		drawCmds.ClearCommands();
 		$.resetMatrix();
+		$._setStrokeIdx(ogStroke);
+		$._setStrokeWeight(ogSW);
 	};
 
 	// switch (cmd.type) {

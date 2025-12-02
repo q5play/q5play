@@ -30,13 +30,6 @@ class Q5Play {
 	 */
 	images: {};
 	/**
-	 * Used for debugging, set to true to make q5play
-	 * not load any images.
-	 * @type {Boolean}
-	 * @default false
-	 */
-	disableImages: boolean;
-	/**
 	 * The default color palette, at index 0 of this array,
 	 * has all the letters of the English alphabet mapped to colors.
 	 * @type {Array}
@@ -107,7 +100,7 @@ class Q5Play {
 	 */
 	onImageLoad(): void;
 }
-var q5play: Q5Play;
+const q5play: Q5Play;
 let usePhysics: boolean;
 let timeScale: number;
 const log: {
@@ -716,19 +709,6 @@ class Sprite {
 	 * @default {x: false, y: false}
 	 */
 	get mirror(): any;
-	set offset(val: object);
-	/**
-	 * Offsetting the sprite moves the sprite's physics body relative
-	 * to its center.
-	 *
-	 * The sprite's x and y properties represent its center in world
-	 * coordinates. This point is also the sprite's center of rotation.
-	 * @type {object}
-	 * @property {Number} x - the sprite's horizontal offset
-	 * @property {Number} y - the sprite's vertical offset
-	 * @default {x: 0, y: 0}
-	 */
-	get offset(): object;
 	set opacity(val: number);
 	/**
 	 * The sprite's opacity. 0 is transparent, 1 is opaque.

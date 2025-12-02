@@ -19,7 +19,7 @@
 		"V": "npm version minor --force"
 	},
 	"dependencies": {
-		"box2d3-wasm": "^5.1.2",
-		"q5": "^3.5.2"
+		"box2d3-wasm": "^5.1.3",
+		"q5": "^3.6.1"
 	}
 }
