@@ -1,4 +1,4 @@
-# q5play
+# <img src="https://q5play.org/assets/q5play_logo.svg" width="64"> q5play
 
 Coming soon...
 
