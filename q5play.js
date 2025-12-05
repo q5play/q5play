@@ -1,11 +1,12 @@
 /**
  * q5play
- * @version 4.0-alpha11
+ * @version 4.0-alpha12
  * @author quinton-ashley
  * @license q5play License
  */
 
-let q5play_version = 'alpha11';
+// will use semver minor after 4.0 is released
+let q5play_version = 'alpha12';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -40,27 +41,17 @@ async function q5playPreSetup() {
 		b2DestroyWorld,
 		b2World_Step,
 		b2World_Draw,
-		b2World_GetBodyEvents,
 		b2World_GetSensorEvents,
 		b2World_GetContactEvents,
 		b2World_EnableSleeping,
 		b2World_IsSleepingEnabled,
-		b2World_EnableWarmStarting,
-		b2World_IsWarmStartingEnabled,
 		b2World_GetAwakeBodyCount,
-		b2World_EnableContinuous,
-		b2World_IsContinuousEnabled,
 		b2World_SetRestitutionThreshold,
 		b2World_GetRestitutionThreshold,
 		b2World_SetHitEventThreshold,
 		b2World_GetHitEventThreshold,
-		b2World_SetContactTuning,
-		b2World_SetJointTuning,
-		b2World_SetMaximumLinearSpeed,
-		b2World_GetMaximumLinearSpeed,
 		b2World_GetProfile,
 		b2World_GetCounters,
-		b2World_GetPointer,
 		b2World_OverlapAABB,
 		b2World_OverlapPoint,
 		b2World_OverlapCircle,
@@ -72,12 +63,12 @@ async function q5playPreSetup() {
 		b2World_CastCapsule,
 		b2World_CastPolygon,
 		b2World_SetCustomFilterCallback,
-		b2World_SetPreSolveCallback,
 		b2World_SetGravity,
 		b2World_GetGravity,
 		b2World_Explode,
-		b2World_RebuildStaticTree,
-		b2World_EnableSpeculative,
+
+		/* Explosion */
+		b2DefaultExplosionDef,
 
 		/* Shape */
 		b2DefaultShapeDef,
@@ -98,31 +89,18 @@ async function q5playPreSetup() {
 		b2CreateSegmentShape,
 		b2DestroyShape,
 
-		b2Shape_GetBody,
-		b2Shape_GetWorld,
-		b2Shape_GetPointer,
 		b2Shape_IsValid,
 		b2Shape_IsSensor,
 		b2Shape_TestPoint,
 		b2Shape_RayCast,
 		b2Shape_SetDensity,
-		b2Shape_GetDensity,
 		b2Shape_SetFriction,
-		b2Shape_GetFriction,
 		b2Shape_SetRestitution,
-		b2Shape_GetRestitution,
 		b2Shape_GetSurfaceMaterial,
 		b2Shape_SetSurfaceMaterial,
-		b2Shape_GetFilter,
-		b2Shape_SetFilter,
-		b2Shape_EnableSensorEvents,
-		b2Shape_AreSensorEventsEnabled,
 		b2Shape_EnableContactEvents,
-		b2Shape_AreContactEventsEnabled,
-		b2Shape_EnablePreSolveEvents,
-		b2Shape_ArePreSolveEventsEnabled,
+		b2Shape_EnableSensorEvents,
 		b2Shape_EnableHitEvents,
-		b2Shape_AreHitEventsEnabled,
 		b2Shape_GetType,
 		b2Shape_GetCircle,
 		b2Shape_GetSegment,
@@ -134,11 +112,9 @@ async function q5playPreSetup() {
 		b2Shape_SetSegment,
 		b2Shape_SetPolygon,
 		b2Shape_GetParentChain,
-		b2Shape_GetContactCapacity,
-		b2Shape_GetContactData,
-		b2Shape_GetSensorCapacity,
-		b2Shape_GetSensorOverlaps,
 		b2Shape_GetAABB,
+
+		// get closest point on the shape to a target point
 		b2Shape_GetClosestPoint,
 
 		/* Body */
@@ -155,9 +131,7 @@ async function q5playPreSetup() {
 		b2Body_GetLocalVector,
 		b2Body_GetWorldVector,
 		b2Body_GetMass,
-		b2Body_GetRotationalInertia,
 		b2Body_GetLocalCenterOfMass,
-		b2Body_GetWorldCenterOfMass,
 		b2Body_SetMassData,
 		b2Body_GetMassData,
 		b2Body_ApplyMassFromShapes,
@@ -168,20 +142,15 @@ async function q5playPreSetup() {
 		b2Body_ApplyForce,
 		b2Body_ApplyForceToCenter,
 		b2Body_ApplyTorque,
-		b2Body_ApplyLinearImpulse,
-		b2Body_ApplyLinearImpulseToCenter,
-		b2Body_ApplyAngularImpulse,
 		b2Body_SetLinearDamping,
 		b2Body_GetLinearDamping,
 		b2Body_SetAngularDamping,
 		b2Body_GetAngularDamping,
 		b2Body_SetGravityScale,
 		b2Body_GetGravityScale,
-		b2Body_GetType,
 		b2Body_SetType,
 		b2Body_IsAwake,
 		b2Body_SetAwake,
-		b2Body_IsEnabled,
 		b2Body_Enable,
 		b2Body_Disable,
 		b2Body_IsSleepEnabled,
@@ -192,21 +161,14 @@ async function q5playPreSetup() {
 		b2Body_IsFixedRotation,
 		b2Body_SetBullet,
 		b2Body_IsBullet,
-		b2Body_GetPointer,
-		b2Body_EnableSensorEvents,
-		b2Body_EnableContactEvents,
-		b2Body_EnableHitEvents,
 		b2Body_GetShapeCount,
 		b2Body_GetShapes,
 		b2Body_GetJointCount,
 		b2Body_GetJoints,
-		b2Body_GetContactCapacity,
-		b2Body_GetContactData,
 		b2Body_ComputeAABB,
 		b2Body_GetWorld,
 
 		/* Joint */
-		b2DestroyJoint,
 		b2DefaultDistanceJointDef,
 		b2CreateDistanceJoint,
 		b2DefaultMotorJointDef,
@@ -243,7 +205,8 @@ async function q5playPreSetup() {
 		b2MouseJoint_SetSpringDampingRatio,
 		b2MouseJoint_GetSpringDampingRatio,
 		b2MouseJoint_SetMaxForce,
-		b2MouseJoint_GetMaxForce
+		b2MouseJoint_GetMaxForce,
+		b2DestroyJoint
 	} = Box2D;
 
 	$.Box2D = Box2D;
@@ -252,7 +215,6 @@ async function q5playPreSetup() {
 
 	this.Q5Play = class {
 		constructor() {
-			// will use semver minor after 4.0 is released
 			this.version = q5play_version;
 			this.sprites = {};
 			this.groups = {};
@@ -308,6 +270,7 @@ async function q5playPreSetup() {
 			 *
 			 * Doing this:
 			 * group1.collides(group2, cb1);
+			 * let sprite0 = new group1.Sprite(...);
 			 * sprite0.collides(sprite1, cb0);
 			 *
 			 * Would result in this:
@@ -327,6 +290,7 @@ async function q5playPreSetup() {
 			this._overlaps = {};
 			this._overlapping = {};
 			this._overlapped = {};
+			this._passes = {};
 		}
 
 		get friendlyRounding() {
@@ -401,29 +365,31 @@ async function q5playPreSetup() {
 			this.sprite = sprite;
 		}
 
-		init(id, type) {
+		init(id, type, geo) {
 			// Box2D shape ID pointer object
 			this.id = id;
 
 			// ['box', 'circle', 'segment', 'capsule', 'chain', 'polygon]
 			this.type = type;
+
+			this.geo = geo;
 		}
 
 		delete() {
 			b2DestroyShape(this.id);
 		}
 
-		enableContactEvents(val = true) {
-			if (!this.areContactEventsEnabled) {
+		_enableContactEvents(val = true) {
+			if (!this._areContactEventsEnabled) {
 				b2Shape_EnableContactEvents(this.id, val);
-				this.areContactEventsEnabled = val;
+				this._areContactEventsEnabled = val;
 			}
 		}
 
-		enableSensorEvents(val = true) {
-			if (!this.areSensorEventsEnabled) {
+		_enableSensorEvents(val = true) {
+			if (!this._areSensorEventsEnabled) {
 				b2Shape_EnableSensorEvents(this.id, val);
-				this.areSensorEventsEnabled = val;
+				this._areSensorEventsEnabled = val;
 			}
 		}
 
@@ -791,7 +757,10 @@ async function q5playPreSetup() {
 			this._aniChangeCount = 0;
 			this._draw = () => this.__draw();
 
-			this._hasOverlap = {};
+			// the relationship type this sprite has with other sprites
+			// 0 = collides, 1 = passes, 2 = overlaps
+			this._relation = {};
+
 			this._collisions = {};
 			this._overlappers = {};
 
@@ -1288,18 +1257,21 @@ async function q5playPreSetup() {
 						x = path[0][0];
 						y = path[0][1];
 						// log(x, y);
-						if (!this.fixture || !this._relativeOrigin) {
-							this.x = x;
-							this.y = y;
-						} else {
-							x = this.x - this._relativeOrigin.x;
-							y = this.y - this._relativeOrigin.y;
-							vecs.pop();
-						}
+
+						// TODO: implement this so that adding multiple colliders
+						// to a sprite in vertex mode works correctly
+						// if (!this.colliders.length || !this._relativeOrigin)
+						this.x = x;
+						this.y = y;
+						// } else {
+						// 	x = this.x - this._relativeOrigin.x;
+						// 	y = this.y - this._relativeOrigin.y;
+						// 	vecs.pop();
+						// }
 					}
 					for (let i = 0; i < path.length; i++) {
 						if (vertexMode) {
-							if (i == 0 && !this.fixture) continue;
+							if (i == 0 && !this.colliders.length) continue;
 							// verts are relative to the first vert
 							vert.x = path[i][0] - x;
 							vert.y = path[i][1] - y;
@@ -1368,20 +1340,20 @@ async function q5playPreSetup() {
 					centerX = sumX / vl;
 					centerY = sumY / vl;
 
-					if (!this.fixture) {
+					if (!this.colliders.length) {
 						this._relativeOrigin = { x: centerX, y: centerY };
 					}
 
 					if (vertexMode && usesVertices) {
-						if (!this.fixture) {
-							// repositions the sprite's x, y coordinates
-							// to be in the center of the shape
-							this.x += centerX;
-							this.y += centerY;
-						} else {
-							centerX = this._relativeOrigin.x;
-							centerY = this._relativeOrigin.y;
-						}
+						// if (!this.colliders.length) {
+						// repositions the sprite's x, y coordinates
+						// to be in the center of the shape
+						this.x += centerX;
+						this.y += centerY;
+						// } else {
+						// 	centerX = this._relativeOrigin.x;
+						// 	centerY = this._relativeOrigin.y;
+						// }
 					}
 
 					for (let i = 0; i < vecs.length; i++) {
@@ -1399,7 +1371,7 @@ async function q5playPreSetup() {
 					geo = b2MakePolygon(hull, 0);
 
 					id = b2CreatePolygonShape(bdID, shapeDef, geo);
-					shape.init(id, 5);
+					shape.init(id, 5, geo);
 				} else {
 					if (vecs.length == 2) {
 						if (!rr) {
@@ -1407,14 +1379,14 @@ async function q5playPreSetup() {
 							geo.point1 = vecs[0];
 							geo.point2 = vecs[1];
 							id = b2CreateSegmentShape(bdID, shapeDef, geo);
-							shape.init(id, 2);
+							shape.init(id, 2, geo);
 						} else {
 							geo = new b2Capsule();
 							geo.center1 = vecs[0];
 							geo.center2 = vecs[1];
 							geo.radius = rr / meterSize;
 							id = b2CreateCapsuleShape(bdID, shapeDef, geo);
-							shape.init(id, 3);
+							shape.init(id, 3, geo);
 						}
 					} else if (this._phys != 1) {
 						// create several capsules to approximate a hollow shape (closed chain)
@@ -1425,7 +1397,7 @@ async function q5playPreSetup() {
 							geo.radius = 0.12;
 							id = b2CreateCapsuleShape(bdID, shapeDef, geo);
 							let shapePart = new Collider(this);
-							shape.init(id, 3);
+							shape.init(id, 3, geo);
 							shapes.push(shapePart);
 							shapeMap[id.index1] = shapePart;
 						}
@@ -1438,7 +1410,7 @@ async function q5playPreSetup() {
 						chainDef.SetMaterials([{ customColor: this._uid }]);
 
 						id = b2CreateChain(bdID, chainDef);
-						shape.init(id, 4);
+						shape.init(id, 4, geo);
 					}
 				}
 			} else {
@@ -1451,7 +1423,7 @@ async function q5playPreSetup() {
 					geo.radius = (w * 0.5) / meterSize;
 
 					id = b2CreateCircleShape(bdID, shapeDef, geo);
-					shape.init(id, 1);
+					shape.init(id, 1, geo);
 				} else {
 					let offset = scaleTo(offsetX, offsetY);
 					let hw = (w * 0.5) / meterSize;
@@ -1464,7 +1436,7 @@ async function q5playPreSetup() {
 					}
 
 					id = b2CreatePolygonShape(bdID, shapeDef, geo);
-					shape.init(id, 0);
+					shape.init(id, 0, geo);
 				}
 
 				// TODO: use AABB to get extents for multiple shapes
@@ -2081,6 +2053,13 @@ async function q5playPreSetup() {
 			b2Body_SetAwake(this.bdID, !val);
 		}
 
+		get sleepThreshold() {
+			return b2Body_GetSleepThreshold(wID);
+		}
+		set sleepThreshold(val) {
+			b2Body_SetSleepThreshold(wID, val);
+		}
+
 		get speed() {
 			return this._vel.mag();
 		}
@@ -2130,43 +2109,6 @@ async function q5playPreSetup() {
 		}
 		set tintColor(val) {
 			this.tint = val;
-		}
-
-		set vertices(val) {
-			if (this._phys == 3) {
-				throw new Error('Cannot set vertices of a sprite with collider type of "none".');
-			}
-			if (this.watch) this.mod[27] = true;
-
-			this._deleteFixtures();
-
-			this._originMode = 'start';
-			this.addCollider(val);
-			if (this._hasSensors) {
-				this.addDefaultSensors();
-			}
-		}
-		get vertices() {
-			return this._getVertices();
-		}
-
-		_getVertices(internalUse) {
-			let f = this.fixture;
-			let s = f.getShape();
-			let v = [...s.m_vertices];
-			if (s.m_type == 'polygon') v.unshift(v.at(-1));
-			let x = this.x;
-			let y = this.y;
-			for (let i = 0; i < v.length; i++) {
-				let arr = [v[i].x * meterSize + x, v[i].y * meterSize + y];
-				if (friendlyRounding) {
-					arr[0] = fixRound(arr[0]);
-					arr[1] = fixRound(arr[1]);
-				}
-				if (internalUse) v[i] = arr;
-				else v[i] = $.createVector(arr[0], arr[1]);
-			}
-			return v;
 		}
 
 		get visible() {
@@ -2481,7 +2423,7 @@ async function q5playPreSetup() {
 
 		___step() {
 			const a = this;
-			let b, contactType, shouldOverlap, cb;
+			let b, contactType, checkOverlaps, cb;
 			let checkCollisions = true;
 			for (const event in eventTypes) {
 				const ledgerA = a[event];
@@ -2498,8 +2440,8 @@ async function q5playPreSetup() {
 					if (a._isGroup || b?._isGroup) continue;
 
 					// is there even a chance that a contact callback exists?
-					shouldOverlap = a._hasOverlap[b._uid] ?? b._hasOverlap[a._uid];
-					if ((checkCollisions && shouldOverlap !== false) || (!checkCollisions && shouldOverlap !== true)) {
+					checkOverlaps = a._relation[b._uid] == 2 || b._relation[a._uid] == 2;
+					if ((checkCollisions && checkOverlaps !== false) || (!checkCollisions && checkOverlaps !== true)) {
 						continue;
 					}
 
@@ -2690,6 +2632,60 @@ async function q5playPreSetup() {
 
 		// TODO applyForceScaled possible in Box2D v3?
 
+		/**
+		 * Applies a force to the sprite's center of mass attracting it to
+		 * the given position.
+		 *
+		 * Radius and easing not implemented yet!
+		 *
+		 * @param {Number} x
+		 * @param {Number} y
+		 * @param {Number} force
+		 * @param {Number} [radius] - infinite if not given
+		 * @param {Number} [easing] - solid if not given
+		 * @example
+		 * sprite.attractTo(x, y, force);
+		 * sprite.attractTo({x, y}, force);
+		 */
+		attractTo(x, y, force, radius, easing) {
+			if (this._phys != 0) {
+				console.error('attractTo can only be used on sprites with dynamic physics bodies');
+				return;
+			}
+			if (typeof x != 'number') {
+				let obj = x;
+				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
+				force = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			if (this.x == x && this.y == y) return;
+
+			let a = y - this.y;
+			let b = x - this.x;
+			let c = Math.sqrt(a * a + b * b);
+
+			let percent = force / c;
+
+			let forceVector = new b2Vec2(b * percent, a * percent);
+			b2Body_ApplyForceToCenter(this.bdID, forceVector, true);
+		}
+
+		repelFrom(x, y, force, radius, easing) {
+			if (this._phys != 0) {
+				console.error('repelFrom can only be used on sprites with dynamic colliders');
+				return;
+			}
+			if (typeof x != 'number') {
+				let obj = x;
+				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
+				force = y;
+				y = obj.y;
+				x = obj.x;
+			}
+			this.attractTo(x, y, -force, radius, easing);
+		}
+
 		applyTorque(val) {
 			b2Body_ApplyTorque(this.bdID, val, true);
 		}
@@ -2778,26 +2774,47 @@ async function q5playPreSetup() {
 			}
 		}
 
-		_ensureCollide(target, cb, type) {
-			if (this._hasOverlap[target._uid] !== false) {
-				this._hasOverlap[target._uid] = false;
-				for (let collider of this.colliders) {
-					collider.enableContactEvents();
-				}
+		/**
+		 * What should happen when this sprite
+		 * contacts the target sprite/group?
+		 * @param r the relationship value:
+		 * - collide is 0 or undefined (default)
+		 * - pass is 1
+		 * - overlap is 2
+		 */
+		_ensureContactRelationship(target, r) {
+			if (this._relation[target._uid] !== r) {
+				this._relation[target._uid] = r;
 			}
-			if (target._hasOverlap[this._uid] !== false) {
-				target._hasOverlap[this._uid] = false;
+			if (target._relation[this._uid] !== r) {
+				target._relation[this._uid] = r;
 				if (target._isGroup) {
 					for (let s of target) {
-						s._hasOverlap[this._uid] = false;
-						this._hasOverlap[s._uid] = false;
+						s._relation[this._uid] = r;
+						this._relation[s._uid] = r;
+					}
+				}
+			}
+		}
+
+		_ensureCollide(target) {
+			this._ensureContactRelationship(target, 0);
+
+			if (!this._areContactEventsEnabled) {
+				for (let collider of this.colliders) {
+					collider._enableContactEvents();
+				}
+			}
+			if (!target._areContactEventsEnabled) {
+				if (target._isGroup) {
+					for (let s of target) {
 						for (let collider of s.colliders) {
-							collider.enableContactEvents();
+							collider._enableContactEvents();
 						}
 					}
 				} else {
 					for (let collider of target.colliders) {
-						collider.enableContactEvents();
+						collider._enableContactEvents();
 					}
 				}
 			}
@@ -2842,8 +2859,19 @@ async function q5playPreSetup() {
 			}
 		}
 
+		pass(target) {
+			this._ensureContactRelationship(target, 1);
+		}
+
+		passes(target) {
+			this._ensureContactRelationship(target, 1);
+		}
+
 		_ensureOverlap(target) {
+			this._ensureContactRelationship(target, 2);
+
 			if (!this._hasSensors) this.addDefaultSensors();
+
 			if (!target._hasSensors) {
 				if (target._isSprite) {
 					target.addDefaultSensors();
@@ -2852,19 +2880,6 @@ async function q5playPreSetup() {
 						if (!s._hasSensors) s.addDefaultSensors();
 					}
 					target._hasSensors = true;
-				}
-			}
-
-			if (!this._hasOverlap[target._uid]) {
-				this._hasOverlap[target._uid] = true;
-			}
-			if (!target._hasOverlap[this._uid]) {
-				target._hasOverlap[this._uid] = true;
-				if (target._isGroup) {
-					for (let s of target) {
-						s._hasOverlap[this._uid] = true;
-						this._hasOverlap[s._uid] = true;
-					}
 				}
 			}
 		}
@@ -2897,11 +2912,30 @@ async function q5playPreSetup() {
 		}
 
 		addDefaultSensors() {
-			// TODO
+			let bdID = this.bdID;
 			for (let collider of this.colliders) {
-				log(collider);
+				let geo = collider.geo;
+				let sensor = new Sensor(this);
+
+				let shapeDef = new b2DefaultShapeDef();
+				shapeDef.isSensor = true;
+				shapeDef.enableCustomFiltering = true;
+				shapeDef.density = 0;
+				shapeDef.enableSensorEvents = true;
+
+				let id;
+				if (collider.type == 0) {
+					id = b2CreatePolygonShape(bdID, shapeDef, geo);
+					sensor.init(id, 0, geo);
+				} else if (collider.type == 1) {
+					id = b2CreateCircleShape(bdID, shapeDef, geo);
+					sensor.init(id, 1, geo);
+				}
+
+				this.sensors.push(sensor);
+				shapeMap[id.index1] = sensor;
 			}
-			// this._hasSensors = true;
+			this._hasSensors = true;
 		}
 
 		distanceTo(o) {
@@ -3640,7 +3674,7 @@ async function q5playPreSetup() {
 				this.parent = 0;
 			}
 
-			this._hasOverlap = {};
+			this._relation = {};
 			this._collisions = {};
 			this._overlappers = {};
 
@@ -3887,42 +3921,53 @@ async function q5playPreSetup() {
 			}
 		}
 
-		_ensureCollide(target) {
-			if (this._hasOverlap[target._uid] !== false) {
-				this._hasOverlap[target._uid] = false;
+		_ensureContactRelationship(target, r) {
+			if (this._relation[target._uid] !== r && this._uid != target._uid) {
+				this._relation[target._uid] = r;
 				for (let s of this) {
-					s._hasOverlap[target._uid] = false;
-					target._hasOverlap[s._uid] = false;
-					for (let collider of s.colliders) {
-						collider.enableContactEvents();
-					}
-					// if this group is the same group as the target
-					if (this._uid == target._uid) {
-						for (let s2 of target) {
-							s._hasOverlap[s2._uid] = false;
-							s2._hasOverlap[s._uid] = false;
+					s._relation[target._uid] = r;
+					target._relation[s._uid] = r;
+				}
+			}
+			if (target._relation[this._uid] !== r) {
+				target._relation[this._uid] = r;
+				if (target._isGroup) {
+					for (let s of target) {
+						s._relation[this._uid] = r;
+						this._relation[s._uid] = r;
+						for (let s2 of this) {
+							s._relation[s2._uid] = r;
+							s2._relation[s._uid] = r;
 						}
 					}
 				}
 			}
-			if (target._hasOverlap[this._uid] !== false) {
-				target._hasOverlap[this._uid] = false;
-				for (let collider of target.colliders) {
-					collider.enableContactEvents();
-				}
-				if (target._isGroup) {
-					for (let s of target) {
-						s._hasOverlap[this._uid] = false;
-						this._hasOverlap[s._uid] = false;
-						for (let collider of s.colliders) {
-							collider.enableContactEvents();
-						}
-						for (let s2 of this) {
-							s._hasOverlap[s2._uid] = false;
-							s2._hasOverlap[s._uid] = false;
-						}
+		}
+
+		_ensureCollide(target) {
+			this._ensureContactRelationship(target, 0);
+
+			if (!this._areContactEventsEnabled) {
+				for (let s of this) {
+					for (let collider of s.colliders) {
+						collider._enableContactEvents();
 					}
 				}
+				this._areContactEventsEnabled = true;
+			}
+			if (!target._areContactEventsEnabled) {
+				if (target._isGroup) {
+					for (let s of target) {
+						for (let collider of s.colliders) {
+							collider._enableContactEvents();
+						}
+					}
+				} else {
+					for (let collider of target.colliders) {
+						collider._enableContactEvents();
+					}
+				}
+				target._areContactEventsEnabled = true;
 			}
 		}
 
@@ -3965,7 +4010,17 @@ async function q5playPreSetup() {
 			}
 		}
 
+		pass(target) {
+			this._ensureContactRelationship(target, 1);
+		}
+
+		passes(target) {
+			this._ensureContactRelationship(target, 1);
+		}
+
 		_ensureOverlap(target) {
+			this._ensureContactRelationship(target, 2);
+
 			if (!this._hasSensors) {
 				for (let s of this) {
 					if (!s._hasSensors) s.addDefaultSensors();
@@ -3980,33 +4035,6 @@ async function q5playPreSetup() {
 						if (!s._hasSensors) s.addDefaultSensors();
 					}
 					target._hasSensors = true;
-				}
-			}
-			if (this._hasOverlap[target._uid] != true) {
-				this._hasOverlap[target._uid] = true;
-				for (let s of this) {
-					s._hasOverlap[target._uid] = true;
-					target._hasOverlap[s._uid] = true;
-					// if this group is the same group as the target
-					if (this._uid == target._uid) {
-						for (let s2 of target) {
-							s._hasOverlap[s2._uid] = true;
-							s2._hasOverlap[s._uid] = true;
-						}
-					}
-				}
-			}
-			if (target._hasOverlap[this._uid] != true) {
-				target._hasOverlap[this._uid] = true;
-				if (target._isGroup) {
-					for (let s of target) {
-						s._hasOverlap[this._uid] = true;
-						this._hasOverlap[s._uid] = true;
-						for (let s2 of this) {
-							s._hasOverlap[s2._uid] = true;
-							s2._hasOverlap[s._uid] = true;
-						}
-					}
 				}
 			}
 		}
@@ -4144,7 +4172,7 @@ async function q5playPreSetup() {
 			return 'g' + this.idNum;
 		}
 
-		cull(top, bottom, left, right, cb) {
+		cull(top = 0, bottom, left, right, cb) {
 			if (left === undefined) {
 				let size = top;
 				cb = bottom;
@@ -4162,20 +4190,26 @@ async function q5playPreSetup() {
 
 			let minX = -left + cx;
 			let minY = -top + cy;
-			let maxX = $.width + right + cx;
-			let maxY = $.height + bottom + cy;
+			let maxX = $.canvas.w + right + cx;
+			let maxY = $.canvas.h + bottom + cy;
 
 			let culled = 0;
 			for (let i = 0; i < this.length; i++) {
 				let s = this[i];
-				if (s.shape == 'chain') continue;
-				if (s.x < minX || s.y < minY || s.x > maxX || s.y > maxY) {
+
+				// TODO: if sprite has a chain shape, never cull it
+				// if (s.shape == 'chain') continue;
+
+				if (s._posX < minX || s._posY < minY || s._posX > maxX || s._posY > maxY) {
 					culled++;
 					if (cb) cb(s, culled);
-					else s.remove();
-					if (s.deleted) i--;
+					else s.delete();
+					if (s._deleted) i--;
 				}
 			}
+
+			if (this._isAllSpritesGroup) this.autoCull = null;
+
 			return culled;
 		}
 
@@ -4266,29 +4300,31 @@ async function q5playPreSetup() {
 
 			// addition
 			if (sprites.length > 0) {
+				let b, rel, contactTypes, ledger, lg, ls;
 				for (let s of sprites) {
-					let b;
-					for (let tuid in this._hasOverlap) {
-						let hasOverlap = this._hasOverlap[tuid];
-						if (hasOverlap && !s._hasSensors) {
-							s.addDefaultSensors();
+					for (let tuid in this._relation) {
+						rel = this._relation[tuid];
+
+						if (rel == 2 && !s._hasSensors) {
+							s.addDefaultSensors(); // TODO: implement
 						}
 						if (tuid >= 1000) b = $.q5play.sprites[tuid];
 						else b = $.q5play.groups[tuid];
 
 						if (!b || b.deleted) continue;
 
-						if (!hasOverlap) b._ensureCollide(s);
-						else b._ensureOverlap(s);
+						if (rel == 0) b._ensureCollide(s);
+						else if (rel == 1) b._ensureContactRelationship(s, 1); // passes
+						else if (rel == 2) b._ensureOverlap(s);
 					}
 					for (let event in eventTypes) {
-						let contactTypes = eventTypes[event];
+						contactTypes = eventTypes[event];
 						for (let contactType of contactTypes) {
-							let ledger = $.q5play[contactType];
-							let lg = ledger[this._uid];
+							ledger = $.q5play[contactType];
+							lg = ledger[this._uid];
 							if (!lg) continue;
 
-							let ls = (ledger[s._uid] ??= {});
+							ls = ledger[s._uid] ??= {};
 							for (let b_uid in lg) {
 								ls[b_uid] = lg[b_uid];
 							}
@@ -4402,30 +4438,6 @@ async function q5playPreSetup() {
 	$.Visuals.prototype.addAni = $.Group.prototype.addAni = $.Sprite.prototype.addAni;
 	$.Visuals.prototype.addAnis = $.Group.prototype.addAnis = $.Sprite.prototype.addAnis;
 
-	function shouldCollide(that) {
-		// should this and that produce a contact event?
-		let a = this;
-		let b = that;
-
-		// sensors overlap (returning true doesn't mean they will collide it means
-		// they're included in begin contact and end contact events)
-		if (a.m_isSensor && b.m_isSensor) return true;
-		// ignore contact events between a sensor and a non-sensor
-		if (a.m_isSensor || b.m_isSensor) return false;
-		// else test if the two non-sensor colliders should overlap
-
-		a = a.m_body.sprite;
-		b = b.m_body.sprite;
-
-		let shouldOverlap = a._hasOverlap[b._uid] ?? b._hasOverlap[a._uid];
-
-		// if `a` has an overlap enabled with `b` their colliders should
-		// not produce a contact event, the overlap contact event should
-		// only be produced between their sensors
-		if (shouldOverlap) return false;
-		return true;
-	}
-
 	this.World = class {
 		constructor() {
 			this.mod = {};
@@ -4482,8 +4494,8 @@ async function q5playPreSetup() {
 			b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
 				const shapeA = shapeMap[shapeIdA.index1],
 					shapeB = shapeMap[shapeIdB.index1],
-					isSensorA = shapeA.isSensor,
-					isSensorB = shapeB.isSensor,
+					isSensorA = shapeA._isSensor,
+					isSensorB = shapeB._isSensor,
 					spriteA = shapeA.sprite,
 					spriteB = shapeB.sprite;
 
@@ -4495,16 +4507,16 @@ async function q5playPreSetup() {
 				// to let colliders pass through each other.
 				return (
 					(isSensorA && isSensorB) ||
-					(!isSensorA && !isSensorB && !(spriteA._hasOverlap[spriteB._uid] ?? spriteB._hasOverlap[spriteA._uid]))
+					(!isSensorA && !isSensorB && !(spriteA._relation[spriteB._uid] ?? spriteB._relation[spriteA._uid]))
 				);
 			});
 		}
 
-		_processContactEvents(t, events) {
+		_processEvents(events, t, idA, idB) {
 			for (let i = 0; i < events.beginCount; i++) {
 				const evt = events.GetBeginEvent(i),
-					shapeA = shapeMap[evt.shapeIdA.index1],
-					shapeB = shapeMap[evt.shapeIdB.index1],
+					shapeA = shapeMap[evt[idA].index1],
+					shapeB = shapeMap[evt[idB].index1],
 					a = shapeA.sprite,
 					b = shapeB.sprite,
 					ledgerA = a[t],
@@ -4536,8 +4548,8 @@ async function q5playPreSetup() {
 
 			for (let i = 0; i < events.endCount; i++) {
 				const evt = events.GetEndEvent(i),
-					shapeA = shapeMap[evt.shapeIdA.index1],
-					shapeB = shapeMap[evt.shapeIdB.index1],
+					shapeA = shapeMap[evt[idA].index1],
+					shapeB = shapeMap[evt[idB].index1],
 					a = shapeA.sprite,
 					b = shapeB.sprite,
 					ledgerA = a[t],
@@ -4580,8 +4592,26 @@ async function q5playPreSetup() {
 			}
 		}
 
-		get profile() {
-			return b2World_GetProfile();
+		get allowSleeping() {
+			return b2World_IsSleepingEnabled(wID);
+		}
+		set allowSleeping(val) {
+			b2World_EnableSleeping(wID, val);
+		}
+
+		get awakeBodies() {
+			return b2World_GetAwakeBodyCount(wID);
+		}
+
+		get bounceThreshold() {
+			return b2World_GetRestitutionThreshold(wID);
+		}
+		set bounceThreshold(val) {
+			b2World_SetRestitutionThreshold(wID, val);
+		}
+
+		get debugInfo() {
+			return b2World_GetCounters(wID);
 		}
 
 		get gravity() {
@@ -4591,11 +4621,22 @@ async function q5playPreSetup() {
 			b2World_SetGravity(wID, new b2Vec2(val.x, val.y));
 		}
 
+		get hitThreshold() {
+			return b2World_SetHitEventThreshold(wID);
+		}
+		set hitThreshold(val) {
+			b2World_GetHitEventThreshold(wID, val);
+		}
+
 		get meterSize() {
 			return meterSize;
 		}
 		set meterSize(val) {
 			meterSize = val;
+		}
+
+		get profile() {
+			return b2World_GetProfile();
 		}
 
 		get timeScale() {
@@ -4623,80 +4664,28 @@ async function q5playPreSetup() {
 			this._timeStep = (1 / this._updateRate) * this._timeScale;
 		}
 
-		get bounceThreshold() {
-			return b2World_GetRestitutionThreshold(wID);
-		}
-		set bounceThreshold(val) {
-			b2World_SetRestitutionThreshold(wID, val);
+		delete() {
+			b2DestroyWorld(wID);
 		}
 
-		physicsUpdate(timeStep) {
-			usePhysics = true;
-			timeScale = this._timeScale;
-
-			// TODO: more efficient way to get positions
-			// for (let s of $.allSprites) {
-			// 	s.prevPos.x = s.x;
-			// 	s.prevPos.y = s.y;
-			// 	s.prevRotation = s.rotation;
-			// }
-
-			timeStep ??= this._timeStep;
-
-			b2World_Step(wID, timeStep, this.subSteps);
-			this.taskSystem?.ClearTasks();
-
-			const collideEvents = b2World_GetContactEvents(wID),
-				overlapEvents = b2World_GetSensorEvents(wID);
-
-			this._processContactEvents('_collisions', collideEvents);
-			this._processContactEvents('_overlappers', overlapEvents);
-
-			this.physicsTime += timeStep;
-
-			let sprites = Object.values($.q5play.sprites);
-			let groups = Object.values($.q5play.groups);
-
-			for (let s of sprites) s._step();
-			for (let g of groups) g._step();
-
-			for (let s of sprites) {
-				s.___step();
+		explodeAt(x, y, radius, magnitude = 1, falloff = 0.1) {
+			if (x.x) {
+				falloff = magnitude;
+				magnitude = radius;
+				radius = y;
+				y = x.y;
+				x = x.x;
 			}
-			for (let g of groups) {
-				g.___step();
-			}
-
-			if (this.autoStep) this.autoStep = null;
-		}
-
-		speculate(timeStep) {
-			timeStep ??= this._timeStep;
-
-			for (let s of $.allSprites) {
-				s.prevPos.x = s.x;
-				s.prevPos.y = s.y;
-				s.prevRotation = s.rotation;
-			}
-
-			usePhysics = false;
-			timeScale = (timeStep / this._timeStep) * this._timeScale;
-
-			let sprites = Object.values($.q5play.sprites);
-			let groups = Object.values($.q5play.groups);
-
-			for (let s of sprites) s._step();
-			for (let g of groups) g._step();
-
-			if (this.autoStep) this.autoStep = null;
-		}
-
-		get realTime() {
-			return $.millis() / 1000;
+			let e = b2DefaultExplosionDef();
+			e.position = scaleTo(x, y);
+			e.radius = radius / meterSize;
+			e.impulsePerLength = magnitude;
+			e.falloff = falloff;
+			b2World_Explode(wID, e);
 		}
 
 		getSpritesAt(x, y, group, cameraActiveWhenDrawn = true) {
-			if (typeof x == 'object') {
+			if (x.x) {
 				cameraActiveWhenDrawn = group ?? true;
 				group = y;
 				y = x.y;
@@ -4747,11 +4736,48 @@ async function q5playPreSetup() {
 			return sprites;
 		}
 
-		get allowSleeping() {
-			return this.getAllowSleeping();
+		physicsUpdate(timeStep) {
+			usePhysics = true;
+			timeScale = this._timeScale;
+
+			// TODO: more efficient way to get positions
+			// for (let s of $.allSprites) {
+			// 	s.prevPos.x = s.x;
+			// 	s.prevPos.y = s.y;
+			// 	s.prevRotation = s.rotation;
+			// }
+
+			timeStep ??= this._timeStep;
+
+			b2World_Step(wID, timeStep, this.subSteps);
+			this.taskSystem?.ClearTasks();
+
+			const collideEvents = b2World_GetContactEvents(wID),
+				overlapEvents = b2World_GetSensorEvents(wID);
+
+			this._processEvents(collideEvents, '_collisions', 'shapeIdA', 'shapeIdB');
+			this._processEvents(overlapEvents, '_overlappers', 'sensorShapeId', 'visitorShapeId');
+
+			this.physicsTime += timeStep;
+
+			let sprites = Object.values($.q5play.sprites);
+			let groups = Object.values($.q5play.groups);
+
+			for (let s of sprites) s._step();
+			for (let g of groups) g._step();
+
+			for (let s of sprites) {
+				s.___step();
+			}
+			for (let g of groups) {
+				g.___step();
+			}
+
+			if (this.autoStep) this.autoStep = null;
 		}
-		set allowSleeping(val) {
-			this.setAllowSleeping(val);
+
+		get realTime() {
+			return $.millis() / 1000;
 		}
 
 		rayCast(startPos, direction, maxDistance) {
@@ -6066,6 +6092,10 @@ async function q5playPreSetup() {
 			c.addEventListener('mouseleave', () => {
 				$.mouse.isOnCanvas = false;
 			});
+			c.addEventListener('wheel', (e) => {
+				$.mouse.scrollDelta.x = e.deltaX;
+				$.mouse.scrollDelta.y = e.deltaY;
+			});
 			c.addEventListener('touchstart', (e) => e.preventDefault());
 			// this stops the right click menu from appearing
 			c.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -6447,6 +6477,20 @@ main {
 		constructor() {
 			super();
 			this._default = 'left';
+			this.x = 0;
+			this.y = 0;
+			this.canvasPos = {};
+			this.isOnCanvas = false;
+			this.isActive = false;
+			this.left = 0;
+			this.center = 0;
+			this.right = 0;
+			this.scroll = 0;
+			this.scrollDelta = { x: 0, y: 0 };
+			this._visible = true;
+			this._cursor = 'default';
+			this._ogX = 0;
+			this._ogY = 0;
 
 			let _this = this;
 
@@ -6471,18 +6515,6 @@ main {
 				}
 			});
 
-			this.x = 0;
-
-			this.y = 0;
-
-			this.canvasPos = {};
-
-			this.left = 0;
-
-			this.center = 0;
-
-			this.right = 0;
-
 			this.drag = {
 				left: 0,
 				center: 0,
@@ -6493,15 +6525,6 @@ main {
 				center: false,
 				right: false
 			};
-
-			this.isOnCanvas = false;
-
-			this.isActive = false;
-
-			this._visible = true;
-			this._cursor = 'default';
-			this._ogX = 0;
-			this._ogY = 0;
 		}
 
 		_ac(inp) {
@@ -6531,7 +6554,6 @@ main {
 		get pos() {
 			return this._pos;
 		}
-
 		get position() {
 			return this._pos;
 		}
@@ -6559,12 +6581,10 @@ main {
 			inp ??= this._default;
 			return this.drag[inp] == 1;
 		}
-
 		dragging(inp) {
 			inp ??= this._default;
 			return this.drag[inp] > 0 ? this.drag[inp] : 0;
 		}
-
 		dragged(inp) {
 			inp ??= this._default;
 			return this.drag[inp] <= -1;
@@ -7698,16 +7718,17 @@ function q5playPreDraw() {
 	}
 	$.allSprites._autoUpdate ??= true;
 
-	// TODO: cull with shape casting
-	// if ($.allSprites.autoCull) {
-	// 	$.allSprites.cull(10000);
-	// }
-
 	if ($.world.autoStep && $.world.timeScale > 0) {
 		$.world.physicsUpdate();
 		$._syncWorld();
 	}
 	$.world.autoStep ??= true;
+
+	// TODO: cull with shape casting
+	if ($.allSprites.autoCull) {
+		$.allSprites.cull(10000);
+	}
+	$.allSprites.autoCull ??= true;
 
 	if ($.camera.__pos.x != 0 || $.camera.__pos.y != 0 || $.camera._zoom != 1) {
 		$.camera.on();
@@ -7759,6 +7780,9 @@ function q5playPostDraw() {
 
 	let m = $.mouse;
 	let msm = $.world.mouseSprite?.mouse;
+
+	m.scrollDelta.x = 0;
+	m.scrollDelta.y = 0;
 
 	for (let btn of ['left', 'center', 'right']) {
 		if (m[btn] < 0) m[btn] = 0;
