@@ -773,6 +773,14 @@ class Sprite {
 	 * @default 1
 	 */
 	get scale(): number | any;
+
+	/**
+	 * Scales the the sprite's colliders and sensors.
+	 * @param x scaleX or uniform scale factor
+	 * @param y scaleY
+	 */
+	scaleBy(x: number, y?: number): void;
+	
 	set sleeping(val: boolean);
 	/**
 	 * Wake a sprite up or put it to sleep.
@@ -850,7 +858,7 @@ class Sprite {
 	 * The sprite's absolute position on the canvas.
 	 * @readonly
 	 */
-	readonly get canvasPos(): any;
+	get canvasPos(): any;
 	set hw(val: number);
 	/**
 	 * Half the width of the sprite.

@@ -1,12 +1,12 @@
 /**
  * q5play
- * @version 4.0-alpha12
+ * @version 4.0-alpha13
  * @author quinton-ashley
  * @license q5play License
  */
 
-// will use semver minor after 4.0 is released
-let q5play_version = 'alpha12';
+// will use semver minor after v4.0 is released
+let q5play_version = 'alpha13';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -17,12 +17,10 @@ if (typeof globalThis.Q5 == 'undefined') {
 
 // called when a new instance of Q5 is created
 async function q5playPreSetup() {
-	const $ = this; // the q5 instance that called q5playInit
-
-	const log = console.log;
-
-	const Box2DFactory = await import('box2d3-wasm');
-	const Box2D = await Box2DFactory.default({ pthreadCount: 0 });
+	const $ = this, // the q5 instance that called q5playInit
+		log = console.log,
+		Box2DFactory = await import('box2d3-wasm'),
+		Box2D = await Box2DFactory.default({ pthreadCount: 0 });
 
 	const {
 		b2Vec2,
@@ -72,8 +70,10 @@ async function q5playPreSetup() {
 
 		/* Shape */
 		b2DefaultShapeDef,
-		b2MakeOffsetRoundedBox,
+		b2MakeBox,
+		b2MakeRoundedBox,
 		b2MakeOffsetBox,
+		b2MakeOffsetRoundedBox,
 		b2MakePolygon,
 		b2MakeOffsetRoundedPolygon,
 		b2Circle,
@@ -113,6 +113,8 @@ async function q5playPreSetup() {
 		b2Shape_SetPolygon,
 		b2Shape_GetParentChain,
 		b2Shape_GetAABB,
+		b2Shape_GetContactCapacity,
+		b2Shape_GetContactData,
 
 		// get closest point on the shape to a target point
 		b2Shape_GetClosestPoint,
@@ -314,6 +316,9 @@ async function q5playPreSetup() {
 	const DEGREES = $.DEGREES;
 	$.angleMode(DEGREES);
 
+	$.rectMode($.CENTER);
+	$.imageMode($.CENTER);
+
 	const ZERO_ROT = b2MakeRot(0);
 
 	let meterSize = 60;
@@ -346,6 +351,7 @@ async function q5playPreSetup() {
 
 	let wID,
 		usePhysics = true,
+		cameraOn = false,
 		timeScale = 1,
 		shapeMap = {};
 
@@ -365,18 +371,47 @@ async function q5playPreSetup() {
 			this.sprite = sprite;
 		}
 
-		init(id, type, geo) {
+		init(id, type, geom) {
 			// Box2D shape ID pointer object
 			this.id = id;
 
-			// ['box', 'circle', 'segment', 'capsule', 'chain', 'polygon]
+			// ['box', 'polygon', 'roundedPolygon', 'circle', 'capsule', 'segment', 'chain', 'capsuleChain']
 			this.type = type;
 
-			this.geo = geo;
+			this.geom = geom;
 		}
 
 		delete() {
 			b2DestroyShape(this.id);
+		}
+
+		scaleBy(x, y) {
+			if (y === undefined) y = x;
+
+			let id = this.id,
+				type = this.type,
+				geom = this.geom;
+
+			if (type == 0) {
+				let hw = geom._hw * x,
+					hh = geom._hh * y,
+					rr;
+
+				if (!geom._rr) geom = b2MakeBox(hw, hh);
+				else {
+					rr = geom._rr * Math.min(x, y);
+					geom = b2MakeOffsetBox(hw, hh, rr);
+				}
+				b2Shape_SetPolygon(id, geom);
+				geom._hw = hw;
+				geom._hh = hh;
+				geom._rr = rr;
+				this.geom = geom;
+			} else if (type == 3) {
+				geom.radius *= x;
+				b2Shape_SetCircle(id, geom);
+				this.geom = geom;
+			}
 		}
 
 		_enableContactEvents(val = true) {
@@ -460,9 +495,13 @@ async function q5playPreSetup() {
 	};
 
 	this.Visual = class {
-		constructor() {
-			this.ani = null;
+		constructor(x = 0, y = 0) {
+			this._isVisual = true;
 
+			this.x = x;
+			this.y = y;
+
+			this.ani = null;
 			this.img = null;
 			this._hasImagery = false;
 			this._aniChangeCount = 0;
@@ -542,7 +581,7 @@ async function q5playPreSetup() {
 				if (this.w !== undefined) this.w = ani.w;
 				if (this.h !== undefined) this.h = ani.h;
 			}
-			return ani;
+			return ani.promise;
 		}
 
 		addAnis() {
@@ -554,10 +593,13 @@ async function q5playPreSetup() {
 				this.spriteSheet = args[0];
 				atlases = args[1];
 			}
+
+			let loaders = [];
 			for (let name in atlases) {
 				let atlas = atlases[name];
-				this.addAni(name, atlas);
+				loaders.push(this.addAni(name, atlas));
 			}
+			return Promise.all(loaders);
 		}
 
 		async changeAni(anis) {
@@ -655,23 +697,8 @@ async function q5playPreSetup() {
 		}
 
 		draw() {
-			if (!this._hasImagery) return;
-
-			let g = this.ani || this.img;
-
-			let scaleX = g._scale._x;
-			let scaleY = g._scale._y;
-			let shouldScale = scaleX != 1 || scaleY != 1;
-
-			if (shouldScale) $.scale(scaleX, scaleY);
-
-			let ox = g.offset.x;
-			let oy = g.offset.y;
-
-			if (this.ani) $.animation(g, ox, oy);
-			else $.image(g, ox, oy);
-
-			if (shouldScale) $.scale(1 / scaleX, 1 / scaleY);
+			if (this.ani) $.animation(this.ani, this.x, this.y);
+			else if (this.img) $.image(this.img, this.x, this.y);
 		}
 	};
 
@@ -755,7 +782,6 @@ async function q5playPreSetup() {
 			this._visible = true;
 			this._pixelPerfect = false;
 			this._aniChangeCount = 0;
-			this._draw = () => this.__draw();
 
 			// the relationship type this sprite has with other sprites
 			// 0 = collides, 1 = passes, 2 = overlaps
@@ -860,21 +886,23 @@ async function q5playPreSetup() {
 
 			this._heading = 'right';
 
-			this._layer = group._layer;
-			this._layer ??= $.allSprites._getTopLayer() + 1;
+			if (group._layer) this.layer = group._layer;
+			else this._layer = $.allSprites._topLayer += 1;
 
 			physicsType ??= group.physics || group.physicsType || 0;
 			this.physics = physicsType;
 
-			const bodyDef = new b2DefaultBodyDef();
-			bodyDef.type = b2BodyTypes[this._phys];
-			this.bdID = b2CreateBody(wID, bodyDef);
-			this._physicsEnabled = true;
+			if (!group.visualOnly) {
+				const bodyDef = new b2DefaultBodyDef();
+				bodyDef.type = b2BodyTypes[this._phys];
+				this.bdID = b2CreateBody(wID, bodyDef);
+				this._physicsEnabled = true;
 
-			this._shapes = [];
-			this.colliders = [];
-			this.sensors = [];
-			this._hasSensors = false;
+				this._shapes = [];
+				this.colliders = [];
+				this.sensors = [];
+				this._hasSensors = false;
+			}
 
 			x ??= group.x;
 			if (x === undefined) {
@@ -966,10 +994,8 @@ async function q5playPreSetup() {
 				set(val) {
 					if (val == this._x) return;
 					if (_this.watch) _this.mod[26] = true;
-					let scalarX = Math.abs(val / this._x);
-					_this._w *= scalarX;
-					_this._hw *= scalarX;
-					_this._resizeShapes({ x: scalarX, y: 1 });
+					let scaleX = Math.abs(val / this._x);
+					_this.scaleBy(scaleX, 1);
 					this._x = val;
 					this._avg = (this._x + this._y) * 0.5;
 					this._shouldScale = this._avg != 1;
@@ -983,12 +1009,8 @@ async function q5playPreSetup() {
 				set(val) {
 					if (val == this._y) return;
 					if (_this.watch) _this.mod[26] = true;
-					let scalarY = Math.abs(val / this._y);
-					if (_this._h) {
-						this._h *= scalarY;
-						this._hh *= scalarY;
-					}
-					_this._resizeShapes({ x: 1, y: scalarY });
+					let scaleY = Math.abs(val / this._y);
+					_this.scaleBy(1, scaleY);
 					this._y = val;
 					this._avg = (this._x + this._y) * 0.5;
 					this._shouldScale = this._avg != 1;
@@ -1006,13 +1028,15 @@ async function q5playPreSetup() {
 
 			if (forcedBoxShape) h ??= 50;
 
-			if (!this._vertexMode) {
-				args[0] = 0;
-				args[1] = 0;
-				args[2] = w;
-				args[3] = h;
+			if (!group.visualOnly) {
+				if (!this._vertexMode) {
+					args[0] = 0;
+					args[1] = 0;
+					args[2] = w;
+					args[3] = h;
+				}
+				this.addCollider(...args);
 			}
-			this.addCollider(...args);
 
 			this.prevPos = { x, y };
 			this.prevRotation = 0;
@@ -1031,28 +1055,11 @@ async function q5playPreSetup() {
 			if (typeof gvy == 'function') gvy = gvy(group.length - 1);
 			if (gvx || gvy) this.vel = { x: gvx, y: gvy };
 
-			// skip these properties
-			let skipProps = [
-				'ani',
-				'collider',
-				'x',
-				'y',
-				'w',
-				'h',
-				'd',
-				'diameter',
-				'dynamic',
-				'height',
-				'kinematic',
-				'static',
-				'vel',
-				'width'
-			];
+			this.scale = { x: group._scale._x, y: group._scale._y };
 
 			// inherit properties from group in the order they were added
 			// skip props that were already set above
-			for (let prop of $.Sprite.propsAll) {
-				if (skipProps.includes(prop)) continue;
+			for (let prop of spriteStdInheritedProps) {
 				let val = group[prop];
 				if (val === undefined) continue;
 				if (typeof val == 'function' && isArrowFunction(val)) {
@@ -1070,31 +1077,26 @@ async function q5playPreSetup() {
 				}
 			}
 
-			skipProps = [
-				'add',
-				'ani',
-				'anis',
-				'autoCull',
-				'contains',
-				'Group',
-				'idNum',
-				'length',
-				'mod',
-				'mouse',
-				'p',
-				'parent',
-				'Sprite',
-				'subgroups',
-				'velocity'
-			];
+			// add custom props
+			for (let g of this.groups) {
+				// Use cached customKeys if present; otherwise compute once and cache it.
+				let keys = g.customKeys;
 
-			for (let i = 0; i < this.groups.length; i++) {
-				let g = this.groups[i];
-				let props = Object.keys(g);
-				for (let prop of props) {
-					if (!isNaN(prop) || prop[0] == '_' || skipProps.includes(prop) || $.Sprite.propsAll.includes(prop)) {
-						continue;
+				if (!keys) {
+					keys = [];
+					for (let prop in g) {
+						if (!Object.prototype.hasOwnProperty.call(g, prop)) continue;
+						let c = prop.charCodeAt(0);
+						// exclude numeric array indices, built-in group keys, and private internals
+						if ((c >= 48 && c <= 57) || groupKeys[prop] || prop[0] == '_') {
+							continue;
+						}
+						keys.push(prop);
 					}
+					g.customKeys = keys;
+				}
+
+				for (let prop of keys) {
 					let val = g[prop];
 					if (val === undefined) continue;
 					if (typeof val == 'function' && isArrowFunction(val)) {
@@ -1168,7 +1170,7 @@ async function q5playPreSetup() {
 		_add(isSensor, a0, a1, a2, a3, a4) {
 			let offsetX, offsetY, w, h, path;
 			let rr; // rounded radius
-			let id, geo, vertexMode, originMode;
+			let id, geom, vertexMode, originMode;
 			let shapes = this._shapes;
 			// Track how many shapes existed before
 			let startingShapeCount = shapes.length;
@@ -1368,36 +1370,36 @@ async function q5playPreSetup() {
 
 				if (isPolygon) {
 					let hull = b2ComputeHull(vecs);
-					geo = b2MakePolygon(hull, 0);
+					geom = b2MakePolygon(hull, 0);
 
-					id = b2CreatePolygonShape(bdID, shapeDef, geo);
-					shape.init(id, 5, geo);
+					id = b2CreatePolygonShape(bdID, shapeDef, geom);
+					shape.init(id, 1, geom);
 				} else {
 					if (vecs.length == 2) {
 						if (!rr) {
-							geo = new b2Segment();
-							geo.point1 = vecs[0];
-							geo.point2 = vecs[1];
-							id = b2CreateSegmentShape(bdID, shapeDef, geo);
-							shape.init(id, 2, geo);
+							geom = new b2Segment();
+							geom.point1 = vecs[0];
+							geom.point2 = vecs[1];
+							id = b2CreateSegmentShape(bdID, shapeDef, geom);
+							shape.init(id, 5, geom);
 						} else {
-							geo = new b2Capsule();
-							geo.center1 = vecs[0];
-							geo.center2 = vecs[1];
-							geo.radius = rr / meterSize;
-							id = b2CreateCapsuleShape(bdID, shapeDef, geo);
-							shape.init(id, 3, geo);
+							geom = new b2Capsule();
+							geom.center1 = vecs[0];
+							geom.center2 = vecs[1];
+							geom.radius = rr / meterSize;
+							id = b2CreateCapsuleShape(bdID, shapeDef, geom);
+							shape.init(id, 4, geom);
 						}
 					} else if (this._phys != 1) {
 						// create several capsules to approximate a hollow shape (closed chain)
 						for (let i = 1; i < vecs.length; i++) {
-							geo = new b2Capsule();
-							geo.center1 = vecs[i - 1];
-							geo.center2 = vecs[i];
-							geo.radius = 0.12;
-							id = b2CreateCapsuleShape(bdID, shapeDef, geo);
+							geom = new b2Capsule();
+							geom.center1 = vecs[i - 1];
+							geom.center2 = vecs[i];
+							geom.radius = 0.12;
+							id = b2CreateCapsuleShape(bdID, shapeDef, geom);
 							let shapePart = new Collider(this);
-							shape.init(id, 3, geo);
+							shape.init(id, 7, geom);
 							shapes.push(shapePart);
 							shapeMap[id.index1] = shapePart;
 						}
@@ -1410,7 +1412,7 @@ async function q5playPreSetup() {
 						chainDef.SetMaterials([{ customColor: this._uid }]);
 
 						id = b2CreateChain(bdID, chainDef);
-						shape.init(id, 4, geo);
+						shape.init(id, 6, geom);
 					}
 				}
 			} else {
@@ -1418,25 +1420,40 @@ async function q5playPreSetup() {
 				h ??= w;
 
 				if (a3 === undefined) {
-					geo = new b2Circle();
-					geo.center = scaleTo(offsetX, offsetY);
-					geo.radius = (w * 0.5) / meterSize;
+					geom = new b2Circle();
+					geom.center = scaleTo(offsetX, offsetY);
+					geom.radius = (w * 0.5) / meterSize;
 
-					id = b2CreateCircleShape(bdID, shapeDef, geo);
-					shape.init(id, 1, geo);
+					id = b2CreateCircleShape(bdID, shapeDef, geom);
+					shape.init(id, 3, geom);
 				} else {
-					let offset = scaleTo(offsetX, offsetY);
 					let hw = (w * 0.5) / meterSize;
 					let hh = (h * 0.5) / meterSize;
 					rr /= meterSize;
 
-					if (!rr) geo = b2MakeOffsetBox(hw, hh, offset, ZERO_ROT);
-					else {
-						geo = b2MakeOffsetRoundedBox(Math.max(hw - rr, 0.001), Math.max(hh - rr, 0.001), offset, ZERO_ROT, rr);
+					if (!rr) {
+						hw = Math.max(hw - rr, 0.001);
+						hh = Math.max(hh - rr, 0.001);
 					}
 
-					id = b2CreatePolygonShape(bdID, shapeDef, geo);
-					shape.init(id, 0, geo);
+					if (offsetX || offsetY) {
+						let offset = scaleTo(offsetX, offsetY);
+
+						if (!rr) geom = b2MakeOffsetBox(hw, hh, offset, ZERO_ROT);
+						else {
+							geom = b2MakeOffsetRoundedBox(hw, hh, offset, ZERO_ROT, rr);
+						}
+					} else {
+						if (!rr) geom = b2MakeBox(hw, hh);
+						else geom = b2MakeRoundedBox(hw, hh, rr);
+					}
+
+					geom._hw = hw;
+					geom._hh = hh;
+					geom._rr = rr;
+
+					id = b2CreatePolygonShape(bdID, shapeDef, geom);
+					shape.init(id, 0, geom);
 				}
 
 				// TODO: use AABB to get extents for multiple shapes
@@ -1657,20 +1674,11 @@ async function q5playPreSetup() {
 		set textColour(val) {
 			this.textColor = val;
 		}
-
 		get textFill() {
 			return this._textFill;
 		}
 		set textFill(val) {
 			this.textColor = val;
-		}
-
-		get textSize() {
-			return this._textSize;
-		}
-		set textSize(val) {
-			if (this.watch) this.mod[33] = true;
-			this._textSize = val;
 		}
 
 		get textStroke() {
@@ -1687,6 +1695,14 @@ async function q5playPreSetup() {
 		set textStrokeWeight(val) {
 			if (this.watch) this.mod[35] = true;
 			this._textStrokeWeight = val;
+		}
+
+		get textSize() {
+			return this._textSize;
+		}
+		set textSize(val) {
+			if (this.watch) this.mod[33] = true;
+			this._textSize = val;
 		}
 
 		get tile() {
@@ -1787,7 +1803,6 @@ async function q5playPreSetup() {
 			return this._display;
 		}
 		set draw(val) {
-			this._userDefinedDraw = true;
 			this._draw = val;
 		}
 
@@ -1855,6 +1870,10 @@ async function q5playPreSetup() {
 		set layer(val) {
 			if (this.watch) this.mod[17] = true;
 			this._layer = val;
+
+			if (val > $.allSprites._topLayer) {
+				$.allSprites._topLayer = val;
+			}
 		}
 
 		get life() {
@@ -1985,30 +2004,18 @@ async function q5playPreSetup() {
 			} else this._rotationSpeed = val;
 		}
 
-		/*
-		 * Resizes the the sprite's shapes.
-		 * @param scalers {x, y}
-		 */
-		_resizeShapes(scalars) {
-			let geo;
+		scaleBy(x, y) {
+			if (y === undefined) y = x;
 
-			// TODO: rewrite to use Shape class
 			for (let shape of this._shapes) {
-				if (shape.type == 0) {
-					shape.hw *= scalars.x;
-					shape.hh *= scalars.y;
-					shape.offset.x *= scalars.x;
-					shape.offset.y *= scalars.y;
-					geo = b2MakeOffsetBox(shape.hw, shape.hh, shape.offset, ZERO_ROT);
-					b2Shape_SetPolygon(shape.id, geo);
-				} else if (shape.type == 1) {
-					if (scalars.x != 1) shape.radius *= scalars.x;
-					else shape.radius *= scalars.y;
-					geo = new b2Circle();
-					geo.center = shape.offset;
-					geo.radius = shape.radius;
-					b2Shape_SetCircle(shape.id, geo);
-				}
+				shape.scaleBy(x, y);
+			}
+
+			this._w *= x;
+			this._hw *= x;
+			if (this._h) {
+				this._h *= y;
+				this._hh *= y;
 			}
 		}
 
@@ -2016,33 +2023,30 @@ async function q5playPreSetup() {
 			return this._scale;
 		}
 		set scale(val) {
-			if (val == 0) val = 0.01;
-			if (typeof val === 'number') {
-				val = { x: val, y: val };
+			let sc = this._scale;
+
+			let x, y;
+
+			if (typeof val == 'number') {
+				x = val || 0.01;
+				y = val || 0.01;
 			} else {
-				val.x ??= this._scale._x;
-				val.y ??= this._scale._y;
+				x = val.x ?? val[0] ?? sc._x;
+				y = val.y ?? val[1] ?? sc._y;
 			}
-			if (val.x == this._scale._x && val.y == this._scale._y) return;
+
+			if (x == sc._x && y == sc._y) return;
 
 			if (this.watch) this.mod[26] = true;
 
-			let scalars = {
-				x: Math.abs(val.x / this._scale._x),
-				y: Math.abs(val.y / this._scale._y)
-			};
+			let scaleX = Math.abs(x / sc._x);
+			let scaleY = Math.abs(y / sc._y);
 
-			this._w *= scalars.x;
-			this._hw *= scalars.x;
-			if (this._h) {
-				this._h *= scalars.y;
-				this._hh *= scalars.y;
-			}
-			this._resizeShapes(scalars);
+			this.scaleBy(scaleX, scaleY);
 
-			this._scale._x = val.x;
-			this._scale._y = val.y;
-			this._scale._avg = val.x;
+			sc._x = x;
+			sc._y = y;
+			this._shouldScale = (sc._avg = (x + y) * 0.5) != 1;
 		}
 
 		get sleeping() {
@@ -2090,7 +2094,7 @@ async function q5playPreSetup() {
 			return this.colliders[0].surfaceSpeed;
 		}
 		set surfaceSpeed(val) {
-			if (this.watch) this.mod[44] = true;
+			if (this.watch) this.mod[21] = true;
 			for (let collider of this.colliders) {
 				collider.surfaceSpeed = val;
 			}
@@ -2176,9 +2180,7 @@ async function q5playPreSetup() {
 			if (val == this._w) return;
 			if (this.watch) this.mod[40] = true;
 
-			this._resizeShapes({ x: val / this._w, y: 1 });
-			this._w = val;
-			this._hw = val * 0.5;
+			this.scaleBy(val / this._w, 1);
 			delete this._widthUndef;
 			delete this._dimensionsUndef;
 		}
@@ -2211,9 +2213,7 @@ async function q5playPreSetup() {
 			if (val < 0) val = 0.01;
 			if (val == this._h) return;
 			if (this.watch) this.mod[15] = true;
-			this._resizeShapes({ x: 1, y: val / this._h });
-			this._h = val;
-			this._hh = val * 0.5;
+			this.scaleBy(1, val / this._h);
 			delete this._heightUndef;
 			delete this._dimensionsUndef;
 		}
@@ -2249,16 +2249,15 @@ async function q5playPreSetup() {
 			if (this.watch) this.mod[40] = true;
 
 			if (this._dimensionsUndef) {
+				// TODO change this
 				for (let shape of this._shapes) b2DestroyShape(shape.id, false);
 				this._add(false, 0, 0, val);
 				this._dimensionsUndef = false;
+				this._w = val;
+				this._hw = val * 0.5;
 			} else {
-				let scalar = val / this._w;
-				this._resizeShapes({ x: scalar, y: scalar });
+				this.scaleBy(val / this._w);
 			}
-
-			this._w = val;
-			this._hw = val * 0.5;
 		}
 
 		get diameter() {
@@ -2539,9 +2538,7 @@ async function q5playPreSetup() {
 
 			if (this._opacity == 0) return;
 
-			let camOn = $.camera.isActive;
-
-			if (camOn) $.pushMatrix();
+			if (cameraOn) $.pushMatrix();
 
 			$.translate(x, y);
 
@@ -2555,12 +2552,13 @@ async function q5playPreSetup() {
 
 			this._draw();
 
-			if (camOn) $.popMatrix();
+			if (cameraOn) $.popMatrix();
 			else $.resetMatrix();
-			$.noTint();
-			$.opacity(1);
 
-			this._cameraActiveWhenDrawn = camOn;
+			if (this._tint) $.noTint();
+			if (this._opacity) $.opacity(1);
+
+			this._cameraActiveWhenDrawn = cameraOn;
 			if (!$.camera.isActive) $.camera._wasOff = true;
 
 			this._visible = true;
@@ -2569,7 +2567,7 @@ async function q5playPreSetup() {
 		}
 
 		// default draw
-		__draw() {
+		_draw() {
 			let g = this.ani || this._img;
 
 			let shouldScale = g._scale._avg != 1;
@@ -2914,7 +2912,7 @@ async function q5playPreSetup() {
 		addDefaultSensors() {
 			let bdID = this.bdID;
 			for (let collider of this.colliders) {
-				let geo = collider.geo;
+				let geom = collider.geom;
 				let sensor = new Sensor(this);
 
 				let shapeDef = new b2DefaultShapeDef();
@@ -2923,13 +2921,14 @@ async function q5playPreSetup() {
 				shapeDef.density = 0;
 				shapeDef.enableSensorEvents = true;
 
-				let id;
-				if (collider.type == 0) {
-					id = b2CreatePolygonShape(bdID, shapeDef, geo);
-					sensor.init(id, 0, geo);
-				} else if (collider.type == 1) {
-					id = b2CreateCircleShape(bdID, shapeDef, geo);
-					sensor.init(id, 1, geo);
+				let type = collider.type,
+					id;
+				if (type == 0) {
+					id = b2CreatePolygonShape(bdID, shapeDef, geom);
+					sensor.init(id, 0, geom);
+				} else if (type == 3) {
+					id = b2CreateCircleShape(bdID, shapeDef, geom);
+					sensor.init(id, 3, geom);
 				}
 
 				this.sensors.push(sensor);
@@ -2966,7 +2965,7 @@ async function q5playPreSetup() {
 		life: 'Int32', // 18
 		mass: 'number', // 19
 		physicsEnabled: 'boolean', // 20
-		offset: 'Vec2', // 21
+		surfaceSpeed: 'number', // 21
 		pixelPerfect: 'boolean', // 22
 		deleted: 'boolean', // 23
 		rotationDrag: 'number', // 24
@@ -2988,8 +2987,7 @@ async function q5playPreSetup() {
 		w: 'number', // 40 (width)
 		opacity: 'number', // 41
 		gravityScale: 'number', // 42
-		rollingResistance: 'number', // 43
-		surfaceSpeed: 'number' // 44
+		rollingResistance: 'number' // 43
 	};
 
 	$.Sprite.props = Object.keys($.Sprite.propTypes);
@@ -3001,21 +2999,49 @@ async function q5playPreSetup() {
 		'colour',
 		'd',
 		'diameter',
-		'dynamic',
 		'fill',
 		'height',
 		'heading',
-		'kinematic',
 		'resetAnimationsOnChange',
 		'speed',
 		'spriteSheet',
-		'static',
 		'textColour',
 		'textFill',
 		'width'
 	]);
 
 	$.Sprite.types = [$.DYN, $.STA, $.KIN];
+
+	// don't include props that are inherited in a special way
+	const spriteStdInheritedProps = $.Sprite.props.filter(
+		(p) => !['ani', 'h', 'physics', 'scale', 'w', 'vel', 'x', 'y'].includes(p)
+	);
+
+	let groupKeys = {};
+
+	{
+		const props = $.Sprite.propsAll.concat([
+			'add',
+			'ani',
+			'anis',
+			'autoCull',
+			'contains',
+			'Group',
+			'idNum',
+			'length',
+			'mod',
+			'mouse',
+			'p',
+			'parent',
+			'Sprite',
+			'subgroups',
+			'velocity'
+		]);
+
+		for (let prop of props) {
+			groupKeys[prop] = true;
+		}
+	}
 
 	this.Ani = class extends Array {
 		constructor() {
@@ -3026,7 +3052,10 @@ async function q5playPreSetup() {
 
 			let owner;
 
-			if (typeof args[0] == 'object' && (args[0]._isSprite || args[0]._isGroup)) {
+			if (
+				typeof args[0] == 'object' &&
+				(args[0]._isVisual || args[0]._isSprite || args[0]._isGroup || args[0]._isVisuals)
+			) {
 				owner = args[0];
 				args = args.slice(1);
 				this._addedToSpriteOrGroup = true;
@@ -3041,10 +3070,10 @@ async function q5playPreSetup() {
 			this._frame = 0;
 			this._cycles = 0;
 			this.targetFrame = -1;
-			this._resolveLoad = null; // promise resolver for loading
 			this.promise = new Promise((resolve) => {
-				this._resolveLoad = resolve;
-			}); // Use owner's anis if it exists, otherwise use the first group's anis for sprites
+				this._resolve = resolve;
+			});
+			// Use owner's anis if it exists, otherwise use the first group's anis for sprites
 			let anis;
 			if (owner?._anis) {
 				anis = owner._anis;
@@ -3170,37 +3199,7 @@ async function q5playPreSetup() {
 					atlas = args[0];
 				}
 
-				let _this = this;
-
-				if (sheet instanceof Q5.Image && sheet.width != 1 && sheet.height != 1) {
-					this.spriteSheet = sheet;
-					_generateSheetFrames();
-					// resolve immediately for synchronous loading
-					if (_this._resolveLoad) _this._resolveLoad(_this);
-				} else {
-					let url;
-					if (typeof sheet == 'string') url = sheet;
-					else url = sheet.url;
-					this.spriteSheet = $.loadImage(url, () => {
-						_generateSheetFrames();
-
-						if (_this._clones) {
-							// propagate frame data to all clones
-							for (let clone of _this._clones) {
-								for (let i = 0; i < _this.length; i++) {
-									clone.push(_this[i]);
-								}
-							}
-						}
-
-						if (_this._resolveLoad) _this._resolveLoad(_this);
-					});
-					if (typeof sheet == 'string') {
-						owner.spriteSheet = this.spriteSheet;
-					}
-				}
-
-				function _generateSheetFrames() {
+				const _generateSheetFrames = () => {
 					if (Array.isArray(atlas)) {
 						if (typeof atlas[0] == 'object') {
 							atlas = { frames: atlas };
@@ -3213,9 +3212,9 @@ async function q5playPreSetup() {
 
 					let { w, h, width, height, row, col, line, x, y, pos, frames, frameCount, frameDelay, delay, rotation } =
 						atlas;
-					if (delay) _this.frameDelay = delay;
-					if (frameDelay) _this.frameDelay = frameDelay;
-					if (rotation) _this.rotation = rotation;
+					if (delay) this.frameDelay = delay;
+					if (frameDelay) this.frameDelay = frameDelay;
+					if (rotation) this.rotation = rotation;
 					if (frames && Array.isArray(frames)) {
 						frameCount = frames.length;
 					} else frameCount ??= frames || 1;
@@ -3235,13 +3234,13 @@ async function q5playPreSetup() {
 							w ??= owner.w;
 							h ??= owner.h;
 						} else if (frameCount) {
-							w ??= _this.spriteSheet.width / frameCount;
-							h ??= _this.spriteSheet.height;
+							w ??= this.spriteSheet.width / frameCount;
+							h ??= this.spriteSheet.height;
 						} else {
-							if (_this.spriteSheet.width < _this.spriteSheet.height) {
-								w = h = _this.spriteSheet.width;
+							if (this.spriteSheet.width < this.spriteSheet.height) {
+								w = h = this.spriteSheet.width;
 							} else {
-								w = h = _this.spriteSheet.height;
+								w = h = this.spriteSheet.height;
 							}
 						}
 					}
@@ -3256,16 +3255,16 @@ async function q5playPreSetup() {
 							let f = { x, y, w, h };
 							f.defaultWidth = w * $._defaultImageScale;
 							f.defaultHeight = h * $._defaultImageScale;
-							_this.push(f);
+							this.push(f);
 							x += w;
-							if (x >= _this.spriteSheet.width) {
+							if (x >= this.spriteSheet.width) {
 								x = 0;
 								y += h;
-								if (y >= _this.spriteSheet.height) y = 0;
+								if (y >= this.spriteSheet.height) y = 0;
 							}
 						}
 					} else {
-						let sw = Math.round(_this.spriteSheet.width / w);
+						let sw = Math.round(this.spriteSheet.width / w);
 						for (let frame of frames) {
 							let f;
 							if (typeof frame == 'number') {
@@ -3288,8 +3287,35 @@ async function q5playPreSetup() {
 							}
 							f.defaultWidth = f.w * $._defaultImageScale;
 							f.defaultHeight = f.h * $._defaultImageScale;
-							_this.push(f);
+							this.push(f);
 						}
+					}
+				};
+
+				if (sheet instanceof Q5.Image && sheet.width != 1 && sheet.height != 1) {
+					this.spriteSheet = sheet;
+					_generateSheetFrames();
+					this._resolve(this);
+				} else {
+					let url;
+					if (typeof sheet == 'string') url = sheet;
+					else url = sheet.url;
+					this.spriteSheet = $.loadImage(url, () => {
+						_generateSheetFrames();
+
+						if (this._clones) {
+							// propagate frame data to all clones
+							for (let clone of this._clones) {
+								for (let i = 0; i < this.length; i++) {
+									clone.push(this[i]);
+								}
+							}
+						}
+
+						this._resolve(this);
+					});
+					if (typeof sheet == 'string') {
+						owner.spriteSheet = this.spriteSheet;
 					}
 				}
 			} // end SpriteSheet mode
@@ -3302,16 +3328,12 @@ async function q5playPreSetup() {
 			}
 			// single frame animations don't need to play
 			if (this.length == 1) this.playing = false;
-			// if frames are already loaded synchronously, resolve immediately
-			if (this.length > 0 && this._resolveLoad) {
-				this._resolveLoad(this);
-			}
 		}
 
 		// make loading Ani objects awaitable
-		then(resolve, reject) {
-			return this.promise.then(() => resolve(this), reject);
-		}
+		// then(resolve, reject) {
+		// 	return this.promise.then(resolve, reject);
+		// }
 
 		get frame() {
 			return this._frame;
@@ -3566,8 +3588,9 @@ async function q5playPreSetup() {
 	this.Visuals = class extends Array {
 		constructor(...args) {
 			super(...args);
+			this._isVisuals = true;
 
-			this._anis = new $.Anis();
+			this._anis = null;
 			this.ani = null;
 			this._img = null;
 		}
@@ -3600,9 +3623,7 @@ async function q5playPreSetup() {
 
 		draw() {
 			for (let v of this) {
-				if (v.draw && typeof v.draw === 'function') {
-					v.draw();
-				}
+				v.draw();
 			}
 		}
 	};
@@ -3713,8 +3734,10 @@ async function q5playPreSetup() {
 				};
 			}
 
+			let skipProps = ['ani', 'scale', 'velocity', 'width', 'height', 'diameter'];
+
 			for (let prop of $.Sprite.propsAll) {
-				if (prop == 'ani' || prop == 'velocity' || prop == 'width' || prop == 'height' || prop == 'diameter') continue;
+				if (skipProps.includes(prop)) continue;
 
 				Object.defineProperty(this, prop, {
 					get() {
@@ -3746,11 +3769,12 @@ async function q5playPreSetup() {
 				});
 			}
 
-			let vecProps = ['offset', 'scale', 'vel'];
+			let vecProps = ['scale', 'vel'];
+
 			for (let vecProp of vecProps) {
 				vecProp = '_' + vecProp;
 				if (vecProp != 'vel') this[vecProp] = {};
-				else this[vecProp] = new $.Vector();
+				else this[vecProp] = $.createVector.call($);
 				this[vecProp]._x = 0;
 				this[vecProp]._y = 0;
 				for (let prop of ['x', 'y']) {
@@ -3782,6 +3806,9 @@ async function q5playPreSetup() {
 				}
 			}
 
+			this._scale._x = 1;
+			this._scale._y = 1;
+
 			if (this._isAllSpritesGroup) {
 				this.autoCull = true;
 				this.autoDraw = true;
@@ -3793,17 +3820,25 @@ async function q5playPreSetup() {
 			this.contains = this.includes;
 		}
 
-		/*
-		 * Returns the highest layer in a group
-		 */
-		_getTopLayer() {
-			if (this.length == 0) return 0;
-			if (this.length == 1 && this[0]._layer === undefined) return 0;
-			let max = this[0]._layer;
-			for (let s of this) {
-				if (s._layer > max) max = s._layer;
+		get scale() {
+			return this._scale;
+		}
+		set scale(val) {
+			let x = val.x ?? val[0] ?? val;
+			let y = val.y ?? val[1] ?? val;
+
+			this._scale._x = x;
+			this._scale._y = y;
+
+			for (let g of this.subgroups) {
+				g['_' + prop] = val;
 			}
-			return max;
+			for (let i = 0; i < this.length; i++) {
+				let s = this[i];
+				let v = val;
+				if (typeof val == 'function') v = val(i);
+				s[prop] = v;
+			}
 		}
 
 		get amount() {
@@ -5005,14 +5040,14 @@ async function q5playPreSetup() {
 					this.__pos.rounded.y ??= Math.round(this.__pos.y);
 					$.translate(this.__pos.rounded.x, this.__pos.rounded.y);
 				}
-				this.isActive = true;
+				this.isActive = cameraOn = true;
 			}
 		}
 
 		off() {
 			if (this.isActive) {
 				$.pop();
-				this.isActive = false;
+				this.isActive = cameraOn = false;
 			}
 		}
 	}; //end camera class
@@ -5805,10 +5840,6 @@ async function q5playPreSetup() {
 		img.h = img.height;
 		$.q5play.onImageLoad(img);
 		return img; // return the p5 graphics object
-	};
-
-	this.loadAni = function () {
-		return new $.Ani(...arguments);
 	};
 
 	this.parseTextureAtlas = function (xml) {
@@ -7675,7 +7706,7 @@ main {
 	// }
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','loadAni','loadAnimation'];
+	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
