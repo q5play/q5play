@@ -13,7 +13,7 @@
 	"scripts": {
 		"dist": "cp q5play.js ../../web/q5play-web/q5play.js",
 		"multi": "ws --https --cors.embedder-policy require-corp --cors.opener-policy same-origin --directory .",
-		"relink": "npm link q5 ../../pkg/q5",
+		"relink": "bun link q5 box2d3-wasm",
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"v": "npm version patch --force",
 		"V": "npm version minor --force"

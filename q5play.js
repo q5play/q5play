@@ -1,12 +1,25 @@
 /**
- * q5play
- * @version 4.0-alpha13
+ *            /5555555            /ll
+ *           | 55____/           | ll
+ *   /qqqqqq | 55        /pppppp | ll  /aaaaaa  /yy   /yy
+ *  /qq__  qq| 5555555  /pp__  pp| ll |____  aa| yy  | yy
+ * | qq  \ qq|_____  55| pp  \ pp| ll  /aaaaaaa| yy  | yy
+ * | qq  | qq /55  \ 55| pp  | pp| ll /aa__  aa| yy  | yy
+ * |  qqqqqqq|  555555/| ppppppp/| ll|  aaaaaaa|  yyyyyyy
+ *  \____  qq \______/ | pp____/ |__/ \_______/ \____  yy
+ *       | qq          | pp                     /yy  | yy
+ *       | qq          | pp                    |  yyyyyy/
+ *       |__/          |__/                     \______/
+ *
+ * @package q5play
+ * @version 4.0-alpha14
  * @author quinton-ashley
  * @license q5play License
+ * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha13';
+let q5play_version = 'alpha14';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -51,15 +64,8 @@ async function q5playPreSetup() {
 		b2World_GetProfile,
 		b2World_GetCounters,
 		b2World_OverlapAABB,
-		b2World_OverlapPoint,
-		b2World_OverlapCircle,
-		b2World_OverlapCapsule,
-		b2World_OverlapPolygon,
 		b2World_CastRay,
 		b2World_CastRayClosest,
-		b2World_CastCircle,
-		b2World_CastCapsule,
-		b2World_CastPolygon,
 		b2World_SetCustomFilterCallback,
 		b2World_SetGravity,
 		b2World_GetGravity,
@@ -159,8 +165,6 @@ async function q5playPreSetup() {
 		b2Body_EnableSleep,
 		b2Body_SetSleepThreshold,
 		b2Body_GetSleepThreshold,
-		b2Body_SetFixedRotation,
-		b2Body_IsFixedRotation,
 		b2Body_SetBullet,
 		b2Body_IsBullet,
 		b2Body_GetShapeCount,
@@ -169,16 +173,14 @@ async function q5playPreSetup() {
 		b2Body_GetJoints,
 		b2Body_ComputeAABB,
 		b2Body_GetWorld,
+		b2MotionLocks,
+		b2Body_SetMotionLocks,
 
 		/* Joint */
 		b2DefaultDistanceJointDef,
 		b2CreateDistanceJoint,
 		b2DefaultMotorJointDef,
 		b2CreateMotorJoint,
-		b2DefaultMouseJointDef,
-		b2CreateMouseJoint,
-		b2DefaultNullJointDef,
-		b2CreateNullJoint,
 		b2DefaultPrismaticJointDef,
 		b2CreatePrismaticJoint,
 		b2DefaultRevoluteJointDef,
@@ -192,22 +194,12 @@ async function q5playPreSetup() {
 		b2Joint_GetBodyA,
 		b2Joint_GetBodyB,
 		b2Joint_GetWorld,
-		b2Joint_GetLocalAnchorA,
-		b2Joint_GetLocalAnchorB,
 		b2Joint_SetCollideConnected,
 		b2Joint_GetCollideConnected,
 		b2Joint_GetPointer,
 		b2Joint_WakeBodies,
 		b2Joint_GetConstraintForce,
 		b2Joint_GetConstraintTorque,
-		b2MouseJoint_SetTarget,
-		b2MouseJoint_GetTarget,
-		b2MouseJoint_SetSpringHertz,
-		b2MouseJoint_GetSpringHertz,
-		b2MouseJoint_SetSpringDampingRatio,
-		b2MouseJoint_GetSpringDampingRatio,
-		b2MouseJoint_SetMaxForce,
-		b2MouseJoint_GetMaxForce,
 		b2DestroyJoint
 	} = Box2D;
 
@@ -353,7 +345,8 @@ async function q5playPreSetup() {
 		usePhysics = true,
 		cameraOn = false,
 		timeScale = 1,
-		shapeMap = {};
+		shapeDict = {},
+		tilesDict = {};
 
 	const eventTypes = {
 		_collisions: ['_collides', '_colliding', '_collided'],
@@ -502,7 +495,7 @@ async function q5playPreSetup() {
 			this.y = y;
 
 			this.ani = null;
-			this.img = null;
+			this._img = null;
 			this._hasImagery = false;
 			this._aniChangeCount = 0;
 		}
@@ -517,17 +510,24 @@ async function q5playPreSetup() {
 			this._anis = val;
 		}
 
-		get image() {
-			return this.img || this.ani?.frameImage;
+		get img() {
+			return this._img || this.ani?.frameImage;
 		}
-		set image(img) {
-			if (typeof img == 'string') {
-				if (!img.includes('.')) {
-					img = new $.EmojiImage(img, this.w || 50);
-				} else img = $.loadImage(img);
+		set img(val) {
+			if (typeof val == 'string') {
+				if (!val.includes('.')) {
+					val = new $.EmojiImage(val, this.w || 50);
+				} else val = $.loadImage(val);
 			}
-			this.img = this._extendImage(img);
+			this._img = this._extendImage(val);
 			this._hasImagery = true;
+		}
+
+		get image() {
+			return this._img || this.ani?.frameImage;
+		}
+		set image(val) {
+			this.img = val;
 		}
 
 		_extendImage(img) {
@@ -698,7 +698,7 @@ async function q5playPreSetup() {
 
 		draw() {
 			if (this.ani) $.animation(this.ani, this.x, this.y);
-			else if (this.img) $.image(this.img, this.x, this.y);
+			else if (this._img) $.image(this._img, this.x, this.y);
 		}
 	};
 
@@ -1401,7 +1401,7 @@ async function q5playPreSetup() {
 							let shapePart = new Collider(this);
 							shape.init(id, 7, geom);
 							shapes.push(shapePart);
-							shapeMap[id.index1] = shapePart;
+							shapeDict[id.index1] = shapePart;
 						}
 						shape = null;
 						this.isSuperFast = true;
@@ -1465,7 +1465,7 @@ async function q5playPreSetup() {
 
 			if (shape) {
 				shapes.push(shape);
-				shapeMap[id.index1] = shape;
+				shapeDict[id.index1] = shape;
 			}
 
 			// Categorize all newly created shapes into colliders or sensors arrays
@@ -1711,6 +1711,7 @@ async function q5playPreSetup() {
 		set tile(val) {
 			if (this.watch) this.mod[36] = true;
 			this._tile = val;
+			tilesDict[val] = this;
 		}
 
 		get bearing() {
@@ -1822,34 +1823,6 @@ async function q5playPreSetup() {
 		}
 		set heading(val) {
 			this.direction = val;
-		}
-
-		get image() {
-			return this._img || this._ani?.frameImage;
-		}
-		set image(img) {
-			if (typeof img == 'string') {
-				if (!img.includes('.')) {
-					img = new $.EmojiImage(img, this.w);
-				} else img = $.loadImage(img);
-			}
-			this._img = this._extendImage(img);
-			this._hasImagery = true;
-		}
-
-		_extendImage(img) {
-			img.offset ??= { x: 0, y: 0 };
-			img._scale ??= { x: 1, y: 1 };
-			if (!img.scale) {
-				Object.defineProperty(img, 'scale', {
-					get: () => img._scale,
-					set: (val) => {
-						if (typeof val == 'number') val = { x: val, y: val };
-						img._scale = val;
-					}
-				});
-			}
-			return img;
 		}
 
 		get isMoving() {
@@ -1980,12 +1953,20 @@ async function q5playPreSetup() {
 		}
 
 		get rotationLock() {
-			return b2Body_IsFixedRotation(this.bdID);
+			return this._rotationLock;
 		}
 		set rotationLock(val) {
 			if (this.watch) this.mod[25] = true;
+
 			// let mass = this.mass;
-			b2Body_SetFixedRotation(this.bdID, val);
+
+			// TODO: not working, shape is ignored by physics sim after this
+			let locks = new b2MotionLocks();
+			locks.linearX = false;
+			locks.linearY = false;
+			locks.angularZ = val;
+			b2Body_SetMotionLocks(this.bdID, locks);
+
 			// this.mass = mass;
 		}
 
@@ -2614,7 +2595,7 @@ async function q5playPreSetup() {
 				args[1] = undefined;
 			}
 			let o = {};
-			o.forceVector = new b2Vec2(this._args2Vec(args[0], args[1]));
+			o.forceVector = new b2Vec2(args[0], args[1]);
 			if (args[2] !== undefined) {
 				o.poa = this._args2Vec(args[2], args[3]);
 				o.poa = scaleTo(o.poa.x, o.poa.y);
@@ -2932,7 +2913,7 @@ async function q5playPreSetup() {
 				}
 
 				this.sensors.push(sensor);
-				shapeMap[id.index1] = sensor;
+				shapeDict[id.index1] = sensor;
 			}
 			this._hasSensors = true;
 		}
@@ -3012,9 +2993,9 @@ async function q5playPreSetup() {
 
 	$.Sprite.types = [$.DYN, $.STA, $.KIN];
 
-	// don't include props that are inherited in a special way
+	// exclude props that are inherited in a special way or not traits
 	const spriteStdInheritedProps = $.Sprite.props.filter(
-		(p) => !['ani', 'h', 'physics', 'scale', 'w', 'vel', 'x', 'y'].includes(p)
+		(p) => !['ani', 'tile', 'h', 'physics', 'scale', 'w', 'vel', 'x', 'y'].includes(p)
 	);
 
 	let groupKeys = {};
@@ -3046,8 +3027,10 @@ async function q5playPreSetup() {
 	this.Ani = class extends Array {
 		constructor() {
 			super();
+			this._isAni = true;
 			let args = [...arguments];
 
+			// TODO by default, base name on image file name instead
 			this.name = 'default';
 
 			let owner;
@@ -3065,6 +3048,10 @@ async function q5playPreSetup() {
 			if (typeof args[0] == 'string' && (args[0].length == 1 || !args[0].includes('.'))) {
 				this.name = args[0];
 				args = args.slice(1);
+			}
+
+			if (this.name.length == 1) {
+				tilesDict[this.name] = this;
 			}
 
 			this._frame = 0;
@@ -3605,20 +3592,27 @@ async function q5playPreSetup() {
 			this._anis = val;
 		}
 
+		get img() {
+			return this._img;
+		}
+		set img(val) {
+			if (typeof val == 'function') {
+				this._img = val;
+				return;
+			}
+			if (typeof val == 'string') {
+				if (!val.includes('.')) {
+					val = new $.EmojiImage(val, this.w || this.width || this.d || this.diameter);
+				} else val = $.loadImage(val);
+			}
+			this._img = $.Visual.prototype._extendImage(val);
+		}
+
 		get image() {
 			return this._img;
 		}
-		set image(img) {
-			if (typeof img == 'function') {
-				this._img = img;
-				return;
-			}
-			if (typeof img == 'string') {
-				if (!img.includes('.')) {
-					img = new $.EmojiImage(img, this.w || this.width || this.d || this.diameter);
-				} else img = $.loadImage(img);
-			}
-			this._img = $.Visual.prototype._extendImage(img);
+		set image(val) {
+			this.img = val;
 		}
 
 		draw() {
@@ -3734,7 +3728,7 @@ async function q5playPreSetup() {
 				};
 			}
 
-			let skipProps = ['ani', 'scale', 'velocity', 'width', 'height', 'diameter'];
+			let skipProps = ['ani', 'tile', 'scale', 'velocity', 'width', 'height', 'diameter'];
 
 			for (let prop of $.Sprite.propsAll) {
 				if (skipProps.includes(prop)) continue;
@@ -3820,6 +3814,69 @@ async function q5playPreSetup() {
 			this.contains = this.includes;
 		}
 
+		static fromTiles(tiles, x = 0, y = 0, colGap, rowGap) {
+			if (typeof tiles == 'string') {
+				if (tiles[0] == '\n') tiles = tiles.slice(1);
+				tiles = tiles.replaceAll('\t', '  ');
+				tiles = tiles.split('\n');
+			}
+
+			const tilesGroup = new this();
+			// unknownTiles = new Set();
+
+			for (let row = 0; row < tiles.length; row++) {
+				for (let col = 0; col < tiles[row].length; col++) {
+					let t = tiles[row][col],
+						tile = tilesDict[t];
+
+					if (!tile) {
+						// unknownTiles.add(t);
+						continue;
+					}
+
+					if (colGap === undefined) {
+						colGap = tile.w || tile.ani.w;
+						rowGap = tile.h || tile.ani.h;
+					}
+
+					let tileX = x + col * colGap;
+					let tileY = y + row * rowGap;
+
+					if (tile._isAni) {
+						let ani = tile;
+						let sprite;
+						if (ani.owner._isGroup) {
+							let g = ani.owner;
+							sprite = new g.Sprite(ani, tileX, tileY);
+							tilesGroup.push(sprite);
+							continue;
+						} else {
+							tile = ani.owner;
+						}
+					}
+
+					if (tile._isGroup) {
+						let g = tile;
+						let sprite = new g.Sprite(tileX, tileY);
+						tilesGroup.push(sprite);
+					} else if (tile._isSprite) {
+						let sprite = tile;
+						sprite.pos = [tileX, tileY];
+						tilesGroup.push(sprite);
+					}
+				}
+			}
+
+			// if (unknownTiles.size > 0) {
+			// 	console.warn(
+			// 		'In Group.fromTiles the following characters do not correspond to a Sprite, Group, or Ani object: ' +
+			// 			Array.from(unknownTiles).join('')
+			// 	);
+			// }
+
+			return tilesGroup;
+		}
+
 		get scale() {
 			return this._scale;
 		}
@@ -3873,6 +3930,14 @@ async function q5playPreSetup() {
 		}
 		set height(val) {
 			this.h = val;
+		}
+
+		get tile() {
+			return this._tile;
+		}
+		set tile(val) {
+			this._tile = val;
+			tilesDict[val] = this;
 		}
 
 		get velocity() {
@@ -4527,8 +4592,8 @@ async function q5playPreSetup() {
 			this.step = this.physicsUpdate;
 
 			b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
-				const shapeA = shapeMap[shapeIdA.index1],
-					shapeB = shapeMap[shapeIdB.index1],
+				const shapeA = shapeDict[shapeIdA.index1],
+					shapeB = shapeDict[shapeIdB.index1],
 					isSensorA = shapeA._isSensor,
 					isSensorB = shapeB._isSensor,
 					spriteA = shapeA.sprite,
@@ -4550,8 +4615,8 @@ async function q5playPreSetup() {
 		_processEvents(events, t, idA, idB) {
 			for (let i = 0; i < events.beginCount; i++) {
 				const evt = events.GetBeginEvent(i),
-					shapeA = shapeMap[evt[idA].index1],
-					shapeB = shapeMap[evt[idB].index1],
+					shapeA = shapeDict[evt[idA].index1],
+					shapeB = shapeDict[evt[idB].index1],
 					a = shapeA.sprite,
 					b = shapeB.sprite,
 					ledgerA = a[t],
@@ -4583,8 +4648,8 @@ async function q5playPreSetup() {
 
 			for (let i = 0; i < events.endCount; i++) {
 				const evt = events.GetEndEvent(i),
-					shapeA = shapeMap[evt[idA].index1],
-					shapeB = shapeMap[evt[idB].index1],
+					shapeA = shapeDict[evt[idA].index1],
+					shapeB = shapeDict[evt[idB].index1],
 					a = shapeA.sprite,
 					b = shapeB.sprite,
 					ledgerA = a[t],
@@ -5051,70 +5116,6 @@ async function q5playPreSetup() {
 			}
 		}
 	}; //end camera class
-
-	this.Tiles = class {
-		constructor(tiles, x, y, w, h) {
-			if (typeof tiles == 'string') {
-				if (tiles[0] == '\n') tiles = tiles.slice(1);
-				tiles = tiles.replaceAll('\t', '  ');
-				tiles = tiles.split('\n');
-			}
-
-			x ??= 0;
-			y ??= 0;
-			w ??= 1;
-			h ??= 1;
-
-			let sprites = new $.Group();
-
-			for (let row = 0; row < tiles.length; row++) {
-				for (let col = 0; col < tiles[row].length; col++) {
-					let t = tiles[row][col];
-					if (t == ' ' || t == '.') continue;
-					let ani, g;
-					let groups = Object.values($.q5play.groups);
-					for (g of groups) {
-						ani = g._anis[t];
-						if (ani) break;
-					}
-					if (ani) {
-						sprites.push(new g.Sprite(ani, x + col * w, y + row * h));
-						continue;
-					}
-					let wasFound = false;
-					for (g of groups) {
-						if (g.tile == t) {
-							wasFound = true;
-							break;
-						}
-					}
-					if (wasFound) {
-						sprites.push(new g.Sprite(x + col * w, y + row * h));
-						continue;
-					}
-					let s;
-					for (s of $.allSprites) {
-						if (s.tile == t) {
-							wasFound = true;
-							break;
-						}
-					}
-					if (wasFound) {
-						s.x = x + col * w;
-						s.y = y + row * h;
-						continue;
-					}
-					throw 'Tile not found: ' + t;
-				}
-			}
-
-			return sprites;
-		}
-	};
-
-	this.createTiles = function (tiles, x, y, w, h) {
-		return new $.Tiles(tiles, x, y, w, h);
-	};
 
 	this.Joint = class {
 		constructor(spriteA, spriteB, type) {
