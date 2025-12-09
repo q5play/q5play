@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha14
+ * @version 4.0-alpha15
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha14';
+let q5play_version = 'alpha15';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -393,7 +393,7 @@ async function q5playPreSetup() {
 				if (!geom._rr) geom = b2MakeBox(hw, hh);
 				else {
 					rr = geom._rr * Math.min(x, y);
-					geom = b2MakeOffsetBox(hw, hh, rr);
+					geom = b2MakeRoundedBox(hw, hh, rr);
 				}
 				b2Shape_SetPolygon(id, geom);
 				geom._hw = hw;
@@ -584,15 +584,16 @@ async function q5playPreSetup() {
 			return ani.promise;
 		}
 
-		addAnis() {
-			let args = arguments;
-			let atlases;
-			if (args.length == 1) {
-				atlases = args[0];
-			} else {
-				this.spriteSheet = args[0];
-				atlases = args[1];
+		addAnis(spriteSheet, frameSize, atlases) {
+			let args = [...arguments];
+
+			if (args.length == 3) {
+				this.anis.frameSize = frameSize;
 			}
+			if (args.length >= 2) {
+				this.anis.spriteSheet = spriteSheet;
+			}
+			atlases = args.at(-1);
 
 			let loaders = [];
 			for (let name in atlases) {
@@ -602,57 +603,88 @@ async function q5playPreSetup() {
 			return Promise.all(loaders);
 		}
 
-		async changeAni(anis) {
-			if (!Array.isArray(anis)) anis = [...arguments];
-
-			let loop, stopOnLastAni;
-
-			for (let i = 0; i < anis.length; i++) {
-				let ani = anis[i];
-				if (ani instanceof $.Ani) {
-					anis[i] = { name: ani.name };
-					continue;
-				}
-				if (typeof ani == 'string') {
-					anis[i] = { name: ani };
-					ani = anis[i];
-				}
-				if (ani.name[0] == '!') {
-					ani.name = ani.name.slice(1);
-					ani.flipX = true;
-				}
-				if (ani.name[0] == '?') {
-					ani.name = ani.name.slice(1);
-					ani.flipY = true;
-				}
-				if (ani.name == '**') {
-					loop = true;
-					anis = anis.slice(0, -1);
-				}
-				if (ani.name == ';;') {
-					stopOnLastAni = true;
-					anis = anis.slice(0, -1);
-				}
-			}
-
-			let count = this._aniChangeCount;
-			this._aniChangeCount = count + 1;
-
-			do {
-				for (let i = 0; i < anis.length; i++) {
-					if (this._aniChangeCount != count) return;
-
-					await this._playSequencedAni(anis[i]);
-				}
-			} while (loop);
-
-			if (stopOnLastAni && this.ani) this.ani.stop();
+		async changeAni(label) {
+			this.playSequence(label);
 		}
 
-		/*
-		 * Changes the animation. Use `addAni` to define the
-		 * animation(s) first. Internal use only.
-		 */
+		async playSequence(seq) {
+			if (arguments.length > 1) seq = [...arguments];
+			else if (seq instanceof $.Ani) {
+				if (seq == this.ani) return;
+				seq = [seq];
+			} else if (!Array.isArray(seq)) {
+				if (seq == this.ani?.name) return;
+				seq = [seq];
+			}
+
+			this._aniChangeCount++;
+			let loop, stopOnLastAni;
+			for (let i = 0; i < seq.length; i++) {
+				let phase = seq[i];
+				if (typeof phase == 'string') {
+					phase = { name: phase };
+					seq[i] = phase;
+				}
+				if (phase.name.length > 1) {
+					if (phase.name[0] == '!') {
+						phase.name = phase.name.slice(1);
+						phase.start = -1;
+						phase.end = 0;
+					}
+					if (phase.name[0] == '<' || phase.name[0] == '>') {
+						phase.name = phase.name.slice(1);
+						phase.flipX = true;
+					}
+					if (phase.name[0] == '^') {
+						phase.name = phase.name.slice(1);
+						phase.flipY = true;
+					}
+					if (phase.name == '**') {
+						loop = true;
+						seq = seq.slice(0, -1);
+					}
+					if (phase.name == ';;') {
+						stopOnLastAni = true;
+						seq = seq.slice(0, -1);
+					}
+				}
+			}
+			let count = this._aniChangeCount;
+
+			do {
+				for (let phase of seq) {
+					if (!phase.start && seq.length > 1) phase.start = 0;
+					await this._playPhase(phase);
+				}
+			} while (loop && count == this._aniChangeCount);
+			if (seq.length != 1 && stopOnLastAni) this.ani.stop();
+		}
+
+		_playPhase(phase) {
+			return new Promise((resolve) => {
+				let { name, start, end, flipX, flipY } = phase;
+				this._changeAni(name);
+
+				let ani = this.ani;
+
+				if (flipX) ani.scale.x = -ani.scale.x;
+				if (flipY) ani.scale.y = -ani.scale.y;
+
+				if (start < 0) start = ani.length + start;
+				if (start !== undefined) ani._frame = start;
+
+				if (end !== undefined) ani.goToFrame(end);
+				else if (ani._frame == ani.lastFrame) resolve();
+
+				ani._onComplete = ani._onChange = () => {
+					if (flipX) ani.scale.x = -ani.scale.x;
+					if (flipY) ani.scale.y = -ani.scale.y;
+					ani._onComplete = ani._onChange = null;
+					resolve();
+				};
+			});
+		}
+
 		_changeAni(label) {
 			let ani = this._anis?.[label];
 			if (!ani) {
@@ -668,32 +700,10 @@ async function q5playPreSetup() {
 					return;
 				}
 			}
-			this.ani = ani;
-			this.ani.name = label;
 			// reset to frame 0 of that animation
-			if (this.resetAnimationsOnChange) this.ani._frame = 0;
-		}
-
-		_playSequencedAni(ani) {
-			return new Promise((resolve) => {
-				let { name, start, end, flipX, flipY } = ani;
-				this._changeAni(name);
-
-				if (flipX) this.ani.scale.x = -this.ani.scale.x;
-				if (flipY) this.ani.scale.y = -this.ani.scale.y;
-
-				if (start < 0) start = this.ani.length + start;
-				if (start !== undefined) this.ani._frame = start;
-
-				if (end !== undefined) this.ani.goToFrame(end);
-				else if (this.ani._frame == this.ani.lastFrame) resolve();
-
-				this.ani._onComplete = this.ani._onChange = () => {
-					if (flipX) this.ani.scale.x = -this.ani.scale.x;
-					if (flipY) this.ani.scale.y = -this.ani.scale.y;
-					resolve();
-				};
-			});
+			if (this.resetAnimationsOnChange) ani._frame = 0;
+			ani.name = label;
+			this.ani = ani;
 		}
 
 		draw() {
@@ -998,7 +1008,7 @@ async function q5playPreSetup() {
 					_this.scaleBy(scaleX, 1);
 					this._x = val;
 					this._avg = (this._x + this._y) * 0.5;
-					this._shouldScale = this._avg != 1;
+					_this._shouldScale = this._avg != 1;
 				}
 			});
 
@@ -1013,7 +1023,7 @@ async function q5playPreSetup() {
 					_this.scaleBy(1, scaleY);
 					this._y = val;
 					this._avg = (this._x + this._y) * 0.5;
-					this._shouldScale = this._avg != 1;
+					_this._shouldScale = this._avg != 1;
 				}
 			});
 
@@ -2027,7 +2037,8 @@ async function q5playPreSetup() {
 
 			sc._x = x;
 			sc._y = y;
-			this._shouldScale = (sc._avg = (x + y) * 0.5) != 1;
+			sc._avg = (x + y) * 0.5;
+			this._shouldScale = sc._avg != 1;
 		}
 
 		get sleeping() {
@@ -2485,17 +2496,19 @@ async function q5playPreSetup() {
 		_display() {
 			if (!this._hasImagery) return;
 
-			let x = this._posX;
-			let y = this._posY;
+			let x = this._posX,
+				y = this._posY;
 
 			if (this._pixelPerfect) {
 				let w, h;
 				if (this.ani?.length) {
 					w = this.ani[this.ani._frame].w;
 					h = this.ani[this.ani._frame].h;
+				} else if (this._img) {
+					w = this._img._w;
+					h = this._img._h;
 				} else {
-					w = this.img._w;
-					h = this.img._h;
+					return;
 				}
 				if (w % 2 == 0) x = Math.round(x);
 				else x = Math.round(x - 0.5) + 0.5;
@@ -2524,9 +2537,13 @@ async function q5playPreSetup() {
 			$.translate(x, y);
 
 			let rot = this._rotation;
-			if (rot) $.rotate(rot);
+			if (rot) {
+				$.rotate(rot);
+			}
 
-			if (this._shouldScale) $.scale(this._scale._x, this._scale._y);
+			if (this._shouldScale) {
+				$.scale(this._scale._x, this._scale._y);
+			}
 
 			if (this._tint) $.tint(this._tint);
 			if (this._opacity) $.opacity(this._opacity);
@@ -3028,16 +3045,14 @@ async function q5playPreSetup() {
 		constructor() {
 			super();
 			this._isAni = true;
-			let args = [...arguments];
 
-			// TODO by default, base name on image file name instead
-			this.name = 'default';
+			let args = [...arguments];
 
 			let owner;
 
 			if (
 				typeof args[0] == 'object' &&
-				(args[0]._isVisual || args[0]._isSprite || args[0]._isGroup || args[0]._isVisuals)
+				(args[0]._isVisual || args[0]._isSprite || args[0]._isVisuals || args[0]._isGroup)
 			) {
 				owner = args[0];
 				args = args.slice(1);
@@ -3045,63 +3060,53 @@ async function q5playPreSetup() {
 			}
 			owner ??= $.allSprites;
 
+			let anis = owner._anis;
+
+			if (!anis && owner._isSprite) {
+				anis = owner.groups[0]._anis;
+			}
+
 			if (typeof args[0] == 'string' && (args[0].length == 1 || !args[0].includes('.'))) {
 				this.name = args[0];
 				args = args.slice(1);
+			} else {
+				this.name = 'default';
 			}
 
-			if (this.name.length == 1) {
-				tilesDict[this.name] = this;
-			}
+			// loading promise
+			this.promise = new Promise((resolve) => {
+				this._resolve = resolve;
+			});
 
 			this._frame = 0;
 			this._cycles = 0;
 			this.targetFrame = -1;
-			this.promise = new Promise((resolve) => {
-				this._resolve = resolve;
-			});
-			// Use owner's anis if it exists, otherwise use the first group's anis for sprites
-			let anis;
-			if (owner?._anis) {
-				anis = owner._anis;
-			} else if (owner._isSprite) {
-				// Use the sprite's group's anis
-				anis = owner.groups[0]._anis;
-			}
-
-			this.frameDelay = anis?.frameDelay || 4;
-			this.demoMode = anis?.demoMode ?? false;
-
 			this._scale = new Scale();
-
 			this.offset = { x: anis?.offset.x ?? 0, y: anis?.offset.y ?? 0 };
-
-			this.playing = true;
-
+			this.rotationLock = anis?.rotationLock ?? false;
+			this.frameDelay = anis?.frameDelay || 4;
 			this.looping = anis?.looping ?? true;
-
-			this.endOnFirstFrame = anis?.endOnFirstFrame ?? false;
 			this.frameChanged = false;
-			this.onComplete = this.onChange = null;
+			this.endOnFirstFrame = anis?.endOnFirstFrame ?? false;
+
+			this._spriteSheetDemo = anis?._spriteSheetDemo ?? false;
 			this._onComplete = this._onChange = null;
 
-			if (args.length == 0 || typeof args[0] == 'number') return;
+			if (!args.length) return;
 
-			if (anis) anis[this.name] = this;
-			owner.ani = this; // list mode images can be added as a list of arguments or an array
+			// list mode images can be added as a list of arguments or an array
 			if (Array.isArray(args[0]) && typeof args[0][0] == 'string') {
 				args = [...args[0]];
 			}
 
 			// sequence mode - frames parameter must be a string
-			if (args.length == 2 && typeof args[0] == 'string' && typeof args[1] == 'string') {
-				let from = args[0];
-				let to = args[1];
-				let num2;
-
-				let extIndex = from.lastIndexOf('.');
-				let digits1 = 0;
-				let digits2 = 0;
+			if (args.length == 2 && typeof args[0] == 'string' && typeof args[1] == 'string' && !args[1].includes('.')) {
+				let from = args[0],
+					to = args[1],
+					num2,
+					extIndex = from.lastIndexOf('.'),
+					digits1 = 0,
+					digits2 = 0;
 
 				// start from ext "."
 				// work backwards to find where the numbers end
@@ -3119,74 +3124,56 @@ async function q5playPreSetup() {
 
 				let ext = from.slice(extIndex);
 				let prefix1 = from.slice(0, extIndex - digits1);
-				let prefix2;
-				if (to) prefix2 = to.slice(0, extIndex - digits2);
 
-				// images don't belong to the same sequence
-				// they are just two separate images with numbers
-				if (to && prefix1 != prefix2) {
-					this.push($.loadImage(from));
-					this.push($.loadImage(to));
-				} else {
-					let num1 = parseInt(from.slice(extIndex - digits1, extIndex), 10);
-					num2 ??= parseInt(to.slice(extIndex - digits2, extIndex), 10);
+				let num1 = parseInt(from.slice(extIndex - digits1, extIndex), 10);
+				num2 ??= parseInt(to.slice(extIndex - digits2, extIndex), 10);
 
-					// swap if inverted
-					if (num2 < num1) {
-						let t = num2;
-						num2 = num1;
-						num1 = t;
+				// swap if inverted
+				if (num2 < num1) {
+					let t = num2;
+					num2 = num1;
+					num1 = t;
+				}
+
+				let fileName;
+				if (!to || digits1 == digits2) {
+					// load all images
+					for (let i = num1; i <= num2; i++) {
+						// Use nf() to number format 'i' into the amount of digits
+						// ex: 14 with 4 digits is 0014
+						fileName = prefix1 + $.nf(i, digits1) + ext;
+						this.push($.loadImage(fileName));
 					}
-
-					let fileName;
-					if (!to || digits1 == digits2) {
-						// load all images
-						for (let i = num1; i <= num2; i++) {
-							// Use nf() to number format 'i' into the amount of digits
-							// ex: 14 with 4 digits is 0014
-							fileName = prefix1 + $.nf(i, digits1) + ext;
-							this.push($.loadImage(fileName));
-						}
-					} // case: case img1, img2
-					else {
-						for (let i = num1; i <= num2; i++) {
-							// Use nf() to number format 'i' into four digits
-							fileName = prefix1 + i + ext;
-							this.push($.loadImage(fileName));
-						}
+				} // case: case img1, img2
+				else {
+					for (let i = num1; i <= num2; i++) {
+						// Use nf() to number format 'i' into four digits
+						fileName = prefix1 + i + ext;
+						this.push($.loadImage(fileName));
 					}
 				}
 			} // end sequence mode
 
-			// spriteSheet mode - handles (spriteSheetUrl, frames) or (spriteSheetUrl, frames, atlas)
-			else if (
-				(args.length >= 2 && typeof args[0] == 'string' && typeof args[1] == 'number') ||
-				(typeof args.at(-1) != 'string' && !(args.at(-1) instanceof Q5.Image))
-			) {
-				let sheet = owner.spriteSheet;
-				let atlas;
+			// spriteSheet mode
+			else if (typeof args[1] != 'string') {
+				let atlas,
+					sheet = anis?.spriteSheet;
 
-				// New format: (spriteSheetUrl, frames, atlas?) where frames is a number
-				if (typeof args[0] == 'string' && typeof args[1] == 'number') {
+				if (typeof args[0] == 'string' || args[0] instanceof Q5.Image) {
 					sheet = args[0];
-					atlas = args[2] || { frameCount: args[1] };
-					// Ensure frameCount is set if atlas is provided without it
-					if (typeof atlas === 'object' && !atlas.frameCount && !atlas.frames) {
-						atlas.frameCount = args[1];
-					}
+					args = args.slice(1);
 				}
-				// Legacy format: (spriteSheetUrl, atlas) or (atlas)
-				else if (args[0] instanceof Q5.Image || typeof args[0] == 'string') {
-					if (args.length >= 3) {
-						throw new FriendlyError('Ani', 1);
-					}
-					sheet = args[0];
-					atlas = args[1];
+
+				if (typeof args[0] == 'number') {
+					atlas = { frames: args[0] };
+					if (args[1]) atlas.frameSize = args[1];
 				} else {
 					atlas = args[0];
 				}
 
-				const _generateSheetFrames = () => {
+				const findFrames = () => {
+					this.spriteSheet = sheet;
+
 					if (Array.isArray(atlas)) {
 						if (typeof atlas[0] == 'object') {
 							atlas = { frames: atlas };
@@ -3197,61 +3184,67 @@ async function q5playPreSetup() {
 						}
 					}
 
-					let { w, h, width, height, row, col, line, x, y, pos, frames, frameCount, frameDelay, delay, rotation } =
-						atlas;
-					if (delay) this.frameDelay = delay;
+					let { row, col, frames, frameSize, frameDelay } = atlas;
+
 					if (frameDelay) this.frameDelay = frameDelay;
-					if (rotation) this.rotation = rotation;
-					if (frames && Array.isArray(frames)) {
-						frameCount = frames.length;
-					} else frameCount ??= frames || 1;
-					w ??= width || anis?.w;
-					h ??= height || anis?.h;
-					x ??= col || 0;
-					y ??= line || row || 0;
-					if (pos) {
-						x = pos[0];
-						y = pos[1];
+					let framesAmt = frames?.length || frames || 1;
+					frameSize ??= anis?.frameSize;
+
+					let w, h;
+
+					if (frameSize) {
+						if (typeof frameSize == 'string') {
+							let dims = frameSize.toLowerCase().split('x');
+							w = parseInt(dims[0]);
+							h = parseInt(dims[1]);
+						} else {
+							w = frameSize[0];
+							h = frameSize[1];
+						}
 					}
 
 					if (!w || !h) {
-						// sprites will be given default dimensions, but groups
-						// are not, _dimensionsUndef is only for sprites
-						if (!owner._dimensionsUndef && owner.w && owner.h) {
-							w ??= owner.w;
-							h ??= owner.h;
-						} else if (frameCount) {
-							w ??= this.spriteSheet.width / frameCount;
-							h ??= this.spriteSheet.height;
+						if (framesAmt) {
+							w ??= sheet.width / framesAmt;
+							h ??= sheet.height;
 						} else {
-							if (this.spriteSheet.width < this.spriteSheet.height) {
-								w = h = this.spriteSheet.width;
+							if (sheet.width < sheet.height) {
+								w = h = sheet.width;
 							} else {
-								w = h = this.spriteSheet.height;
+								w = h = sheet.height;
 							}
 						}
+
+						// sprites will be given default dimensions, but groups
+						// are not, _dimensionsUndef is only for sprites
+						// if (!owner._dimensionsUndef && owner.w && owner.h) {
+						// 	w ??= owner.w;
+						// 	h ??= owner.h;
+						// }
 					}
+
+					let x = 0,
+						y = 0;
 
 					// add all the frames in the animation to the frames array
 					if (!Array.isArray(frames)) {
-						if (pos || line !== undefined || row !== undefined || col !== undefined) {
-							x *= w;
-							y *= h;
-						}
-						for (let i = 0; i < frameCount; i++) {
+						if (col) x = col * w;
+						if (row) y = row * h;
+
+						for (let i = 0; i < framesAmt; i++) {
 							let f = { x, y, w, h };
 							f.defaultWidth = w * $._defaultImageScale;
 							f.defaultHeight = h * $._defaultImageScale;
 							this.push(f);
 							x += w;
-							if (x >= this.spriteSheet.width) {
+							if (x >= sheet.width) {
 								x = 0;
 								y += h;
-								if (y >= this.spriteSheet.height) y = 0;
+								if (y >= sheet.height) y = 0;
 							}
 						}
 					} else {
-						let sw = Math.round(this.spriteSheet.width / w);
+						let sw = Math.round(sheet.width / w);
 						for (let frame of frames) {
 							let f;
 							if (typeof frame == 'number') {
@@ -3277,18 +3270,27 @@ async function q5playPreSetup() {
 							this.push(f);
 						}
 					}
+
+					this.cutFrames = atlas.cutFrames ?? anis?.cutFrames;
+
+					if (this.cutFrames) {
+						for (let i = 0; i < this.length; i++) {
+							let f = this[i];
+							// create a new image object for each frame
+							this[i] = sheet.get(f.x, f.y, f.w, f.h);
+						}
+					}
 				};
 
 				if (sheet instanceof Q5.Image && sheet.width != 1 && sheet.height != 1) {
-					this.spriteSheet = sheet;
-					_generateSheetFrames();
+					findFrames();
 					this._resolve(this);
 				} else {
-					let url;
-					if (typeof sheet == 'string') url = sheet;
-					else url = sheet.url;
-					this.spriteSheet = $.loadImage(url, () => {
-						_generateSheetFrames();
+					if (typeof sheet == 'string') {
+						sheet = $.loadImage(sheet);
+					}
+					sheet.promise.then(() => {
+						findFrames();
 
 						if (this._clones) {
 							// propagate frame data to all clones
@@ -3301,20 +3303,26 @@ async function q5playPreSetup() {
 
 						this._resolve(this);
 					});
-					if (typeof sheet == 'string') {
-						owner.spriteSheet = this.spriteSheet;
-					}
 				}
 			} // end SpriteSheet mode
+
+			// list of images
 			else {
-				// list of images
 				for (let i = 0; i < args.length; i++) {
 					if (args[i] instanceof Q5.Image) this.push(args[i]);
 					else this.push($.loadImage(args[i]));
 				}
 			}
-			// single frame animations don't need to play
-			if (this.length == 1) this.playing = false;
+
+			if (anis) anis[this.name] = this;
+			owner.ani = this;
+
+			if (this.name.length == 1) {
+				tilesDict[this.name] = this;
+			}
+
+			// play by default but a single frame ani doesn't need to play
+			this.playing = this.length != 1;
 		}
 
 		// make loading Ani objects awaitable
@@ -3506,14 +3514,23 @@ async function q5playPreSetup() {
 		}
 	};
 
-	$.Ani.props = ['demoMode', 'endOnFirstFrame', 'frameDelay', 'offset', 'scale', 'looping'];
+	$.Ani.props = [
+		'frameSize',
+		'frameDelay',
+		'offset',
+		'scale',
+		'rotationLock',
+		'looping',
+		'endOnFirstFrame',
+		'_spriteSheetDemo'
+	];
 
 	this.Anis = class {
 		#_ = {};
 		constructor() {
 			let _this = this;
 
-			let props = [...$.Ani.props, 'w', 'h'];
+			let props = $.Ani.props;
 			let vecProps = ['offset', 'scale'];
 
 			for (let prop of props) {
@@ -3814,25 +3831,19 @@ async function q5playPreSetup() {
 			this.contains = this.includes;
 		}
 
-		static fromTiles(tiles, x = 0, y = 0, colGap, rowGap) {
+		addTiles(tiles, x = 0, y = 0, colGap, rowGap) {
 			if (typeof tiles == 'string') {
 				if (tiles[0] == '\n') tiles = tiles.slice(1);
 				tiles = tiles.replaceAll('\t', '  ');
 				tiles = tiles.split('\n');
 			}
 
-			const tilesGroup = new this();
-			// unknownTiles = new Set();
-
 			for (let row = 0; row < tiles.length; row++) {
 				for (let col = 0; col < tiles[row].length; col++) {
 					let t = tiles[row][col],
 						tile = tilesDict[t];
 
-					if (!tile) {
-						// unknownTiles.add(t);
-						continue;
-					}
+					if (!tile) continue;
 
 					if (colGap === undefined) {
 						colGap = tile.w || tile.ani.w;
@@ -3848,7 +3859,7 @@ async function q5playPreSetup() {
 						if (ani.owner._isGroup) {
 							let g = ani.owner;
 							sprite = new g.Sprite(ani, tileX, tileY);
-							tilesGroup.push(sprite);
+							this.push(sprite);
 							continue;
 						} else {
 							tile = ani.owner;
@@ -3858,23 +3869,14 @@ async function q5playPreSetup() {
 					if (tile._isGroup) {
 						let g = tile;
 						let sprite = new g.Sprite(tileX, tileY);
-						tilesGroup.push(sprite);
+						this.push(sprite);
 					} else if (tile._isSprite) {
 						let sprite = tile;
 						sprite.pos = [tileX, tileY];
-						tilesGroup.push(sprite);
+						this.push(sprite);
 					}
 				}
 			}
-
-			// if (unknownTiles.size > 0) {
-			// 	console.warn(
-			// 		'In Group.fromTiles the following characters do not correspond to a Sprite, Group, or Ani object: ' +
-			// 			Array.from(unknownTiles).join('')
-			// 	);
-			// }
-
-			return tilesGroup;
 		}
 
 		get scale() {
@@ -4172,11 +4174,12 @@ async function q5playPreSetup() {
 			}
 		}
 
-		applyForceScaled() {
-			for (let s of this) {
-				s.applyForceScaled(...arguments);
-			}
-		}
+		// TODO: implement
+		// applyForceScaled() {
+		// 	for (let s of this) {
+		// 		s.applyForceScaled(...arguments);
+		// 	}
+		// }
 
 		attractTo() {
 			for (let s of this) {
@@ -4184,83 +4187,15 @@ async function q5playPreSetup() {
 			}
 		}
 
-		applyTorque() {
-			for (let s of this) {
-				s.applyTorque(...arguments);
-			}
-		}
-
-		move(distance, direction, speed) {
-			let movements = [];
-			for (let s of this) {
-				movements.push(s.move(distance, direction, speed));
-			}
-			return Promise.all(movements);
-		}
-
-		moveTo(x, y, speed) {
-			if (typeof x != 'number') {
-				let obj = x;
-				if (obj == $.mouse && !$.mouse.isActive) return;
-				speed = y;
-				y = obj.y;
-				x = obj.x;
-			}
-			let centroid = this._resetCentroid();
-			let movements = [];
-			for (let s of this) {
-				let dest = {
-					x: s.x - centroid.x + x,
-					y: s.y - centroid.y + y
-				};
-				movements.push(s.moveTo(dest.x, dest.y, speed));
-			}
-			return Promise.all(movements);
-		}
-
-		moveTowards(x, y, tracking) {
-			if (typeof x != 'number') {
-				let obj = x;
-				if (obj == $.mouse && !$.mouse.isActive) return;
-				tracking = y;
-				y = obj.y;
-				x = obj.x;
-			}
-			if (x === undefined && y === undefined) return;
-			this._resetCentroid();
-			for (let s of this) {
-				if (s.distCentroid === undefined) this._resetDistancesFromCentroid();
-				let dest = {
-					x: s.distCentroid.x + x,
-					y: s.distCentroid.y + y
-				};
-				s.moveTowards(dest.x, dest.y, tracking);
-			}
-		}
-
-		moveAway(x, y, repel) {
-			if (typeof x != 'number') {
-				let obj = x;
-				if (obj == $.mouse && !$.mouse.isActive) return;
-				repel = y;
-				y = obj.y;
-				x = obj.x;
-			}
-			if (x === undefined && y === undefined) return;
-			this._resetCentroid();
-			for (let s of this) {
-				if (s.distCentroid === undefined) this._resetDistancesFromCentroid();
-				let dest = {
-					x: s.distCentroid.x + x,
-					y: s.distCentroid.y + y
-				};
-				s.moveAway(dest.x, dest.y, repel);
-			}
-		}
-
 		repelFrom() {
 			for (let s of this) {
 				s.repelFrom(...arguments);
+			}
+		}
+
+		applyTorque() {
+			for (let s of this) {
+				s.applyTorque(...arguments);
 			}
 		}
 
@@ -4964,16 +4899,16 @@ async function q5playPreSetup() {
 			return this._pos;
 		}
 		set pos(val) {
-			this.x = val.x;
-			this.y = val.y;
+			this.x = val[0] ?? val.x;
+			this.y = val[1] ?? val.y;
 		}
 
 		get position() {
 			return this._pos;
 		}
 		set position(val) {
-			this.x = val.x;
-			this.y = val.y;
+			this.x = val[0] ?? val.x;
+			this.y = val[1] ?? val.y;
 		}
 
 		_calcBoundsX(val) {
@@ -5045,7 +4980,7 @@ async function q5playPreSetup() {
 				for (let i = 0; i < steps; i++) {
 					this.x += velX;
 					this.y += velY;
-					await $.sleep();
+					await $.delay(16);
 					if (destIdx != this._destIdx) return false;
 				}
 				this.x = x;
@@ -5087,7 +5022,7 @@ async function q5playPreSetup() {
 				for (let i = 0; i < frames; i++) {
 					if (zoomIdx != this._zoomIdx) return false;
 					this.zoom += speed;
-					await $.sleep();
+					await $.delay(16);
 				}
 				this.zoom = target;
 				return true;
@@ -5866,7 +5801,7 @@ async function q5playPreSetup() {
 		if (img !== undefined) {
 			if (ani.spriteSheet) {
 				let { x, y, w, h } = img; // image info
-				if (!ani.demoMode) {
+				if (!ani._spriteSheetDemo) {
 					$.image(ani.spriteSheet, dx, dy, dw || img.defaultWidth || w, dh || img.defaultHeight || h, x, y, w, h);
 				} else {
 					$.image(
@@ -5905,7 +5840,6 @@ async function q5playPreSetup() {
 				if (ani.looping) ani.targetFrame = -1;
 				else ani.playing = false;
 				if (ani._onComplete) ani._onComplete();
-				if (ani.onComplete) ani.onComplete(); //fire when on last frame
 				if (!ani.looping) return;
 			}
 
@@ -6162,30 +6096,6 @@ async function q5playPreSetup() {
 
 		didCreateCanvas = true;
 		return rend;
-	};
-
-	// this is only for jsdoc
-
-	this.Canvas = class {
-		constructor(width, height, renderer, options) {
-			this.w;
-
-			this.width;
-
-			this.h;
-
-			this.height;
-
-			this.hw;
-
-			this.hh;
-
-			this.mouse;
-		}
-
-		resize() {}
-
-		save() {}
 	};
 
 	this.canvas = $.canvas;
@@ -7613,7 +7523,7 @@ main {
 				}
 				$.endShape(true);
 				if (rr > 0) {
-					$.strokeWeight(swScaled);
+					$._setStrokeWeight(swData);
 					$._setStrokeIdx(ogStroke);
 				}
 			}
@@ -7629,7 +7539,7 @@ main {
 					$.strokeJoin('round');
 					$.strokeWeight(cmd.data[4] * 2);
 					$.line(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3]);
-					$.strokeWeight(swScaled);
+					$._setStrokeWeight(swData);
 				}
 			}
 			// draw a line segment
@@ -7707,7 +7617,7 @@ main {
 	// }
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS'];
+	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','animation'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
