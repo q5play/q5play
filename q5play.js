@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha16
+ * @version 4.0-alpha17
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha16';
+let q5play_version = 'alpha17';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -45,6 +45,9 @@ async function q5playPreSetup() {
 		TaskSystem,
 		b2ComputeHull,
 		DebugDrawCommandBuffer,
+
+		b2Rot_identity,
+		b2InvMulRot,
 
 		/* World */
 		b2DefaultWorldDef,
@@ -132,6 +135,7 @@ async function q5playPreSetup() {
 		b2Body_GetRotation,
 		b2Body_GetTransform,
 		b2Body_SetTransform,
+		b2Body_SetTargetTransform,
 		b2Body_GetLocalPoint,
 		b2Body_GetWorldPoint,
 		b2Body_GetLocalVector,
@@ -816,9 +820,9 @@ async function q5playPreSetup() {
 			this.groups = [];
 
 			this.joints = [];
-			this.joints.removeAll = () => {
+			this.joints.deleteAll = () => {
 				while (this.joints.length) {
-					this.joints.at(-1).remove();
+					this.joints.at(-1).delete();
 				}
 			};
 
@@ -2514,6 +2518,20 @@ async function q5playPreSetup() {
 		 * before the sprite's `draw` function is called.
 		 */
 		_display() {
+			for (let j of this.joints) {
+				if (!j.visible) {
+					j.visible ??= true;
+					continue;
+				}
+				if (this._uid == j.spriteA._uid) {
+					if (!j.spriteB._visible || this.layer <= j.spriteB.layer) {
+						j._display();
+					}
+				} else if (!j.spriteA._visible || this.layer < j.spriteA.layer) {
+					j._display();
+				}
+			}
+
 			if (!this._hasImagery) return;
 
 			let x = this._posX,
@@ -2534,20 +2552,6 @@ async function q5playPreSetup() {
 				else x = Math.round(x - 0.5) + 0.5;
 				if (h % 2 == 0) y = Math.round(y);
 				else y = Math.round(y - 0.5) + 0.5;
-			}
-
-			for (let j of this.joints) {
-				if (!j.visible) {
-					j.visible ??= true;
-					continue;
-				}
-				if (this._uid == j.spriteA._uid) {
-					if (!j.spriteB._visible || this.layer <= j.spriteB.layer) {
-						j._display();
-					}
-				} else if (!j.spriteA._visible || this.layer < j.spriteA.layer) {
-					j._display();
-				}
 			}
 
 			if (this._opacity == 0) return;
@@ -2648,21 +2652,6 @@ async function q5playPreSetup() {
 
 		// TODO applyForceScaled possible in Box2D v3?
 
-		/**
-		 * Applies a force to the sprite's center of mass attracting it to
-		 * the given position.
-		 *
-		 * Radius and easing not implemented yet!
-		 *
-		 * @param {Number} x
-		 * @param {Number} y
-		 * @param {Number} force
-		 * @param {Number} [radius] - infinite if not given
-		 * @param {Number} [easing] - solid if not given
-		 * @example
-		 * sprite.attractTo(x, y, force);
-		 * sprite.attractTo({x, y}, force);
-		 */
 		attractTo(x, y, force, radius, easing) {
 			if (this._phys != 0) {
 				console.error('attractTo can only be used on sprites with dynamic physics bodies');
@@ -2738,6 +2727,39 @@ async function q5playPreSetup() {
 		angleToFace(x, y, facing) {
 			let ang = this.rotationToFace(x, y, facing);
 			return minAngleDist(ang, this._rotation);
+		}
+
+		moveTowards(x, y, tracking) {
+			if (x === undefined) return;
+
+			if (typeof x != 'number' && x !== null) {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				tracking = y;
+				y = pos[0] ?? pos.y;
+				x = pos[1] ?? pos.x;
+			}
+			tracking ??= 0.1;
+
+			let velX = this._velX,
+				velY = this._velY;
+
+			if (x !== undefined && x !== null) {
+				let diffX = x - this.x;
+				if (!isSlop(diffX)) {
+					velX = diffX * tracking;
+				} else velX = 0;
+			}
+			if (y !== undefined && y !== null) {
+				let diffY = y - this.y;
+				if (!isSlop(diffY)) {
+					velY = diffY * tracking;
+				} else velY = 0;
+			}
+
+			if (velX || velY) {
+				this._setVel(velX, velY);
+			}
 		}
 
 		delete() {
@@ -3707,7 +3729,10 @@ async function q5playPreSetup() {
 
 			// if the allSprites group doesn't exist yet,
 			// this group must be the allSprites group!
-			if (!$.allSprites) this._isAllSpritesGroup = true;
+			if (!$.allSprites) {
+				this._isAllSpritesGroup = true;
+				this._topLayer = 0;
+			}
 
 			this.subgroups = [];
 
@@ -4217,6 +4242,48 @@ async function q5playPreSetup() {
 			}
 		}
 
+		_resetCentroid() {
+			let x = 0;
+			let y = 0;
+			for (let s of this) {
+				x += s.x;
+				y += s.y;
+			}
+			this.centroid = { x: x / this.length, y: y / this.length };
+			return this.centroid;
+		}
+
+		_resetDistancesFromCentroid() {
+			for (let s of this) {
+				s.distCentroid = {
+					x: s.x - this.centroid.x,
+					y: s.y - this.centroid.y
+				};
+			}
+		}
+
+		moveTowards(x, y, tracking) {
+			if (typeof x != 'number') {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				tracking = y;
+				y = pos[0] ?? pos.y;
+				x = pos[1] ?? pos.x;
+			}
+			tracking ??= 0.1;
+
+			if (x === undefined && y === undefined) return;
+
+			this._resetCentroid();
+
+			for (let s of this) {
+				if (s.distCentroid === undefined) {
+					this._resetDistancesFromCentroid();
+				}
+				s.moveTowards(s.distCentroid.x + x, s.distCentroid.y + y, tracking);
+			}
+		}
+
 		size() {
 			return this.length;
 		}
@@ -4422,9 +4489,6 @@ async function q5playPreSetup() {
 		}
 
 		remove(item) {
-			// deprecated alias for `group.delete`, will remove this behavior in v4
-			if (item === undefined) return this.delete();
-
 			let idx;
 			if (typeof item == 'number') {
 				idx = item;
@@ -4438,10 +4502,9 @@ async function q5playPreSetup() {
 			return this.splice(idx, 1)[0];
 		}
 
-		//
-		// removeAll() {
-		// 	return this.splice(0, this.length);
-		// }
+		removeAll() {
+			return this.splice(0, this.length);
+		}
 
 		delete() {
 			this.deleteAll();
@@ -4671,7 +4734,7 @@ async function q5playPreSetup() {
 			return this._gravity;
 		}
 		set gravity(val) {
-			b2World_SetGravity(wID, new b2Vec2(val.x, val.y));
+			b2World_SetGravity(wID, new b2Vec2(val[0] ?? val.x, val[1] ?? val.y));
 		}
 
 		get hitThreshold() {
@@ -4792,14 +4855,6 @@ async function q5playPreSetup() {
 		physicsUpdate(timeStep) {
 			usePhysics = true;
 			timeScale = this._timeScale;
-
-			// TODO: more efficient way to get positions
-			// for (let s of $.allSprites) {
-			// 	s.prevPos.x = s.x;
-			// 	s.prevPos.y = s.y;
-			// 	s.prevRotation = s.rotation;
-			// }
-
 			timeStep ??= this._timeStep;
 
 			b2World_Step(wID, timeStep, this.subSteps);
@@ -5182,22 +5237,19 @@ async function q5playPreSetup() {
 			j.base.bodyIdA = a.bdID;
 			j.base.bodyIdB = b.bdID;
 
-			j.base.localFrameA.p = b2Body_GetLocalPoint(a.bdID, scaleTo(a.x, a.y));
-			j.base.localFrameB.p = b2Body_GetLocalPoint(a.bdID, scaleTo(b.x, b.y));
+			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
 
-			this._oBx = b.x - a.x;
-			this._oBy = b.y - a.y;
+			let qA = b2Body_GetRotation(a.bdID);
+			j.base.localFrameA.q = b2InvMulRot(qA, b2Rot_identity);
+
+			let qB = b2Body_GetRotation(b.bdID);
+			j.base.localFrameB.q = b2InvMulRot(qB, b2Rot_identity);
 
 			return j;
 		}
 
 		_display() {
-			this._draw(
-				this.spriteA.x + this._oAx,
-				this.spriteA.y + this._oAy,
-				this.spriteB.x + this._oBx,
-				this.spriteB.y + this._oBy
-			);
+			this._draw(this.spriteA.x, this.spriteA.y, this.spriteB.x, this.spriteB.y);
 			this.visible = null;
 		}
 
@@ -5221,7 +5273,7 @@ async function q5playPreSetup() {
 				vec = scaleTo(a.x + x, a.y + y),
 				t = new b2Transform();
 
-			t.p = b2Body_GetLocalPoint(this.spriteA.bdID, vec);
+			t.p = b2Body_GetLocalPoint(a.bdID, vec);
 			b2Joint_SetLocalFrameA(this.jID, t);
 			b2Joint_WakeBodies(this.jID);
 
@@ -5230,8 +5282,8 @@ async function q5playPreSetup() {
 		}
 
 		_setOffsetB(x, y) {
-			const b = this.spriteB,
-				vec = scaleTo(b.x + x, b.y + y),
+			const a = this.spriteA,
+				vec = scaleTo(a.x + x, a.y + y),
 				t = new b2Transform();
 
 			t.p = b2Body_GetLocalPoint(this.spriteB.bdID, vec);
@@ -5246,8 +5298,8 @@ async function q5playPreSetup() {
 			return this._offsetA;
 		}
 		set offsetA(val) {
-			const x = val[0] || val.x,
-				y = val[1] || val.y;
+			const x = val[0] ?? val.x,
+				y = val[1] ?? val.y;
 
 			this._setOffsetA(x, y);
 		}
@@ -5256,8 +5308,8 @@ async function q5playPreSetup() {
 			return this._offsetB;
 		}
 		set offsetB(val) {
-			const x = val[0] || val.x,
-				y = val[1] || val.y;
+			const x = val[0] ?? val.x,
+				y = val[1] ?? val.y;
 
 			this._setOffsetB(x, y);
 		}
@@ -5352,9 +5404,15 @@ async function q5playPreSetup() {
 
 		delete() {
 			if (this._deleted) return;
-			this.spriteA.joints.splice(this.spriteA.joints.indexOf(this), 1);
-			this.spriteB.joints.splice(this.spriteB.joints.indexOf(this), 1);
-			$.world.destroyJoint(this._j);
+
+			const a = this.spriteA,
+				b = this.spriteB;
+
+			a.joints.splice(a.joints.indexOf(this), 1);
+			b.joints.splice(b.joints.indexOf(this), 1);
+
+			b2DestroyJoint(this.jID, true);
+
 			this._deleted = true;
 		}
 	};
@@ -7347,10 +7405,12 @@ async function q5playPreSetup() {
 	}
 
 	let drawCmds = new DebugDrawCommandBuffer();
-	let drawQueue = [];
+	let jointStack = [];
+	let shapeStack = [];
 
 	$._syncWorld = () => {
-		drawQueue = [];
+		jointStack = [];
+		shapeStack = [];
 		b2World_Draw(wID, drawCmds.GetDebugDraw());
 		let cmdPtr = drawCmds.GetCommandsData();
 		let cmdSize = drawCmds.GetCommandsSize();
@@ -7363,20 +7423,21 @@ async function q5playPreSetup() {
 		for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
 			// workaround that unpacks data from
 			// the shape material's customColor
-			const customColor = Box2D.HEAPU32[(offset + 4) >> 2],
-				uid = customColor & 0xffffff,
+			const customColor = Box2D.HEAPU32[(offset + 4) >> 2];
+
+			const uid = customColor & 0xffffff,
 				isSensor = (customColor >>> 25) & 0x1,
 				isFirstShape = (customColor >>> 26) & 0x1;
 
 			s = $.q5play.sprites[uid];
 
-			if (s === undefined) {
+			if (s && !s.visible) {
 				continue;
 			}
 
 			let type = Box2D.HEAPU8[offset];
 
-			if (!s.visible || type == 7) {
+			if (type == 7) {
 				continue;
 			}
 
@@ -7386,6 +7447,11 @@ async function q5playPreSetup() {
 			if (type == 1) dataLen = 5 + vertexCount * 2;
 			else if (type == 3 || type == 4) dataLen = 5;
 			let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
+
+			if (!s && type == 0) {
+				jointStack.push(...data);
+				continue;
+			}
 
 			// low performance cost to always sync position
 			// actually way better than retrieving it when needed
@@ -7404,7 +7470,7 @@ async function q5playPreSetup() {
 			// }
 
 			if (!s._hasImagery || s.debug) {
-				drawQueue.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
+				shapeStack.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
 			}
 		}
 	};
@@ -7429,8 +7495,12 @@ async function q5playPreSetup() {
 		}
 		$._setStrokeWeight(swData);
 
+		for (let i = 0; i < jointStack.length; i += 8) {
+			$.line(jointStack[i], jointStack[i + 1], jointStack[i + 4], jointStack[i + 5]);
+		}
+
 		// Sort by layer
-		drawQueue.sort((a, b) => a.sprite.layer - b.sprite.layer);
+		shapeStack.sort((a, b) => a.sprite.layer - b.sprite.layer);
 
 		let v = { x: 0, y: 0 };
 		let xf = {
@@ -7439,7 +7509,7 @@ async function q5playPreSetup() {
 		};
 		let rr;
 
-		for (let cmd of drawQueue) {
+		for (let cmd of shapeStack) {
 			const s = cmd.sprite,
 				isSensor = cmd.isSensor,
 				isFirstShape = cmd.isFirstShape;
@@ -7475,8 +7545,11 @@ async function q5playPreSetup() {
 			if (cmd.data.length >= 4) rr = cmd.data[4];
 			else rr = 0;
 
+			if (cmd.type == 0) {
+				$.line(cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[3]);
+			}
 			// draw a polygon
-			if (cmd.type == 1) {
+			else if (cmd.type == 1) {
 				if (rr > 0) {
 					$._setStrokeIdx($._getFillIdx());
 					$.strokeWeight(rr * 2);
