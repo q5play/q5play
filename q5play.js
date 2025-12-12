@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha15
+ * @version 4.0-alpha16
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha15';
+let q5play_version = 'alpha16';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -57,18 +57,18 @@ async function q5playPreSetup() {
 		b2World_EnableSleeping,
 		b2World_IsSleepingEnabled,
 		b2World_GetAwakeBodyCount,
-		b2World_SetRestitutionThreshold,
 		b2World_GetRestitutionThreshold,
-		b2World_SetHitEventThreshold,
+		b2World_SetRestitutionThreshold,
 		b2World_GetHitEventThreshold,
+		b2World_SetHitEventThreshold,
 		b2World_GetProfile,
 		b2World_GetCounters,
 		b2World_OverlapAABB,
 		b2World_CastRay,
 		b2World_CastRayClosest,
 		b2World_SetCustomFilterCallback,
-		b2World_SetGravity,
 		b2World_GetGravity,
+		b2World_SetGravity,
 		b2World_Explode,
 
 		/* Explosion */
@@ -96,7 +96,6 @@ async function q5playPreSetup() {
 		b2DestroyShape,
 
 		b2Shape_IsValid,
-		b2Shape_IsSensor,
 		b2Shape_TestPoint,
 		b2Shape_RayCast,
 		b2Shape_SetDensity,
@@ -107,16 +106,15 @@ async function q5playPreSetup() {
 		b2Shape_EnableContactEvents,
 		b2Shape_EnableSensorEvents,
 		b2Shape_EnableHitEvents,
-		b2Shape_GetType,
 		b2Shape_GetCircle,
-		b2Shape_GetSegment,
-		b2Shape_GetChainSegment,
-		b2Shape_GetCapsule,
-		b2Shape_GetPolygon,
 		b2Shape_SetCircle,
+		b2Shape_GetCapsule,
 		b2Shape_SetCapsule,
-		b2Shape_SetSegment,
+		b2Shape_GetPolygon,
 		b2Shape_SetPolygon,
+		b2Shape_GetSegment,
+		b2Shape_SetSegment,
+		b2Shape_GetChainSegment,
 		b2Shape_GetParentChain,
 		b2Shape_GetAABB,
 		b2Shape_GetContactCapacity,
@@ -144,18 +142,18 @@ async function q5playPreSetup() {
 		b2Body_GetMassData,
 		b2Body_ApplyMassFromShapes,
 		b2Body_GetLinearVelocity,
-		b2Body_GetAngularVelocity,
 		b2Body_SetLinearVelocity,
+		b2Body_GetAngularVelocity,
 		b2Body_SetAngularVelocity,
 		b2Body_ApplyForce,
 		b2Body_ApplyForceToCenter,
 		b2Body_ApplyTorque,
-		b2Body_SetLinearDamping,
 		b2Body_GetLinearDamping,
-		b2Body_SetAngularDamping,
+		b2Body_SetLinearDamping,
 		b2Body_GetAngularDamping,
-		b2Body_SetGravityScale,
+		b2Body_SetAngularDamping,
 		b2Body_GetGravityScale,
+		b2Body_SetGravityScale,
 		b2Body_SetType,
 		b2Body_IsAwake,
 		b2Body_SetAwake,
@@ -163,20 +161,19 @@ async function q5playPreSetup() {
 		b2Body_Disable,
 		b2Body_IsSleepEnabled,
 		b2Body_EnableSleep,
-		b2Body_SetSleepThreshold,
 		b2Body_GetSleepThreshold,
-		b2Body_SetBullet,
+		b2Body_SetSleepThreshold,
 		b2Body_IsBullet,
-		b2Body_GetShapeCount,
-		b2Body_GetShapes,
-		b2Body_GetJointCount,
-		b2Body_GetJoints,
+		b2Body_SetBullet,
 		b2Body_ComputeAABB,
 		b2Body_GetWorld,
-		b2MotionLocks,
 		b2Body_SetMotionLocks,
 
+		b2MotionLocks,
+
 		/* Joint */
+		b2DefaultWeldJointDef, // glue joint
+		b2CreateWeldJoint,
 		b2DefaultDistanceJointDef,
 		b2CreateDistanceJoint,
 		b2DefaultMotorJointDef,
@@ -185,19 +182,17 @@ async function q5playPreSetup() {
 		b2CreatePrismaticJoint,
 		b2DefaultRevoluteJointDef,
 		b2CreateRevoluteJoint,
-		b2DefaultWeldJointDef,
-		b2CreateWeldJoint,
 		b2DefaultWheelJointDef,
 		b2CreateWheelJoint,
+
 		b2Joint_IsValid,
-		b2Joint_GetType,
-		b2Joint_GetBodyA,
-		b2Joint_GetBodyB,
-		b2Joint_GetWorld,
-		b2Joint_SetCollideConnected,
-		b2Joint_GetCollideConnected,
-		b2Joint_GetPointer,
 		b2Joint_WakeBodies,
+		b2Joint_GetLocalFrameA,
+		b2Joint_GetLocalFrameB,
+		b2Joint_SetLocalFrameA,
+		b2Joint_SetLocalFrameB,
+		b2Joint_GetCollideConnected,
+		b2Joint_SetCollideConnected,
 		b2Joint_GetConstraintForce,
 		b2Joint_GetConstraintTorque,
 		b2DestroyJoint
@@ -319,7 +314,7 @@ async function q5playPreSetup() {
 	const scaleTo = (x, y) => new b2Vec2(x / meterSize, y / meterSize);
 
 	// scale from box2d coordinates to q5 coordinates
-	const scaleFrom = (x) => ({ x: x * meterSize, y: y * meterSize });
+	const scaleFrom = (x, y) => ({ x: x * meterSize, y: y * meterSize });
 
 	const linearSlop = 0.005,
 		angularSlop = 0.000582;
@@ -362,9 +357,12 @@ async function q5playPreSetup() {
 	const Shape = class {
 		constructor(sprite) {
 			this.sprite = sprite;
+
+			this.def = new b2DefaultShapeDef();
+			this.def.enableCustomFiltering = true;
 		}
 
-		init(id, type, geom) {
+		_init(id, type, geom) {
 			// Box2D shape ID pointer object
 			this.id = id;
 
@@ -374,25 +372,51 @@ async function q5playPreSetup() {
 			this.geom = geom;
 		}
 
-		delete() {
-			b2DestroyShape(this.id);
+		_packData() {
+			// workaround that packs:
+			// - sprite's unique ID
+			// - sensor flag
+			// - first shape flag
+			// into a single unsigned 32-bit integer, customColor,
+			// the only custom property Box2D exposes in debug draw
+			const pack24 = this.sprite._uid,
+				pack25 = this._isSensor ? 1 : 0,
+				pack26 = this._isFirstShape ? 1 : 0,
+				packedData = (pack26 << 26) | (pack25 << 25) | pack24;
+			// could use other bits for other flags later
+
+			this.def.material.customColor = packedData;
 		}
 
-		scaleBy(x, y) {
-			if (y === undefined) y = x;
+		delete() {
+			b2DestroyShape(this.id);
+			const s = this.sprite;
+			s._shapes.splice(s._shapes.indexOf(this), 1);
+			if (this._isSensor) {
+				s.sensors.splice(s.sensors.indexOf(this), 1);
+			} else {
+				s.colliders.splice(s.colliders.indexOf(this), 1);
+			}
+			delete shapeDict[this.id.index1];
+
+			if (s._massUndef && s.colliders.length) b2Body_ApplyMassFromShapes(s.bdID);
+		}
+
+		scaleBy(scaleX, scaleY) {
+			if (scaleY === undefined) scaleY = scaleX;
 
 			let id = this.id,
 				type = this.type,
 				geom = this.geom;
 
 			if (type == 0) {
-				let hw = geom._hw * x,
-					hh = geom._hh * y,
+				let hw = geom._hw * scaleX,
+					hh = geom._hh * scaleY,
 					rr;
 
 				if (!geom._rr) geom = b2MakeBox(hw, hh);
 				else {
-					rr = geom._rr * Math.min(x, y);
+					rr = geom._rr * Math.min(scaleX, scaleY);
 					geom = b2MakeRoundedBox(hw, hh, rr);
 				}
 				b2Shape_SetPolygon(id, geom);
@@ -401,7 +425,7 @@ async function q5playPreSetup() {
 				geom._rr = rr;
 				this.geom = geom;
 			} else if (type == 3) {
-				geom.radius *= x;
+				geom.radius *= scaleX;
 				b2Shape_SetCircle(id, geom);
 				this.geom = geom;
 			}
@@ -433,9 +457,10 @@ async function q5playPreSetup() {
 	const Sensor = class extends Shape {
 		constructor(sprite) {
 			super(sprite);
-			this._isSensor = true;
+			this.def.isSensor = this._isSensor = true;
 			this._isCollider = false;
-			this._density = 0;
+			this.def.density = this._density = 0.00000000001;
+			this.def.enableSensorEvents = this._areSensorEventsEnabled = true;
 		}
 	};
 
@@ -450,6 +475,13 @@ async function q5playPreSetup() {
 			this._restitution = sprite.bounciness || 0;
 			this._rollingResistance = 0;
 			this._tangentSpeed = 0;
+
+			this.def.isSensor = false;
+			this.def.density = this._density;
+			this.def.material.friction = this._friction;
+			this.def.material.restitution = this._restitution;
+			this.def.material.rollingResistance = 0;
+			this.def.material.tangentSpeed = 0;
 		}
 
 		get bounciness() {
@@ -722,6 +754,12 @@ async function q5playPreSetup() {
 			this.idNum; // not set until the input params are validated
 
 			let args = [...arguments];
+
+			let withSensor = false;
+			if (args[0] == null) {
+				withSensor = true;
+				args.splice(0, 1);
+			}
 
 			let group, ani;
 
@@ -1045,7 +1083,8 @@ async function q5playPreSetup() {
 					args[2] = w;
 					args[3] = h;
 				}
-				this.addCollider(...args);
+				if (withSensor) this.addSensor(...args);
+				else this.addCollider(...args);
 			}
 
 			this.prevPos = { x, y };
@@ -1139,6 +1178,10 @@ async function q5playPreSetup() {
 			this._textSize ??= $.canvas ? $.textSize() : 12;
 		}
 
+		static withSensor(x, y, w, h, physicsType) {
+			return new $.Sprite(null, ...arguments);
+		}
+
 		addCollider(offsetX, offsetY, w, h) {
 			if (this._deleted) {
 				console.error("Can't add colliders to a sprite that was deleted.");
@@ -1187,35 +1230,11 @@ async function q5playPreSetup() {
 			let bdID = this.bdID;
 
 			let shape;
-
-			let shapeDef = new b2DefaultShapeDef();
-			shapeDef.isSensor = isSensor;
-			shapeDef.enableCustomFiltering = true;
-
 			if (isSensor) shape = new Sensor(this);
-			else {
-				shape = new Collider(this);
+			else shape = new Collider(this);
 
-				shapeDef.material.friction = shape._friction;
-				shapeDef.material.restitution = shape._restitution;
-				shapeDef.material.rollingResistance = shape._rollingResistance;
-				shapeDef.material.tangentSpeed = shape._tangentSpeed;
-			}
-
-			shapeDef.density = shape._density;
-
-			// workaround that packs:
-			// - sprite's unique ID
-			// - sensor flag
-			// - first shape flag
-			// into a single unsigned 32-bit integer, customColor,
-			// the only custom property Box2D exposes in debug draw
-			const pack24 = this._uid,
-				pack25 = isSensor ? 1 : 0,
-				pack26 = startingShapeCount === 0 ? 1 : 0,
-				packedData = (pack26 << 26) | (pack25 << 25) | pack24;
-			// could use other bits for other flags later
-			shapeDef.material.customColor = packedData;
+			shape._isFirstShape = startingShapeCount === 0;
+			shape._packData();
 
 			if (a2 !== undefined) {
 				offsetX = a0;
@@ -1382,23 +1401,23 @@ async function q5playPreSetup() {
 					let hull = b2ComputeHull(vecs);
 					geom = b2MakePolygon(hull, 0);
 
-					id = b2CreatePolygonShape(bdID, shapeDef, geom);
-					shape.init(id, 1, geom);
+					id = b2CreatePolygonShape(bdID, shape.def, geom);
+					shape._init(id, 1, geom);
 				} else {
 					if (vecs.length == 2) {
 						if (!rr) {
 							geom = new b2Segment();
 							geom.point1 = vecs[0];
 							geom.point2 = vecs[1];
-							id = b2CreateSegmentShape(bdID, shapeDef, geom);
-							shape.init(id, 5, geom);
+							id = b2CreateSegmentShape(bdID, shape.def, geom);
+							shape._init(id, 5, geom);
 						} else {
 							geom = new b2Capsule();
 							geom.center1 = vecs[0];
 							geom.center2 = vecs[1];
 							geom.radius = rr / meterSize;
-							id = b2CreateCapsuleShape(bdID, shapeDef, geom);
-							shape.init(id, 4, geom);
+							id = b2CreateCapsuleShape(bdID, shape.def, geom);
+							shape._init(id, 4, geom);
 						}
 					} else if (this._phys != 1) {
 						// create several capsules to approximate a hollow shape (closed chain)
@@ -1407,9 +1426,9 @@ async function q5playPreSetup() {
 							geom.center1 = vecs[i - 1];
 							geom.center2 = vecs[i];
 							geom.radius = 0.12;
-							id = b2CreateCapsuleShape(bdID, shapeDef, geom);
+							id = b2CreateCapsuleShape(bdID, shape.def, geom);
 							let shapePart = new Collider(this);
-							shape.init(id, 7, geom);
+							shape._init(id, 7, geom);
 							shapes.push(shapePart);
 							shapeDict[id.index1] = shapePart;
 						}
@@ -1422,7 +1441,7 @@ async function q5playPreSetup() {
 						chainDef.SetMaterials([{ customColor: this._uid }]);
 
 						id = b2CreateChain(bdID, chainDef);
-						shape.init(id, 6, geom);
+						shape._init(id, 6, geom);
 					}
 				}
 			} else {
@@ -1434,8 +1453,8 @@ async function q5playPreSetup() {
 					geom.center = scaleTo(offsetX, offsetY);
 					geom.radius = (w * 0.5) / meterSize;
 
-					id = b2CreateCircleShape(bdID, shapeDef, geom);
-					shape.init(id, 3, geom);
+					id = b2CreateCircleShape(bdID, shape.def, geom);
+					shape._init(id, 3, geom);
 				} else {
 					let hw = (w * 0.5) / meterSize;
 					let hh = (h * 0.5) / meterSize;
@@ -1462,8 +1481,8 @@ async function q5playPreSetup() {
 					geom._hh = hh;
 					geom._rr = rr;
 
-					id = b2CreatePolygonShape(bdID, shapeDef, geom);
-					shape.init(id, 0, geom);
+					id = b2CreatePolygonShape(bdID, shape.def, geom);
+					shape._init(id, 0, geom);
 				}
 
 				// TODO: use AABB to get extents for multiple shapes
@@ -1491,14 +1510,15 @@ async function q5playPreSetup() {
 		}
 
 		deleteColliders() {
-			for (let collider of this.colliders) {
-				collider.delete();
+			while (this.colliders.length) {
+				this.colliders.at(-1).delete();
 			}
+			this.mass = 0;
 		}
 
 		deleteSensors() {
-			for (let sensor of this.sensors) {
-				sensor.delete();
+			while (this.sensors.length) {
+				this.sensors.at(-1).delete();
 			}
 			this._hasSensors = false;
 		}
@@ -2908,29 +2928,27 @@ async function q5playPreSetup() {
 		}
 
 		addDefaultSensors() {
+			if (this.colliders.length == 0) return this.addSensor(0, 0, 50, 50);
+
 			let bdID = this.bdID;
 			for (let collider of this.colliders) {
-				let geom = collider.geom;
-				let sensor = new Sensor(this);
-
-				let shapeDef = new b2DefaultShapeDef();
-				shapeDef.isSensor = true;
-				shapeDef.enableCustomFiltering = true;
-				shapeDef.density = 0;
-				shapeDef.enableSensorEvents = true;
+				let shape = new Sensor(this);
+				shape._packData();
 
 				let type = collider.type,
+					geom = collider.geom,
 					id;
 				if (type == 0) {
-					id = b2CreatePolygonShape(bdID, shapeDef, geom);
-					sensor.init(id, 0, geom);
+					id = b2CreatePolygonShape(bdID, shape.def, geom);
+					shape._init(id, 0, geom);
 				} else if (type == 3) {
-					id = b2CreateCircleShape(bdID, shapeDef, geom);
-					sensor.init(id, 3, geom);
+					id = b2CreateCircleShape(bdID, shape.def, geom);
+					shape._init(id, 3, geom);
 				}
 
-				this.sensors.push(sensor);
-				shapeDict[id.index1] = sensor;
+				this._shapes.push(shape);
+				this.sensors.push(shape);
+				shapeDict[id.index1] = shape;
 			}
 			this._hasSensors = true;
 		}
@@ -3082,7 +3100,7 @@ async function q5playPreSetup() {
 			this._cycles = 0;
 			this.targetFrame = -1;
 			this._scale = new Scale();
-			this.offset = { x: anis?.offset.x ?? 0, y: anis?.offset.y ?? 0 };
+			this.offset = { x: anis?.offset._x ?? 0, y: anis?.offset._y ?? 0 };
 			this.rotationLock = anis?.rotationLock ?? false;
 			this.frameDelay = anis?.frameDelay || 4;
 			this.looping = anis?.looping ?? true;
@@ -5058,58 +5076,81 @@ async function q5playPreSetup() {
 				throw new Error('The Joint constructor requires two sprites as input.');
 			}
 
-			if (!spriteA.body) spriteA.addDefaultSensors();
-			if (!spriteB.body) spriteB.addDefaultSensors();
+			if (!spriteA._shapes.length) spriteA.addDefaultSensors();
+			if (!spriteB._shapes.length) spriteB.addDefaultSensors();
 
 			this.spriteA = spriteA;
-
 			this.spriteB = spriteB;
 
-			type ??= 'glue';
+			this.type = type ??= 'glue';
+			this.visible = true;
 
-			this.type = type;
-
-			if (type == 'glue') {
-				let j = pl.WeldJoint({}, spriteA.body, spriteB.body, spriteA.body.getWorldCenter());
-				this._createJoint(j);
-			}
+			this._oAx = this._oAy = this._oBx = this._oBy = 0;
 
 			let _this = this;
 
-			if (type != 'glue' && type != 'slider' && type != 'rope') {
-				for (let l of ['A', 'B']) {
-					if (l == 'A' && type == 'wheel') continue;
+			// if (type != 'slider' && type != 'rope') {
 
-					const prop = '_offset' + l;
-					this[prop] = $.createVector.call($);
+			if (type != 'wheel') {
+				this._offsetA = {};
 
-					for (let axis of ['x', 'y']) {
-						Object.defineProperty(this[prop], axis, {
-							get() {
-								let val = _this._j['m_localAnchor' + l][axis] * meterSize;
-								return friendlyRounding ? fixRound(val) : val;
-							},
-							set(val) {
-								_this._j['m_localAnchor' + l][axis] = val / meterSize;
-								if (_this.type == 'distance' || _this.type == 'rope') {
-									_this._j.m_length = b2Vec2.distance(
-										_this._j.m_bodyA.getWorldPoint(_this._j.m_localAnchorA),
-										_this._j.m_bodyB.getWorldPoint(_this._j.m_localAnchorB)
-									);
-								} else if (_this.type == 'hinge' || _this.type == 'wheel') {
-									let o;
-									if (l == 'A') o = 'B';
-									else o = 'A';
-									// body o's local point of body l anchor's world point
-									_this._j['m_localAnchor' + o][axis] = _this._j['m_body' + o].getLocalPoint(
-										_this._j['m_body' + l].getWorldPoint(_this._j['m_localAnchor' + l])
-									)[axis];
-								}
-							}
-						});
+				Object.defineProperty(this._offsetA, 'x', {
+					get() {
+						let val = _this._oAx;
+						return friendlyRounding ? fixRound(val) : val;
+					},
+					set(val) {
+						_this._setOffsetA(val, _this._oAy);
 					}
-				}
+				});
+
+				Object.defineProperty(this._offsetA, 'y', {
+					get() {
+						let val = _this._oAy;
+						return friendlyRounding ? fixRound(val) : val;
+					},
+					set(val) {
+						_this._setOffsetA(_this._oAx, val);
+					}
+				});
 			}
+
+			this._offsetB = {};
+
+			Object.defineProperty(this._offsetB, 'x', {
+				get() {
+					let val = _this._oBx;
+					return friendlyRounding ? fixRound(val) : val;
+				},
+				set(val) {
+					_this._setOffsetB(val, _this._oBy);
+				}
+			});
+
+			Object.defineProperty(this._offsetB, 'y', {
+				get() {
+					let val = _this._oBy;
+					return friendlyRounding ? fixRound(val) : val;
+				},
+				set(val) {
+					_this._setOffsetB(_this._oBx, val);
+				}
+			});
+
+			// _this._j['m_localAnchor' + l][axis] = val / meterSize;
+			// if (_this.type == 'distance' || _this.type == 'rope') {
+			// 	_this._j.m_length = b2Vec2.distance(
+			// 		_this._j.m_bodyA.getWorldPoint(_this._j.m_localAnchorA),
+			// 		_this._j.m_bodyB.getWorldPoint(_this._j.m_localAnchorB)
+			// 	);
+			// } else if (_this.type == 'hinge' || _this.type == 'wheel') {
+			// 	let o;
+			// 	if (l == 'A') o = 'B';
+			// 	else o = 'A';
+			// 	// body o's local point of body l anchor's world point
+			// 	_this._j['m_localAnchor' + o][axis] = _this._j['m_body' + o].getLocalPoint(
+			// 		_this._j['m_body' + l].getWorldPoint(_this._j['m_localAnchor' + l])
+			// 	)[axis];
 
 			let removeProps = [];
 			if (type == 'distance' || type == 'glue' || type == 'rope') {
@@ -5125,18 +5166,38 @@ async function q5playPreSetup() {
 			}
 			Object.defineProperties(this, def);
 
-			this.visible = true;
-
 			spriteA.joints.push(this);
 			spriteB.joints.push(this);
+
+			if (type != 'glue') return;
+
+			let j = this._init(b2DefaultWeldJointDef());
+			this.jID = b2CreateWeldJoint(wID, j);
 		}
 
-		_createJoint(j) {
-			this._j = $.world.createJoint(j);
+		_init(j) {
+			let a = this.spriteA,
+				b = this.spriteB;
+
+			j.base.bodyIdA = a.bdID;
+			j.base.bodyIdB = b.bdID;
+
+			j.base.localFrameA.p = b2Body_GetLocalPoint(a.bdID, scaleTo(a.x, a.y));
+			j.base.localFrameB.p = b2Body_GetLocalPoint(a.bdID, scaleTo(b.x, b.y));
+
+			this._oBx = b.x - a.x;
+			this._oBy = b.y - a.y;
+
+			return j;
 		}
 
 		_display() {
-			this._draw(this.spriteA.x, this.spriteA.y, this.spriteB.x, this.spriteB.y);
+			this._draw(
+				this.spriteA.x + this._oAx,
+				this.spriteA.y + this._oAy,
+				this.spriteB.x + this._oBx,
+				this.spriteB.y + this._oBy
+			);
 			this.visible = null;
 		}
 
@@ -5155,20 +5216,50 @@ async function q5playPreSetup() {
 			this._draw = val;
 		}
 
+		_setOffsetA(x, y) {
+			const a = this.spriteA,
+				vec = scaleTo(a.x + x, a.y + y),
+				t = new b2Transform();
+
+			t.p = b2Body_GetLocalPoint(this.spriteA.bdID, vec);
+			b2Joint_SetLocalFrameA(this.jID, t);
+			b2Joint_WakeBodies(this.jID);
+
+			this._oAx = x;
+			this._oAy = y;
+		}
+
+		_setOffsetB(x, y) {
+			const b = this.spriteB,
+				vec = scaleTo(b.x + x, b.y + y),
+				t = new b2Transform();
+
+			t.p = b2Body_GetLocalPoint(this.spriteB.bdID, vec);
+			b2Joint_SetLocalFrameB(this.jID, t);
+			b2Joint_WakeBodies(this.jID);
+
+			this._oBx = x;
+			this._oBy = y;
+		}
+
 		get offsetA() {
 			return this._offsetA;
 		}
 		set offsetA(val) {
-			this._offsetA.x = val.x;
-			this._offsetA.y = val.y;
+			const x = val[0] || val.x,
+				y = val[1] || val.y;
+
+			this._setOffsetA(x, y);
 		}
 
 		get offsetB() {
 			return this._offsetB;
 		}
 		set offsetB(val) {
-			this._offsetB.x = val.x;
-			this._offsetB.y = val.y;
+			const x = val[0] || val.x,
+				y = val[1] || val.y;
+
+			this._setOffsetB(x, y);
 		}
 
 		get springiness() {
@@ -5270,22 +5361,16 @@ async function q5playPreSetup() {
 
 	this.GlueJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
-			super(...arguments, 'glue');
+			super(spriteA, spriteB, 'glue');
 		}
 	};
 
 	this.DistanceJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
-			super(...arguments, 'distance');
+			super(spriteA, spriteB, 'distance');
 
-			let j = pl.DistanceJoint(
-				{},
-				spriteA.body,
-				spriteB.body,
-				spriteA.body.getWorldCenter(),
-				spriteB.body.getWorldCenter()
-			);
-			this._createJoint(j);
+			let j = this._init(b2DefaultDistanceJointDef());
+			this.jID = b2CreateDistanceJoint(wID, j);
 		}
 
 		_display() {
@@ -5310,7 +5395,7 @@ async function q5playPreSetup() {
 
 	this.WheelJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
-			super(...arguments, 'wheel');
+			super(spriteA, spriteB, 'wheel');
 
 			let j = pl.WheelJoint(
 				{
@@ -5368,7 +5453,7 @@ async function q5playPreSetup() {
 
 	this.HingeJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
-			super(...arguments, 'hinge');
+			super(spriteA, spriteB, 'hinge');
 
 			let j = pl.RevoluteJoint({}, spriteA.body, spriteB.body, spriteA.body.getWorldCenter());
 			this._createJoint(j);
@@ -5435,7 +5520,7 @@ async function q5playPreSetup() {
 
 	this.SliderJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
-			super(...arguments, 'slider');
+			super(spriteA, spriteB, 'slider');
 
 			let j = pl.PrismaticJoint(
 				{
@@ -5501,7 +5586,7 @@ async function q5playPreSetup() {
 
 	this.RopeJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
-			super(...arguments, 'rope');
+			super(spriteA, spriteB, 'rope');
 
 			let j = pl.RopeJoint(
 				{
@@ -5892,16 +5977,6 @@ async function q5playPreSetup() {
 		return $.delay(milliseconds);
 	};
 
-	this.play = (sound) => {
-		if (!sound?.play) {
-			throw new Error("Tried to play your sound but it wasn't a sound object.");
-		}
-		return new Promise((resolve) => {
-			sound.play();
-			sound.onended(() => resolve());
-		});
-	};
-
 	async function playIntro() {
 		if (document.getElementById('made-with-q5play')) return;
 		if (!using_p5v2) $._incrementPreload();
@@ -6136,112 +6211,6 @@ async function q5playPreSetup() {
 		if (hz) $.world._setTimeStep();
 		return ret;
 	};
-
-	// if the user isn't using q5.js
-	// add a backwards compatibility layer for p5.js
-	if (!$.displayMode && typeof document == 'object') {
-		document.head.insertAdjacentHTML(
-			'beforeend',
-			`<style>
-html, body {
-	margin: 0;
-	padding: 0;
-}
-body.hasFrameBorder {
-	display: block;
-}
-.p5Canvas {
-	outline: none;
-	-webkit-touch-callout: none;
-	-webkit-text-size-adjust: none;
-	-webkit-user-select: none;
-	overscroll-behavior: none;
-}
-.p5-pixelated {
-	image-rendering: pixelated;
-	font-smooth: never;
-	-webkit-font-smoothing: none;
-}
-.p5-centered,
-.p5-maxed {
-  display: flex;
-	align-items: center;
-	justify-content: center;
-}
-main.p5-centered,
-main.p5-maxed {
-	height: 100vh;
-}
-main {
-	overscroll-behavior: none;
-}
-</style>`
-		);
-
-		$._adjustDisplay = (forced) => {
-			let c = $.canvas;
-			let s = c.style;
-			// if the canvas doesn't have a style,
-			// it may be a server side canvas, so return
-			if (!s) return;
-			if (c.displayMode == 'normal') {
-				// unless the canvas needs to be resized, return
-				if (!forced) return;
-				s.width = c.w * c.displayScale + 'px';
-				s.height = c.h * c.displayScale + 'px';
-			} else {
-				let parent = c.parentElement.getBoundingClientRect();
-				if (c.w / c.h > parent.width / parent.height) {
-					if (c.displayMode == 'centered') {
-						s.width = c.w * c.displayScale + 'px';
-						s.maxWidth = '100%';
-					} else s.width = '100%';
-					s.height = 'auto';
-					s.maxHeight = '';
-				} else {
-					s.width = 'auto';
-					s.maxWidth = '';
-					if (c.displayMode == 'centered') {
-						s.height = c.h * c.displayScale + 'px';
-						s.maxHeight = '100%';
-					} else s.height = '100%';
-				}
-			}
-		};
-
-		$.MAXED = 'maxed';
-		$.SMOOTH = 'smooth';
-		$.PIXELATED = 'pixelated';
-
-		$.displayMode = (displayMode = 'normal', renderQuality = 'smooth', displayScale = 1) => {
-			let c = $.canvas;
-			if (typeof displayScale == 'string') {
-				displayScale = parseFloat(displayScale.slice(1));
-			}
-			if (displayMode == 'fullscreen') displayMode = 'maxed';
-			if (displayMode == 'center') displayMode = 'centered';
-
-			if (c.displayMode) {
-				c.parentElement.classList.remove('p5-' + c.displayMode);
-				c.classList.remove('p5-pixelated');
-			}
-
-			c.parentElement.classList.add('p5-' + displayMode);
-
-			if (renderQuality == 'pixelated') {
-				c.classList.add('p5-pixelated');
-				$.pixelDensity(1);
-				if ($.noSmooth) $.noSmooth();
-				if ($.textFont) $.textFont('monospace');
-			}
-
-			Object.assign(c, { displayMode, renderQuality, displayScale });
-
-			if ($.ctx) $.push();
-			$._adjustDisplay(true);
-			if ($.ctx) $.pop();
-		};
-	}
 
 	let errMsgs = {
 		generic: [
@@ -7377,11 +7346,7 @@ main {
 		v.y = y;
 	}
 
-	const debugGreen = $.color(0, $._colorFormat, 0, $._colorFormat * 0.9),
-		debugYellow = $.color($._colorFormat, $._colorFormat, 0, $._colorFormat * 0.9);
-
 	let drawCmds = new DebugDrawCommandBuffer();
-
 	let drawQueue = [];
 
 	$._syncWorld = () => {
@@ -7444,6 +7409,12 @@ main {
 		}
 	};
 
+	const colorMax = $._colorFormat,
+		debugGreen = $.color(0, colorMax, 0, colorMax * 0.9),
+		debugGreenFill = $.color(0, colorMax, 0, colorMax * 0.1),
+		debugYellow = $.color(colorMax, colorMax, 0, colorMax * 0.9),
+		debugYellowFill = $.color(colorMax, colorMax, 0, colorMax * 0.1);
+
 	$._debugDraw = () => {
 		$.scale(meterSize);
 
@@ -7491,7 +7462,7 @@ main {
 					strokeWeightChanged = false;
 				}
 			} else {
-				$.noFill();
+				$.fill(isSensor ? debugYellowFill : debugGreenFill);
 				$.stroke(isSensor ? debugYellow : debugGreen);
 				strokeChanged = true;
 			}
@@ -7549,15 +7520,17 @@ main {
 
 			if (isFirstShape) {
 				$.q5play.spritesDrawn++;
-				// draw a triangle at the shape's center to indicate rotation
-				if (s.debug && cmd.type < 5) {
-					$._setFillIdx($._getStrokeIdx());
-					$._doFill();
-					$.noStroke();
+			}
+			// draw a triangle at the shape's center to indicate rotation
+			if (s.debug && cmd.type < 5) {
+				$._setFillIdx($._getStrokeIdx());
+				$._doFill();
+				$.noStroke();
+				if (!isSensor && isFirstShape) {
 					$.beginShape();
 					let a = 0.05,
 						b = 0.03;
-					let tri = [-b, -b, b, -b, 0, a];
+					let tri = [-b, -b, -b, b, a, 0];
 					for (let i = 0; i < 6; i += 2) {
 						v.x = tri[i];
 						v.y = tri[i + 1];
@@ -7565,6 +7538,8 @@ main {
 						$.vertex(v.x, v.y);
 					}
 					$.endShape(true);
+				} else {
+					$.circle(cmd.data[0], cmd.data[1], 0.03);
 				}
 			}
 
@@ -7586,35 +7561,11 @@ main {
 		$._setStrokeWeight(ogSW);
 	};
 
-	// switch (cmd.type) {
-	// 	case 0:
-	// 		this.drawPolygon(cmd);
-	// 		break;
-	// 	case 1:
-	// 		this.drawSolidPolygon(cmd);
-	// 		break;
-	// 	case 2:
-	// 		this.drawCircle(cmd);
-	// 		break;
-	// 	case 3:
-	// 		this.drawSolidCircle(cmd);
-	// 		break;
-	// 	case 4:
-	// 		this.drawSolidCapsule(cmd);
-	// 		break;
-	// 	case 5:
-	// 		this.drawSegment(cmd);
-	// 		break;
-	// 	case 6:
-	// 		this.drawTransform(cmd);
-	// 		break;
-	// 	case 7:
-	// 		this.drawPoint(cmd);
-	// 		break;
-	// 	case 8:
-	// 		this.drawString(cmd);
-	// 		break;
-	// }
+	if ($.q5play.background) {
+		$.update = () => {
+			background($.q5play.background);
+		};
+	}
 
 	// prettier-ignore
 	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','animation'];
