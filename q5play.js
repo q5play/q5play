@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha19
+ * @version 4.0-alpha20
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha19';
+let q5play_version = 'alpha20';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -30,7 +30,7 @@ if (typeof globalThis.Q5 == 'undefined') {
 
 // called when a new instance of Q5 is created
 async function q5playPreSetup() {
-	const $ = this, // the q5 instance that called q5playInit
+	const $ = this, // the q5 instance that called this function
 		log = console.log,
 		Box2DFactory = await import('box2d3-wasm'),
 		Box2D = await Box2DFactory.default({ pthreadCount: 0 });
@@ -55,8 +55,9 @@ async function q5playPreSetup() {
 		b2DestroyWorld,
 		b2World_Step,
 		b2World_Draw,
-		b2World_GetSensorEvents,
 		b2World_GetContactEvents,
+		b2World_GetSensorEvents,
+		b2World_GetJointEvents,
 		b2World_EnableSleeping,
 		b2World_IsSleepingEnabled,
 		b2World_GetAwakeBodyCount,
@@ -199,6 +200,10 @@ async function q5playPreSetup() {
 		b2Joint_SetCollideConnected,
 		b2Joint_GetConstraintForce,
 		b2Joint_GetConstraintTorque,
+		b2Joint_GetForceThreshold,
+		b2Joint_SetForceThreshold,
+		b2Joint_GetTorqueThreshold,
+		b2Joint_SetTorqueThreshold,
 		b2DestroyJoint
 	} = Box2D;
 
@@ -206,7 +211,7 @@ async function q5playPreSetup() {
 
 	let friendlyRounding = true;
 
-	this.Q5Play = class {
+	$.Q5Play = class {
 		constructor() {
 			this.version = q5play_version;
 			this.sprites = {};
@@ -297,7 +302,7 @@ async function q5playPreSetup() {
 		onImageLoad() {}
 	};
 
-	this.q5play = new $.Q5Play();
+	$.q5play = new $.Q5Play();
 	delete $.Q5Play;
 
 	let using_p5v1 = !$._q5 && p5.VERSION[0] == 1;
@@ -345,7 +350,8 @@ async function q5playPreSetup() {
 		cameraOn = false,
 		timeScale = 1,
 		shapeDict = {},
-		tilesDict = {};
+		jointDict = {},
+		tileDict = {};
 
 	const eventTypes = {
 		_collisions: ['_collides', '_colliding', '_collided'],
@@ -523,7 +529,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.Visual = class {
+	$.Visual = class {
 		constructor(x = 0, y = 0) {
 			this._isVisual = true;
 
@@ -748,7 +754,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.Sprite = class extends $.Visual {
+	$.Sprite = class extends $.Visual {
 		constructor(x, y, w, h, physicsType) {
 			super(); // Call Visual constructor
 
@@ -1745,7 +1751,7 @@ async function q5playPreSetup() {
 		set tile(val) {
 			if (this.watch) this.mod[36] = true;
 			this._tile = val;
-			tilesDict[val] = this;
+			tileDict[val] = this;
 		}
 
 		get bearing() {
@@ -2741,21 +2747,20 @@ async function q5playPreSetup() {
 			}
 			tracking ??= 0.1;
 
-			let velX = this._velX,
-				velY = this._velY;
+			let velX, velY;
 
-			if (x !== undefined && x !== null) {
+			if (x !== null) {
 				let diffX = x - this.x;
 				if (!isSlop(diffX)) {
 					velX = diffX * tracking;
 				} else velX = 0;
-			}
-			if (y !== undefined && y !== null) {
+			} else velX = this._velX;
+			if (y !== null) {
 				let diffY = y - this.y;
 				if (!isSlop(diffY)) {
 					velY = diffY * tracking;
 				} else velY = 0;
-			}
+			} else velY = this._velY;
 
 			if (velX || velY) {
 				this._setVel(velX, velY);
@@ -3088,7 +3093,7 @@ async function q5playPreSetup() {
 		}
 	}
 
-	this.Ani = class extends Array {
+	$.Ani = class extends Array {
 		constructor() {
 			super();
 			this._isAni = true;
@@ -3365,7 +3370,7 @@ async function q5playPreSetup() {
 			owner.ani = this;
 
 			if (this.name.length == 1) {
-				tilesDict[this.name] = this;
+				tileDict[this.name] = this;
 			}
 
 			// play by default but a single frame ani doesn't need to play
@@ -3572,7 +3577,7 @@ async function q5playPreSetup() {
 		'_spriteSheetDemo'
 	];
 
-	this.Anis = class {
+	$.Anis = class {
 		#_ = {};
 		constructor() {
 			let _this = this;
@@ -3636,7 +3641,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.Visuals = class extends Array {
+	$.Visuals = class extends Array {
 		constructor(...args) {
 			super(...args);
 			this._isVisuals = true;
@@ -3686,7 +3691,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.Group = class extends $.Visuals {
+	$.Group = class extends $.Visuals {
 		constructor(...args) {
 			let parent;
 			if (args[0] instanceof $.Group) {
@@ -3891,7 +3896,7 @@ async function q5playPreSetup() {
 			for (let row = 0; row < tiles.length; row++) {
 				for (let col = 0; col < tiles[row].length; col++) {
 					let t = tiles[row][col],
-						tile = tilesDict[t];
+						tile = tileDict[t];
 
 					if (!tile) continue;
 
@@ -3989,7 +3994,7 @@ async function q5playPreSetup() {
 		}
 		set tile(val) {
 			this._tile = val;
-			tilesDict[val] = this;
+			tileDict[val] = this;
 		}
 
 		get velocity() {
@@ -4270,6 +4275,8 @@ async function q5playPreSetup() {
 		}
 
 		moveTowards(x, y, tracking) {
+			if (x === undefined) return;
+
 			if (typeof x != 'number') {
 				let pos = x;
 				if (pos == $.mouse && !$.mouse.isActive) return;
@@ -4278,8 +4285,6 @@ async function q5playPreSetup() {
 				x = pos[1] ?? pos.x;
 			}
 			tracking ??= 0.1;
-
-			if (x === undefined && y === undefined) return;
 
 			this._resetCentroid();
 
@@ -4561,7 +4566,7 @@ async function q5playPreSetup() {
 	$.Visuals.prototype.addAni = $.Group.prototype.addAni = $.Sprite.prototype.addAni;
 	$.Visuals.prototype.addAnis = $.Group.prototype.addAnis = $.Sprite.prototype.addAnis;
 
-	this.World = class {
+	$.World = class {
 		constructor() {
 			this.mod = {};
 
@@ -4628,7 +4633,7 @@ async function q5playPreSetup() {
 			});
 		}
 
-		_processEvents(events, t, idA, idB) {
+		_processContacts(events, t, idA, idB) {
 			for (let i = 0; i < events.beginCount; i++) {
 				const evt = events.GetBeginEvent(i),
 					shapeA = shapeDict[evt[idA].index1],
@@ -4705,6 +4710,14 @@ async function q5playPreSetup() {
 						}
 					}
 				}
+			}
+		}
+
+		_processJoints(events) {
+			for (let i = 0; i < events.count; i++) {
+				const evt = events.GetJointEvent(i),
+					j = jointDict[evt.jointId.index1];
+				j.delete();
 			}
 		}
 
@@ -4861,10 +4874,12 @@ async function q5playPreSetup() {
 			this.taskSystem?.ClearTasks();
 
 			const collideEvents = b2World_GetContactEvents(wID),
-				overlapEvents = b2World_GetSensorEvents(wID);
+				overlapEvents = b2World_GetSensorEvents(wID),
+				jointEvents = b2World_GetJointEvents(wID);
 
-			this._processEvents(collideEvents, '_collisions', 'shapeIdA', 'shapeIdB');
-			this._processEvents(overlapEvents, '_overlappers', 'sensorShapeId', 'visitorShapeId');
+			this._processContacts(collideEvents, '_collisions', 'shapeIdA', 'shapeIdB');
+			this._processContacts(overlapEvents, '_overlappers', 'sensorShapeId', 'visitorShapeId');
+			this._processJoints(jointEvents);
 
 			this.physicsTime += timeStep;
 
@@ -4946,7 +4961,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.Camera = class {
+	$.Camera = class {
 		constructor() {
 			// camera position
 			this._pos = $.createVector.call($);
@@ -5129,7 +5144,7 @@ async function q5playPreSetup() {
 		}
 	}; //end camera class
 
-	this.Joint = class {
+	$.Joint = class {
 		constructor(spriteA, spriteB, type) {
 			let a = spriteA,
 				b = spriteB;
@@ -5246,6 +5261,10 @@ async function q5playPreSetup() {
 			j.base.localFrameB.q = b2InvMulRot(qB, b2Rot_identity);
 
 			this.jID = b2CreateWeldJoint(wID, j);
+			jointDict[this.jID.index1] = this;
+
+			this.forceThreshold = 500;
+			this.torqueThreshold = 500;
 		}
 
 		_display() {
@@ -5266,6 +5285,20 @@ async function q5playPreSetup() {
 		}
 		set draw(val) {
 			this._draw = val;
+		}
+
+		get forceThreshold() {
+			return b2Joint_GetForceThreshold(this.jID);
+		}
+		set forceThreshold(val) {
+			b2Joint_SetForceThreshold(this.jID, val);
+		}
+
+		get torqueThreshold() {
+			return b2Joint_GetTorqueThreshold(this.jID);
+		}
+		set torqueThreshold(val) {
+			b2Joint_SetTorqueThreshold(this.jID, val);
 		}
 
 		_setOffsetA(x, y) {
@@ -5417,13 +5450,13 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.GlueJoint = class extends $.Joint {
+	$.GlueJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'glue');
 		}
 	};
 
-	this.DistanceJoint = class extends $.Joint {
+	$.DistanceJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'distance');
 
@@ -5451,7 +5484,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.WheelJoint = class extends $.Joint {
+	$.WheelJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'wheel');
 
@@ -5509,7 +5542,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.HingeJoint = class extends $.Joint {
+	$.HingeJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'hinge');
 
@@ -5576,7 +5609,7 @@ async function q5playPreSetup() {
 	};
 	$.RevoluteJoint = $.HingeJoint;
 
-	this.SliderJoint = class extends $.Joint {
+	$.SliderJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'slider');
 
@@ -5642,7 +5675,7 @@ async function q5playPreSetup() {
 	};
 	$.PrismaticJoint = $.SliderJoint;
 
-	this.RopeJoint = class extends $.Joint {
+	$.RopeJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'rope');
 
@@ -5667,7 +5700,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.GrabberJoint = class extends this.Joint {
+	$.GrabberJoint = class extends $.Joint {
 		constructor(sprite) {
 			super(sprite, sprite, 'grabber');
 
@@ -5847,7 +5880,7 @@ async function q5playPreSetup() {
 		}
 	];
 
-	this.colorPal = (c, palette) => {
+	$.colorPal = (c, palette) => {
 		if (c instanceof p5.Color) return c;
 		if (typeof palette == 'number') {
 			palette = $.q5play.palettes[palette];
@@ -5858,7 +5891,7 @@ async function q5playPreSetup() {
 		return $.color(clr);
 	};
 
-	this.EmojiImage = function (emoji, textSize) {
+	$.EmojiImage = function (emoji, textSize) {
 		textSize *= $.q5play.emojiScale;
 		let size = textSize * 1.25;
 		let g = $.createGraphics(size, size, $.P2D);
@@ -5900,7 +5933,7 @@ async function q5playPreSetup() {
 		return g;
 	};
 
-	this.spriteArt = (txt, scale, palette) => {
+	$.spriteArt = (txt, scale, palette) => {
 		scale ??= 1;
 		if (typeof palette == 'number') {
 			palette = $.q5play.palettes[palette];
@@ -5938,7 +5971,7 @@ async function q5playPreSetup() {
 		return img; // return the p5 graphics object
 	};
 
-	this.parseTextureAtlas = function (xml) {
+	$.parseTextureAtlas = function (xml) {
 		let doc = xml.DOM || (xml instanceof Document ? xml : new DOMParser().parseFromString(xml.text || xml, 'text/xml'));
 		let subTextures = doc.querySelectorAll('SubTexture'),
 			atlas = {};
@@ -5955,7 +5988,7 @@ async function q5playPreSetup() {
 		return atlas;
 	};
 
-	this.animation = function (ani, dx, dy, dw, dh) {
+	$.animation = function (ani, dx, dy, dw, dh) {
 		// Draw the current frame
 		let img = ani[ani._frame];
 		if (img !== undefined) {
@@ -6027,7 +6060,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.delay = (milliseconds) => {
+	$.delay = (milliseconds) => {
 		if (!milliseconds) return new Promise(requestAnimationFrame);
 		// else it wraps setTimeout in a Promise
 		return new Promise((resolve) => {
@@ -6115,7 +6148,7 @@ async function q5playPreSetup() {
 
 	const _createCanvas = $.createCanvas;
 
-	this.createCanvas = function () {
+	$.createCanvas = function () {
 		let args = [...arguments];
 
 		// prevent p5.js v1 overriding the user's canvas with a new default canvas
@@ -6231,11 +6264,11 @@ async function q5playPreSetup() {
 		return rend;
 	};
 
-	this.canvas = $.canvas;
+	$.canvas = $.canvas;
 
 	const _resizeCanvas = $.resizeCanvas;
 
-	this.resizeCanvas = (w, h) => {
+	$.resizeCanvas = (w, h) => {
 		w ??= window.innerWidth;
 		h ??= window.innerHeight;
 		_resizeCanvas.call($, w, h);
@@ -6264,7 +6297,7 @@ async function q5playPreSetup() {
 
 	const _frameRate = $.frameRate;
 
-	this.frameRate = function (hz) {
+	$.frameRate = function (hz) {
 		let ret = _frameRate.call($, hz);
 		if (hz) $.world._setTimeStep();
 		return ret;
@@ -6375,13 +6408,11 @@ async function q5playPreSetup() {
 		}
 	}
 
-	this.allSprites = new $.Group();
+	$.allSprites = new $.Group();
+	$.world = new $.World();
+	$.camera = new $.Camera();
 
-	this.world = new $.World();
-
-	this.camera = new $.Camera();
-
-	this.InputDevice = class {
+	$.InputDevice = class {
 		constructor() {
 			this.holdThreshold = 12;
 
@@ -6442,7 +6473,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this._Mouse = class extends $.InputDevice {
+	$._Mouse = class extends $.InputDevice {
 		constructor() {
 			super();
 			this._default = 'left';
@@ -6561,7 +6592,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.mouse = new $._Mouse();
+	$.mouse = new $._Mouse();
 
 	let pressAmt = 0;
 
@@ -6635,7 +6666,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this._Touch = class extends $.InputDevice {
+	$._Touch = class extends $.InputDevice {
 		constructor(touch) {
 			super();
 
@@ -6737,7 +6768,7 @@ async function q5playPreSetup() {
 		if ($.touchEnded && !$.touchEnded(e)) e.preventDefault();
 	};
 
-	this._Keyboard = class extends $.InputDevice {
+	$._Keyboard = class extends $.InputDevice {
 		constructor() {
 			super();
 			this._default = ' ';
@@ -6854,9 +6885,9 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.kb = new $._Keyboard();
+	$.kb = new $._Keyboard();
 
-	this.keyboard = $.kb;
+	$.keyboard = $.kb;
 
 	if (typeof navigator == 'object' && navigator.keyboard) {
 		const keyboard = navigator.keyboard;
@@ -6937,7 +6968,7 @@ async function q5playPreSetup() {
 		window.addEventListener('keyup', onkeyup.bind(this));
 	}
 
-	this.Contro = class extends $.InputDevice {
+	$.Contro = class extends $.InputDevice {
 		constructor(gp) {
 			super();
 			this._default = 'a';
@@ -7188,7 +7219,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this._Contros = class extends Array {
+	$._Contros = class extends Array {
 		constructor() {
 			super();
 			if (window) {
@@ -7296,13 +7327,12 @@ async function q5playPreSetup() {
 		}
 	};
 
-	this.contros = new $._Contros();
+	$.contros = new $._Contros();
+	$.controllers = $.contros;
 
-	this.controllers = $.contros;
+	$.contro = new $.Contro('mock0');
 
-	this.contro = new $.Contro('mock0');
-
-	this.getFPS ??= () => $.q5play._fps;
+	$.getFPS ??= () => $.q5play._fps;
 
 	let fpsHistory = new Array(180).fill(60),
 		fpsPos = 0,
@@ -7662,7 +7692,7 @@ function q5playPostSetup() {
 		if (!$._q5) window.draw = () => {};
 	}
 
-	this.update ??= () => {};
+	$.update ??= () => {};
 
 	$._setupDone = true;
 }
@@ -7670,6 +7700,7 @@ function q5playPostSetup() {
 // called before each draw function call
 function q5playPreDraw() {
 	const $ = this;
+
 	if (!$._q5) {
 		$.q5play._preDrawFrameTime = performance.now();
 	}
@@ -7705,6 +7736,7 @@ function q5playPreDraw() {
 // called after each draw function call
 function q5playPostDraw() {
 	const $ = this;
+
 	$.q5play._inPostDraw = true;
 
 	if ($.allSprites._autoDraw) {
