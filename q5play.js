@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha17
+ * @version 4.0-alpha18
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha17';
+let q5play_version = 'alpha18';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -945,9 +945,9 @@ async function q5playPreSetup() {
 			this.physics = physicsType;
 
 			if (!group.visualOnly) {
-				const bodyDef = new b2DefaultBodyDef();
-				bodyDef.type = b2BodyTypes[this._phys];
-				this.bdID = b2CreateBody(wID, bodyDef);
+				const def = new b2DefaultBodyDef();
+				def.type = b2BodyTypes[this._phys];
+				this.bdID = b2CreateBody(wID, def);
 				this._physicsEnabled = true;
 
 				this._shapes = [];
@@ -1439,12 +1439,12 @@ async function q5playPreSetup() {
 						shape = null;
 						this.isSuperFast = true;
 					} else {
-						let chainDef = new b2DefaultChainDef();
-						chainDef.SetPoints([vecs[0], ...vecs, vecs.at(-1)]);
-						chainDef.isLoop = vecs.isLoop;
-						chainDef.SetMaterials([{ customColor: this._uid }]);
+						let def = new b2DefaultChainDef();
+						def.SetPoints([vecs[0], ...vecs, vecs.at(-1)]);
+						def.isLoop = vecs.isLoop;
+						def.SetMaterials([{ customColor: this._uid }]);
 
-						id = b2CreateChain(bdID, chainDef);
+						id = b2CreateChain(bdID, def);
 						shape._init(id, 6, geom);
 					}
 				}
@@ -4558,10 +4558,10 @@ async function q5playPreSetup() {
 		constructor() {
 			this.mod = {};
 
-			const worldDef = b2DefaultWorldDef();
-			worldDef.gravity.Set(0, 0);
+			const def = b2DefaultWorldDef();
+			def.gravity.Set(0, 0);
 
-			this.wID = wID = b2CreateWorld(worldDef);
+			this.wID = wID = b2CreateWorld(def);
 
 			let _this = this;
 			this._gravity = {
@@ -4590,20 +4590,13 @@ async function q5playPreSetup() {
 			this._syncedToFrameRate = true;
 			this._lastStepTime = 0;
 			this._setTimeStep();
-
-			this.subSteps = 4;
-
 			this.bounceThreshold = 0.19;
-
 			this.physicsTime = 0;
-
 			this.mouseTracking ??= true;
-
 			this.mouseSprite = null;
-
 			this.mouseSprites = [];
-
 			this.autoStep = true;
+			this.subSteps = 4;
 
 			this.step = this.physicsUpdate;
 
@@ -5049,10 +5042,12 @@ async function q5playPreSetup() {
 			let destIdx = this._destIdx;
 			let steps = Math.ceil(c / speed);
 
+			// TODO: change position in camera.update()
 			return (async () => {
 				for (let i = 0; i < steps; i++) {
 					this.x += velX;
 					this.y += velY;
+
 					await $.delay(16);
 					if (destIdx != this._destIdx) return false;
 				}
@@ -5091,6 +5086,8 @@ async function q5playPreSetup() {
 
 			this._zoomIdx++;
 			let zoomIdx = this._zoomIdx;
+
+			// TODO: change zoom in camera.update()
 			return (async () => {
 				for (let i = 0; i < frames; i++) {
 					if (zoomIdx != this._zoomIdx) return false;
@@ -5127,18 +5124,20 @@ async function q5playPreSetup() {
 
 	this.Joint = class {
 		constructor(spriteA, spriteB, type) {
-			if (!spriteA?._isSprite || !spriteB?._isSprite) {
+			let a = spriteA,
+				b = spriteB;
+
+			if (!a?._isSprite || !b?._isSprite) {
 				throw new Error('The Joint constructor requires two sprites as input.');
 			}
 
-			if (!spriteA._shapes.length) spriteA.addDefaultSensors();
-			if (!spriteB._shapes.length) spriteB.addDefaultSensors();
-
-			this.spriteA = spriteA;
-			this.spriteB = spriteB;
-
+			this.spriteA = a;
+			this.spriteB = b;
 			this.type = type ??= 'glue';
 			this.visible = true;
+
+			if (!a._shapes.length) a.addDefaultSensors();
+			if (!b._shapes.length) b.addDefaultSensors();
 
 			this._oAx = this._oAy = this._oBx = this._oBy = 0;
 
@@ -5221,18 +5220,12 @@ async function q5playPreSetup() {
 			}
 			Object.defineProperties(this, def);
 
-			spriteA.joints.push(this);
-			spriteB.joints.push(this);
+			a.joints.push(this);
+			if (a != b) b.joints.push(this);
 
 			if (type != 'glue') return;
 
-			let j = this._init(b2DefaultWeldJointDef());
-			this.jID = b2CreateWeldJoint(wID, j);
-		}
-
-		_init(j) {
-			let a = this.spriteA,
-				b = this.spriteB;
+			let j = b2DefaultWeldJointDef();
 
 			j.base.bodyIdA = a.bdID;
 			j.base.bodyIdB = b.bdID;
@@ -5245,7 +5238,7 @@ async function q5playPreSetup() {
 			let qB = b2Body_GetRotation(b.bdID);
 			j.base.localFrameB.q = b2InvMulRot(qB, b2Rot_identity);
 
-			return j;
+			this.jID = b2CreateWeldJoint(wID, j);
 		}
 
 		_display() {
@@ -5669,22 +5662,31 @@ async function q5playPreSetup() {
 
 	this.GrabberJoint = class extends this.Joint {
 		constructor(sprite) {
-			super(sprite, sprite, 'grab');
+			super(sprite, sprite, 'grabber');
 
-			this._target = { x: 0, y: 0 };
-			this.__target = new b2Vec2(0, 0);
+			let bd = b2DefaultBodyDef();
+			bd.type = 1; // KIN
+			bd.enableSleep = false;
 
-			let j = pl.MouseJoint(
-				{
-					maxForce: 1000,
-					frequencyHz: 3,
-					dampingRatio: 0.9,
-					target: sprite.body.getPosition()
-				},
-				sprite.body,
-				sprite.body
-			);
-			this._createJoint(j);
+			this._target = { x: 0, y: 0, bdID: b2CreateBody(wID, bd) };
+
+			let j = b2DefaultMotorJointDef();
+			j.base.bodyIdA = this._target.bdID;
+			j.base.bodyIdB = sprite.bdID;
+			j.linearHertz = 7.5;
+			j.linearDampingRatio = 1.0;
+
+			let data = b2Body_GetMassData(sprite.bdID);
+
+			let mg = data.mass * Math.abs($.world.gravity.y);
+			j.maxSpringForce = 100 * mg;
+
+			if (data.mass) {
+				let lever = Math.sqrt(data.rotationalInertia / data.mass);
+				j.maxVelocityTorque = 0.25 * lever * mg;
+			}
+
+			this.jID = b2CreateMotorJoint(wID, j);
 		}
 
 		_draw() {
@@ -5695,18 +5697,26 @@ async function q5playPreSetup() {
 			return this._target;
 		}
 		set target(pos) {
-			this._target.x = pos.x;
-			this._target.y = pos.y;
-			this.__target.x = pos.x / meterSize;
-			this.__target.y = pos.y / meterSize;
-			this._j.setTarget(this.__target);
+			let x = pos[0] ?? pos.x ?? 0,
+				y = pos[1] ?? pos.y ?? 0;
+
+			this._target.x = x;
+			this._target.y = y;
+
+			let t = new b2Transform();
+			t.p = scaleTo(x, y);
+			t.q = b2Rot_identity;
+
+			b2Body_SetTargetTransform(this._target.bdID, t, $.world._timeStep);
+
+			// b2Body_SetTransform(this._target.bdID, scaleTo(x, y), b2Rot_identity);
 		}
 
 		get maxForce() {
-			return this._j.getMaxForce();
+			return Box2D.b2MotorJoint_GetMaxSpringForce(this.jID);
 		}
 		set maxForce(val) {
-			this._j.setMaxForce(val);
+			Box2D.b2MotorJoint_SetMaxSpringForce(this.jID, val);
 		}
 	};
 
@@ -6016,23 +6026,6 @@ async function q5playPreSetup() {
 		return new Promise((resolve) => {
 			setTimeout(resolve, milliseconds);
 		});
-	};
-
-	this.sleep = (milliseconds) => {
-		if (!milliseconds) {
-			return new Promise((resolve) => {
-				if ($.canvas.dispatchEvent) {
-					function handler() {
-						$.canvas.removeEventListener('q5play_worldStepped', handler);
-						resolve();
-					}
-					$.canvas.addEventListener('q5play_worldStepped', handler);
-				} else {
-					setTimeout(resolve, $.world._timeStep * 1000);
-				}
-			});
-		}
-		return $.delay(milliseconds);
 	};
 
 	async function playIntro() {
@@ -6371,7 +6364,7 @@ async function q5playPreSetup() {
 				msg += m;
 			}
 
-			p5._friendlyError(msg, func);
+			Q5._friendlyError(msg, func);
 		}
 	}
 
@@ -6446,6 +6439,11 @@ async function q5playPreSetup() {
 		constructor() {
 			super();
 			this._default = 'left';
+			this._visible = true;
+			this._cursor = 'default';
+			this._ogX = 0;
+			this._ogY = 0;
+
 			this.x = 0;
 			this.y = 0;
 			this.canvasPos = {};
@@ -6456,10 +6454,6 @@ async function q5playPreSetup() {
 			this.right = 0;
 			this.scroll = 0;
 			this.scrollDelta = { x: 0, y: 0 };
-			this._visible = true;
-			this._cursor = 'default';
-			this._ogX = 0;
-			this._ogY = 0;
 
 			let _this = this;
 
@@ -7448,8 +7442,8 @@ async function q5playPreSetup() {
 			else if (type == 3 || type == 4) dataLen = 5;
 			let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
 
-			if (!s && type == 0) {
-				jointStack.push(...data);
+			if (!s) {
+				if (type == 0) jointStack.push(...data);
 				continue;
 			}
 
@@ -7641,7 +7635,7 @@ async function q5playPreSetup() {
 	}
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','animation'];
+	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','animation'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
