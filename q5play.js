@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha18
+ * @version 4.0-alpha19
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha18';
+let q5play_version = 'alpha19';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -356,7 +356,7 @@ async function q5playPreSetup() {
 	$.STA = $.STATIC = 'static';
 	$.KIN = $.KINEMATIC = 'kinematic';
 
-	let b2BodyTypes = [b2BodyType.b2_dynamicBody, b2BodyType.b2_staticBody, b2BodyType.b2_kinematicBody];
+	let bodyTypes = [b2BodyType.b2_dynamicBody, b2BodyType.b2_staticBody, b2BodyType.b2_kinematicBody];
 
 	const Shape = class {
 		constructor(sprite) {
@@ -946,7 +946,7 @@ async function q5playPreSetup() {
 
 			if (!group.visualOnly) {
 				const def = new b2DefaultBodyDef();
-				def.type = b2BodyTypes[this._phys];
+				def.type = bodyTypes[this._phys];
 				this.bdID = b2CreateBody(wID, def);
 				this._physicsEnabled = true;
 
@@ -1637,7 +1637,7 @@ async function q5playPreSetup() {
 
 			if (this.watch) this.mod[8] = true;
 
-			if (this.bdID) b2Body_SetType(this.bdID, b2BodyTypes[val]);
+			if (this.bdID) b2Body_SetType(this.bdID, bodyTypes[val]);
 			this._phys = val;
 		}
 
@@ -2760,6 +2760,13 @@ async function q5playPreSetup() {
 			if (velX || velY) {
 				this._setVel(velX, velY);
 			}
+		}
+
+		_setTargetTransform(x, y, rotation) {
+			let t = new b2Transform();
+			t.p = scaleTo(x, y);
+			t.q = b2MakeRot(rotation);
+			b2Body_SetTargetTransform(this.bdID, t, $.world._timeStep);
 		}
 
 		delete() {
@@ -5665,7 +5672,7 @@ async function q5playPreSetup() {
 			super(sprite, sprite, 'grabber');
 
 			let bd = b2DefaultBodyDef();
-			bd.type = 1; // KIN
+			bd.type = bodyTypes[2]; // KIN
 			bd.enableSleep = false;
 
 			this._target = { x: 0, y: 0, bdID: b2CreateBody(wID, bd) };
@@ -5705,7 +5712,7 @@ async function q5playPreSetup() {
 
 			let t = new b2Transform();
 			t.p = scaleTo(x, y);
-			t.q = b2Rot_identity;
+			t.q = ZERO_ROT;
 
 			b2Body_SetTargetTransform(this._target.bdID, t, $.world._timeStep);
 
