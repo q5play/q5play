@@ -12,14 +12,14 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha20
+ * @version 4.0-alpha21
  * @author quinton-ashley
  * @license q5play License
  * @website https://q5play.org
  */
 
 // will use semver minor after v4.0 is released
-let q5play_version = 'alpha20';
+let q5play_version = 'alpha21';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -192,8 +192,6 @@ async function q5playPreSetup() {
 
 		b2Joint_IsValid,
 		b2Joint_WakeBodies,
-		b2Joint_GetLocalFrameA,
-		b2Joint_GetLocalFrameB,
 		b2Joint_SetLocalFrameA,
 		b2Joint_SetLocalFrameB,
 		b2Joint_GetCollideConnected,
@@ -4717,7 +4715,8 @@ async function q5playPreSetup() {
 			for (let i = 0; i < events.count; i++) {
 				const evt = events.GetJointEvent(i),
 					j = jointDict[evt.jointId.index1];
-				j.delete();
+
+				j.onStrain();
 			}
 		}
 
@@ -5213,53 +5212,12 @@ async function q5playPreSetup() {
 				}
 			});
 
-			// _this._j['m_localAnchor' + l][axis] = val / meterSize;
-			// if (_this.type == 'distance' || _this.type == 'rope') {
-			// 	_this._j.m_length = b2Vec2.distance(
-			// 		_this._j.m_bodyA.getWorldPoint(_this._j.m_localAnchorA),
-			// 		_this._j.m_bodyB.getWorldPoint(_this._j.m_localAnchorB)
-			// 	);
-			// } else if (_this.type == 'hinge' || _this.type == 'wheel') {
-			// 	let o;
-			// 	if (l == 'A') o = 'B';
-			// 	else o = 'A';
-			// 	// body o's local point of body l anchor's world point
-			// 	_this._j['m_localAnchor' + o][axis] = _this._j['m_body' + o].getLocalPoint(
-			// 		_this._j['m_body' + l].getWorldPoint(_this._j['m_localAnchor' + l])
-			// 	)[axis];
-
-			let removeProps = [];
-			if (type == 'distance' || type == 'glue' || type == 'rope') {
-				removeProps.push('enableMotor', 'maxPower', 'motorSpeed', 'power', 'speed');
-			}
-			if (type == 'rope') {
-				removeProps.push('damping', 'springiness');
-			}
-
-			let def = {};
-			for (let prop of removeProps) {
-				def[prop] = { value: null, enumerable: false };
-			}
-			Object.defineProperties(this, def);
-
 			a.joints.push(this);
 			if (a != b) b.joints.push(this);
 
 			if (type != 'glue') return;
 
-			let j = b2DefaultWeldJointDef();
-
-			j.base.bodyIdA = a.bdID;
-			j.base.bodyIdB = b.bdID;
-
-			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
-
-			let qA = b2Body_GetRotation(a.bdID);
-			j.base.localFrameA.q = b2InvMulRot(qA, b2Rot_identity);
-
-			let qB = b2Body_GetRotation(b.bdID);
-			j.base.localFrameB.q = b2InvMulRot(qB, b2Rot_identity);
-
+			let j = this._init(b2DefaultWeldJointDef());
 			this.jID = b2CreateWeldJoint(wID, j);
 			jointDict[this.jID.index1] = this;
 
@@ -5267,17 +5225,35 @@ async function q5playPreSetup() {
 			this.torqueThreshold = 500;
 		}
 
+		_init(j) {
+			let a = this.spriteA,
+				b = this.spriteB;
+
+			j.base.bodyIdA = a.bdID;
+			j.base.bodyIdB = b.bdID;
+
+			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+
+			let qA = b2Body_GetRotation(a.bdID);
+			let qB = b2Body_GetRotation(b.bdID);
+			j.base.localFrameA.q = b2InvMulRot(qA, qB);
+
+			return j;
+		}
+
 		_display() {
-			this._draw(this.spriteA.x, this.spriteA.y, this.spriteB.x, this.spriteB.y);
+			this._draw(
+				this.spriteA.x + this._oAx,
+				this.spriteA.y + this._oAy,
+				this.spriteB.x + this._oBx,
+				this.spriteB.y + this._oBy
+			);
 			this.visible = null;
 		}
 
 		_draw(xA, yA, xB, yB) {
-			if (yB) {
-				$.line(xA, yA, xB, yB);
-			} else {
-				$.point(xA, yA);
-			}
+			if (xB) $.line(xA, yA, xB, yB);
+			else $.point(xA, yA);
 		}
 
 		get draw() {
@@ -5285,6 +5261,21 @@ async function q5playPreSetup() {
 		}
 		set draw(val) {
 			this._draw = val;
+		}
+
+		get collideConnected() {
+			return b2Joint_GetCollideConnected(this.jID);
+		}
+		set collideConnected(val) {
+			b2Joint_SetCollideConnected(this.jID, val);
+		}
+
+		get constraintForce() {
+			return b2Joint_GetConstraintForce(this.jID);
+		}
+
+		get constraintTorque() {
+			return b2Joint_GetConstraintTorque(this.jID);
 		}
 
 		get forceThreshold() {
@@ -5299,6 +5290,16 @@ async function q5playPreSetup() {
 		}
 		set torqueThreshold(val) {
 			b2Joint_SetTorqueThreshold(this.jID, val);
+		}
+
+		onStrain() {
+			this.spriteA.speed = 0;
+			this.spriteA.rotationSpeed = 0;
+
+			this.spriteB.speed = 0;
+			this.spriteB.rotationSpeed = 0;
+
+			this.delete();
 		}
 
 		_setOffsetA(x, y) {
@@ -5347,10 +5348,7 @@ async function q5playPreSetup() {
 			this._setOffsetB(x, y);
 		}
 
-		get springiness() {
-			return this._springiness;
-		}
-		set springiness(val) {
+		_springMap(val) {
 			if (val > 0) {
 				if (val < 0.1) {
 					val = $.map(val, 0, 0.1, 30, 4);
@@ -5364,75 +5362,7 @@ async function q5playPreSetup() {
 					val = $.map(val, 0.9, 1.0, 0.5, 0.2);
 				}
 			}
-			this._springiness = val;
-
-			if (this.type != 'wheel') return this._j.setFrequency(val);
-			this._j.setSpringFrequencyHz(val);
-		}
-
-		get damping() {
-			if (this.type != 'wheel') {
-				return this._j.getDampingRatio();
-			}
-			return this._j.getSpringDampingRatio();
-		}
-		set damping(val) {
-			if (this.type != 'wheel') {
-				this._j.setDampingRatio(val);
-				return;
-			}
-			this._j.setSpringDampingRatio(val);
-		}
-
-		get speed() {
-			return this._j.getJointSpeed();
-		}
-		set speed(val) {
-			if (!this._j.isMotorEnabled()) {
-				this._j.enableMotor(true);
-			}
-			this._j.setMotorSpeed(val);
-		}
-
-		get motorSpeed() {
-			return this._j.getMotorSpeed();
-		}
-
-		get enableMotor() {
-			return this._j.isMotorEnabled();
-		}
-		set enableMotor(val) {
-			this._j.enableMotor(val);
-		}
-
-		get maxPower() {
-			return this._j.getMaxMotorTorque();
-		}
-		set maxPower(val) {
-			if (!this._j.isMotorEnabled() && val) {
-				this._j.enableMotor(true);
-			}
-			this._j.setMaxMotorTorque(val);
-			if (!val) this._j.enableMotor(false);
-		}
-
-		get power() {
-			return this._j.getMotorTorque();
-		}
-
-		get collideConnected() {
-			return this._j.getCollideConnected();
-		}
-		set collideConnected(val) {
-			this._j.m_collideConnected = val;
-		}
-
-		get reactionForce() {
-			return this._j.getReactionForce($.world._timeStep);
-		}
-
-		get reactionTorque() {
-			return this._j.getReactionTorque($.world._timeStep);
+			return val;
 		}
 
 		delete() {
@@ -5454,6 +5384,23 @@ async function q5playPreSetup() {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'glue');
 		}
+
+		get springiness() {
+			return Box2D.b2WeldJoint_GetLinearHertz(this.jID);
+		}
+		set springiness(val) {
+			val = this._springMap(val);
+			Box2D.b2WeldJoint_SetLinearHertz(this.jID, val);
+			Box2D.b2WeldJoint_SetAngularHertz(this.jID, val);
+		}
+
+		get damping() {
+			return Box2D.b2WeldJoint_GetLinearDampingRatio(this.jID);
+		}
+		set damping(val) {
+			Box2D.b2WeldJoint_SetLinearDampingRatio(this.jID, val);
+			Box2D.b2WeldJoint_SetAngularDampingRatio(this.jID, val);
+		}
 	};
 
 	$.DistanceJoint = class extends $.Joint {
@@ -5462,25 +5409,88 @@ async function q5playPreSetup() {
 
 			let j = this._init(b2DefaultDistanceJointDef());
 			this.jID = b2CreateDistanceJoint(wID, j);
+			jointDict[this.jID.index1] = this;
+
+			this.length = $.dist(spriteA.x, spriteA.y, spriteB.x, spriteB.y);
+			this.springEnabled = true;
 		}
 
-		_display() {
-			let ancA, ancB;
-			if (this.offsetA.x || this.offsetA.y) {
-				ancA = this.spriteA.body.getWorldPoint(this._j.m_localAnchorA);
-				ancA = scaleFrom(ancA.x, ancA.y);
-			}
-			if (this.offsetB.x || this.offsetB.y) {
-				ancB = this.spriteB.body.getWorldPoint(this._j.m_localAnchorB);
-				ancB = scaleFrom(ancB.x, ancB.y);
-			}
-			this._draw(
-				!ancA ? this.spriteA.x : ancA.x,
-				!ancA ? this.spriteA.y : ancA.y,
-				!ancB ? this.spriteB.x : ancB.x,
-				!ancB ? this.spriteB.y : ancB.y
-			);
-			this.visible = null;
+		get currentLength() {
+			return Box2D.b2DistanceJoint_GetCurrentLength(this.jID) * meterSize;
+		}
+
+		get length() {
+			return Box2D.b2DistanceJoint_GetLength(this.jID) * meterSize;
+		}
+		set length(val) {
+			Box2D.b2DistanceJoint_SetLength(this.jID, val / meterSize);
+		}
+
+		get limitEnabled() {
+			return Box2D.b2DistanceJoint_IsLimitEnabled(this.jID);
+		}
+		set limitEnabled(val) {
+			return Box2D.b2DistanceJoint_EnableLimit(this.jID, val);
+		}
+
+		get minLength() {
+			return Box2D.b2DistanceJoint_GetMinLength(this.jID) * meterSize;
+		}
+
+		get maxLength() {
+			return Box2D.b2DistanceJoint_GetMaxLength(this.jID) * meterSize;
+		}
+
+		set lengthRange(val) {
+			this.limitEnabled = true;
+			Box2D.b2DistanceJoint_SetLengthRange(this.jID, val[0] / meterSize, val[1] / meterSize);
+		}
+
+		get springEnabled() {
+			return Box2D.b2DistanceJoint_IsSpringEnabled(this.jID);
+		}
+		set springEnabled(val) {
+			return Box2D.b2DistanceJoint_EnableSpring(this.jID, val);
+		}
+
+		get springiness() {
+			return Box2D.b2DistanceJoint_GetSpringHertz(this.jID);
+		}
+		set springiness(val) {
+			val = this._springMap(val);
+			Box2D.b2DistanceJoint_SetSpringHertz(this.jID, val);
+		}
+
+		get damping() {
+			return Box2D.b2DistanceJoint_GetSpringDampingRatio(this.jID);
+		}
+		set damping(val) {
+			Box2D.b2DistanceJoint_SetSpringDampingRatio(this.jID, val);
+		}
+
+		get motorEnabled() {
+			return Box2D.b2DistanceJoint_IsMotorEnabled(this.jID);
+		}
+		set motorEnabled(val) {
+			Box2D.b2DistanceJoint_EnableMotor(this.jID, val);
+		}
+
+		get speed() {
+			return Box2D.b2DistanceJoint_GetMotorSpeed(this.jID) * meterSize;
+		}
+		set speed(val) {
+			Box2D.b2DistanceJoint_SetMotorSpeed(this.jID, val / meterSize);
+		}
+
+		get maxPower() {
+			return Box2D.b2DistanceJoint_GetMaxMotorForce(this.jID) * meterSize;
+		}
+		set maxPower(val) {
+			Box2D.b2DistanceJoint_SetMaxMotorForce(this.jID, val / meterSize);
+		}
+
+		get motorForce() {
+			return Box2D.b2DistanceJoint_GetMotorForce(this.jID) * meterSize;
 		}
 	};
 
