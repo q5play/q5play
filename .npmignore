@@ -1,7 +1,2 @@
-dev
 .gitignore
 Icon
-jsconfig.json
-tests
-node_modules
-package-lock.json

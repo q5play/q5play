@@ -12,28 +12,44 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-alpha21
+ * @version 4.0-beta1
  * @author quinton-ashley
- * @license q5play License
  * @website https://q5play.org
  */
 
-// will use semver minor after v4.0 is released
-let q5play_version = 'alpha21';
+// will use semver minor after v4 is released
+let q5play_version = 'beta1';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
 	if (typeof globalThis.p5 != 'undefined') {
-		console.error('q5play is not compatible with p5.js yet.');
+		console.error(
+			'p5.js is not compatible with q5play. See this issue: https://github.com/processing/p5.js/issues/7737'
+		);
 	}
 }
 
+let box2dPromise;
+
 // called when a new instance of Q5 is created
-async function q5playPreSetup() {
-	const $ = this, // the q5 instance that called this function
-		log = console.log,
-		Box2DFactory = await import('box2d3-wasm'),
-		Box2D = await Box2DFactory.default({ pthreadCount: 0 });
+async function q5playPreSetup($, q) {
+	const log = console.log;
+
+	if (!box2dPromise) {
+		box2dPromise = (async () => {
+			let box2d3 = 'https://q5play.org/Box2D.deluxe.mjs';
+
+			try {
+				box2d3 = import.meta.resolve('box2d3-wasm');
+			} catch (e) {}
+
+			let Box2DFactory = await import(box2d3);
+			return await Box2DFactory.default({
+				pthreadCount: 0
+			});
+		})();
+	}
+	const Box2D = await box2dPromise;
 
 	const {
 		b2Vec2,
@@ -71,6 +87,7 @@ async function q5playPreSetup() {
 		b2World_CastRay,
 		b2World_CastRayClosest,
 		b2World_SetCustomFilterCallback,
+		b2World_SetPreSolveCallback,
 		b2World_GetGravity,
 		b2World_SetGravity,
 		b2World_Explode,
@@ -90,9 +107,6 @@ async function q5playPreSetup() {
 		b2Capsule,
 		b2Segment,
 
-		b2DefaultChainDef,
-		b2CreateChain,
-
 		b2CreatePolygonShape,
 		b2CreateCircleShape,
 		b2CreateCapsuleShape,
@@ -107,9 +121,11 @@ async function q5playPreSetup() {
 		b2Shape_SetRestitution,
 		b2Shape_GetSurfaceMaterial,
 		b2Shape_SetSurfaceMaterial,
+		b2Shape_EnablePreSolveEvents,
 		b2Shape_EnableContactEvents,
 		b2Shape_EnableSensorEvents,
 		b2Shape_EnableHitEvents,
+		b2Shape_ApplyWind,
 		b2Shape_GetCircle,
 		b2Shape_SetCircle,
 		b2Shape_GetCapsule,
@@ -126,6 +142,12 @@ async function q5playPreSetup() {
 
 		// get closest point on the shape to a target point
 		b2Shape_GetClosestPoint,
+
+		/* Chain */
+		b2DefaultChainDef,
+		b2CreateChain,
+		b2Chain_GetSegmentCount,
+		b2Chain_GetSegments,
 
 		/* Body */
 		b2BodyType,
@@ -222,11 +244,13 @@ async function q5playPreSetup() {
 			this.storeDeletedGroupRefs = true;
 			this.snapToGrid = false;
 			this.gridSize = 0.5;
+			this.emojiScale = 1;
 			this.os = {};
 			this.context = 'web';
 
-			if (window.matchMedia) this.hasMouse = window.matchMedia('(any-hover: none)').matches ? false : true;
-			else this.hasMouse = true;
+			if (window.matchMedia) {
+				this.hasMouse = window.matchMedia('(any-hover: none)').matches ? false : true;
+			} else this.hasMouse = true;
 			this.standardizeKeyboard = false;
 
 			if (typeof navigator == 'object') {
@@ -309,9 +333,6 @@ async function q5playPreSetup() {
 	// in q5play the default angle mode is degrees
 	const DEGREES = $.DEGREES;
 	$.angleMode(DEGREES);
-
-	$.rectMode($.CENTER);
-	$.imageMode($.CENTER);
 
 	const ZERO_ROT = b2MakeRot(0);
 
@@ -453,6 +474,13 @@ async function q5playPreSetup() {
 			}
 		}
 
+		_enablePreSolveEvents(val = true) {
+			if (!this._arePreSolveEventsEnabled) {
+				b2Shape_EnablePreSolveEvents(this.id, val);
+				this._arePreSolveEventsEnabled = val;
+			}
+		}
+
 		get density() {
 			return this._density;
 		}
@@ -480,7 +508,7 @@ async function q5playPreSetup() {
 
 			this._density = sprite.density || 1;
 			this._friction = sprite.friction || 0.5;
-			this._restitution = sprite.bounciness || 0;
+			this._restitution = sprite.bounciness || 0.2;
 			this._rollingResistance = 0;
 			this._tangentSpeed = 0;
 
@@ -556,7 +584,7 @@ async function q5playPreSetup() {
 		set img(val) {
 			if (typeof val == 'string') {
 				if (!val.includes('.')) {
-					val = new $.EmojiImage(val, this.w || 50);
+					val = new $.EmojiImage(val, this.w);
 				} else val = $.loadImage(val);
 			}
 			this._img = this._extendImage(val);
@@ -624,13 +652,16 @@ async function q5playPreSetup() {
 			return ani.promise;
 		}
 
-		addAnis(spriteSheet, frameSize, atlases) {
+		async addAnis(spriteSheet, frameSize, atlases) {
 			let args = [...arguments];
 
 			if (args.length == 3) {
 				this.anis.frameSize = frameSize;
 			}
 			if (args.length >= 2) {
+				if (typeof spriteSheet == 'string') {
+					spriteSheet = $.load(spriteSheet);
+				}
 				this.anis.spriteSheet = spriteSheet;
 			}
 			atlases = args.at(-1);
@@ -741,7 +772,7 @@ async function q5playPreSetup() {
 				}
 			}
 			// reset to frame 0 of that animation
-			if (this.resetAnimationsOnChange) ani._frame = 0;
+			if (this.resetAniOnChange) ani._frame = 0;
 			ani.name = label;
 			this.ani = ani;
 		}
@@ -753,6 +784,8 @@ async function q5playPreSetup() {
 	};
 
 	$.Sprite = class extends $.Visual {
+		static maxColliders = 128;
+
 		constructor(x, y, w, h, physicsType) {
 			super(); // Call Visual constructor
 
@@ -764,7 +797,7 @@ async function q5playPreSetup() {
 			let args = [...arguments];
 
 			let withSensor = false;
-			if (args[0] == null) {
+			if (args[0] === null) {
 				withSensor = true;
 				args.splice(0, 1);
 			}
@@ -1048,7 +1081,7 @@ async function q5playPreSetup() {
 					return this._x;
 				},
 				set(val) {
-					if (val == this._x) return;
+					if (!val || val == this._x) return;
 					if (_this.watch) _this.mod[26] = true;
 					let scaleX = Math.abs(val / this._x);
 					_this.scaleBy(scaleX, 1);
@@ -1063,7 +1096,7 @@ async function q5playPreSetup() {
 					return this._y;
 				},
 				set(val) {
-					if (val == this._y) return;
+					if (!val || val == this._y) return;
 					if (_this.watch) _this.mod[26] = true;
 					let scaleY = Math.abs(val / this._y);
 					_this.scaleBy(1, scaleY);
@@ -1112,7 +1145,9 @@ async function q5playPreSetup() {
 			if (typeof gvy == 'function') gvy = gvy(group.length - 1);
 			if (gvx || gvy) this.vel = { x: gvx, y: gvy };
 
-			this.scale = { x: group._scale._x, y: group._scale._y };
+			let gsc = group._scale;
+			if (typeof gsc == 'function') gsc = gsc(group.length - 1);
+			this.scale = gsc;
 
 			// inherit properties from group in the order they were added
 			// skip props that were already set above
@@ -1123,7 +1158,7 @@ async function q5playPreSetup() {
 					val = val.call(this, group.length - 1);
 				}
 				if (typeof val == 'object') {
-					if (val instanceof p5.Color) {
+					if (val instanceof Q5.Color) {
 						// make a copy of the color
 						this[prop] = $.color(val);
 					} else {
@@ -1229,9 +1264,18 @@ async function q5playPreSetup() {
 		// adds a collider or sensor to the sprite
 		// composed of a single shape, several shapes, or a chain
 		_add(isSensor, a0, a1, a2, a3, a4) {
+			if (this._shapes.length >= $.Sprite.maxColliders) {
+				if (!this._warnedMaxColliders) {
+					console.warn(`Sprite has too many colliders (${this._shapes.length}).
+This may be due to a memory leak. Increase Sprite.maxColliders to disable this warning.`);
+					this._warnedMaxColliders = true;
+				}
+				return;
+			}
+
 			let offsetX, offsetY, w, h, path;
 			let rr; // rounded radius
-			let id, geom, vertexMode, originMode;
+			let id, geom, originMode, absVerts;
 			let shapes = this._shapes;
 			// Track how many shapes existed before
 			let startingShapeCount = shapes.length;
@@ -1252,7 +1296,7 @@ async function q5playPreSetup() {
 				offsetY = 0;
 				a2 = a0;
 				a3 = a1;
-				vertexMode = true;
+				absVerts = true;
 			}
 
 			if (typeof a3 == 'string') {
@@ -1261,7 +1305,6 @@ async function q5playPreSetup() {
 			} else if (Array.isArray(a2)) {
 				path = a2;
 				rr = a3;
-				if (Array.isArray(path[0])) originMode = 'start';
 			} else {
 				w = a2;
 				h = a3;
@@ -1269,98 +1312,69 @@ async function q5playPreSetup() {
 			}
 			rr ??= 0;
 
-			// if (w is vertex array) or (side length and h is a
-			// collider type or the name of a regular polygon)
 			if (path) {
-				let isPolygon = false;
-				let vecs = [{ x: 0, y: 0 }];
-				let vert = { x: 0, y: 0 };
-				let min = { x: 0, y: 0 };
-				let max = { x: 0, y: 0 };
+				let vecs = [{ x: 0, y: 0 }],
+					isLoop = (vecs.isLoop = false);
 
-				vecs.isLoop = false;
-
-				// if the path is an array of position arrays
-				let usesVertices = Array.isArray(path[0]);
-
-				function checkVert() {
-					if (vert.x < min.x) min.x = vert.x;
-					if (vert.y < min.y) min.y = vert.y;
-					if (vert.x > max.x) max.x = vert.x;
-					if (vert.y > max.y) max.y = vert.y;
-				}
-
-				let x, y;
-				if (usesVertices) {
-					if (vertexMode) {
-						x = path[0][0];
-						y = path[0][1];
-						// log(x, y);
-
-						// TODO: implement this so that adding multiple colliders
-						// to a sprite in vertex mode works correctly
-						// if (!this.colliders.length || !this._relativeOrigin)
-						this.x = x;
-						this.y = y;
-						// } else {
-						// 	x = this.x - this._relativeOrigin.x;
-						// 	y = this.y - this._relativeOrigin.y;
-						// 	vecs.pop();
-						// }
-					}
+				if (typeof path[0] != 'number') {
+					let posX, posY;
+					let x = 0,
+						y = 0;
 					for (let i = 0; i < path.length; i++) {
-						if (vertexMode) {
-							if (i == 0 && !this.colliders.length) continue;
-							// verts are relative to the first vert
-							vert.x = path[i][0] - x;
-							vert.y = path[i][1] - y;
+						let p = path[i];
+						if (p.dist) {
+							x += p.dist * $.cos(p.angle);
+							y += p.dist * $.sin(p.angle);
 						} else {
-							vert.x += path[i][0];
-							vert.y += path[i][1];
+							x = p[0] ?? p.x;
+							y = p[1] ?? p.y;
 						}
-						vecs.push({ x: vert.x, y: vert.y });
 
-						checkVert();
+						if (absVerts) {
+							if (i == 0) {
+								this.pos = [x, y];
+								posX = x;
+								posY = y;
+								continue;
+							}
+							x -= posX;
+							y -= posY;
+						}
+
+						vecs.push({ x, y });
 					}
 				} else {
 					let rep = 1;
 					if (path.length % 2) rep = path[path.length - 1];
 					let mod = rep > 0 ? 1 : -1;
 					rep = Math.abs(rep);
-					let ang = 0;
+					let ang = 0,
+						x = 0,
+						y = 0;
 					for (let i = 0; i < rep; i++) {
 						for (let j = 0; j < path.length - 1; j += 2) {
 							let len = path[j];
 							ang += path[j + 1];
-							vert.x += len * $.cos(ang);
-							vert.y += len * $.sin(ang);
-							vecs.push({ x: vert.x, y: vert.y });
-
-							checkVert();
+							x += len * $.cos(ang);
+							y += len * $.sin(ang);
+							vecs.push({ x, y });
 						}
 						ang *= mod;
 					}
+					originMode = 'center';
 				}
 
 				let isConvex = false;
 				if (
-					isSlop(Math.abs(vecs[0].x) - Math.abs(vecs[vecs.length - 1].x)) &&
-					isSlop(Math.abs(vecs[0].y) - Math.abs(vecs[vecs.length - 1].y))
+					isSlop(Math.abs(vecs[0].x) - Math.abs(vecs.at(-1).x)) &&
+					isSlop(Math.abs(vecs[0].y) - Math.abs(vecs.at(-1).y))
 				) {
-					isPolygon = true;
 					originMode = 'center';
-					vecs.isLoop = true;
+					vecs.isLoop = isLoop = true;
 					if (this._isConvexPoly(vecs.slice(0, -1))) isConvex = true;
 				}
 
-				w = max.x - min.x;
-				h = max.y - min.y;
-
-				if (originMode == 'start') {
-					for (let i = 0; i < vecs.length; i++) {
-						vecs[i] = scaleTo(vecs[i].x, vecs[i].y);
-					}
-				} else {
+				if (originMode == 'center') {
 					// the center relative to the first vertex
 					let centerX = 0;
 					let centerY = 0;
@@ -1371,7 +1385,7 @@ async function q5playPreSetup() {
 
 					let vl = vecs.length;
 					// last vertex is same as first
-					if (isPolygon || isConvex) vl--;
+					if (isLoop || isConvex) vl--;
 					for (let i = 0; i < vl; i++) {
 						sumX += vecs[i].x;
 						sumY += vecs[i].y;
@@ -1379,39 +1393,24 @@ async function q5playPreSetup() {
 					centerX = sumX / vl;
 					centerY = sumY / vl;
 
-					if (!this.colliders.length) {
-						this._relativeOrigin = { x: centerX, y: centerY };
-					}
-
-					if (vertexMode && usesVertices) {
-						// if (!this.colliders.length) {
-						// repositions the sprite's x, y coordinates
-						// to be in the center of the shape
-						this.x += centerX;
-						this.y += centerY;
-						// } else {
-						// 	centerX = this._relativeOrigin.x;
-						// 	centerY = this._relativeOrigin.y;
-						// }
-					}
-
 					for (let i = 0; i < vecs.length; i++) {
 						let vec = vecs[i];
 						vecs[i] = scaleTo(vec.x + offsetX - centerX, vec.y + offsetY - centerY);
 					}
+				} else {
+					for (let i = 0; i < vecs.length; i++) {
+						vecs[i] = scaleTo(vecs[i].x, vecs[i].y);
+					}
 				}
 
-				if (!isConvex || vecs.length - 1 > 8) {
-					isPolygon = false;
-				}
-
-				if (isPolygon) {
+				if (isLoop && isConvex && vecs.length - 1 <= 8) {
 					let hull = b2ComputeHull(vecs);
 					geom = b2MakePolygon(hull, 0);
 
 					id = b2CreatePolygonShape(bdID, shape.def, geom);
 					shape._init(id, 1, geom);
 				} else {
+					if (!isLoop && this._phys == 0) this.physics = 1;
 					if (vecs.length == 2) {
 						if (!rr) {
 							geom = new b2Segment();
@@ -1427,13 +1426,13 @@ async function q5playPreSetup() {
 							id = b2CreateCapsuleShape(bdID, shape.def, geom);
 							shape._init(id, 4, geom);
 						}
-					} else if (this._phys != 1) {
+					} else if (this._phys == 2 || isLoop) {
 						// create several capsules to approximate a hollow shape (closed chain)
 						for (let i = 1; i < vecs.length; i++) {
 							geom = new b2Capsule();
 							geom.center1 = vecs[i - 1];
 							geom.center2 = vecs[i];
-							geom.radius = 0.12;
+							geom.radius = rr ? rr / meterSize : 0.02;
 							id = b2CreateCapsuleShape(bdID, shape.def, geom);
 							let shapePart = new Collider(this);
 							shape._init(id, 7, geom);
@@ -1443,13 +1442,25 @@ async function q5playPreSetup() {
 						shape = null;
 						this.isSuperFast = true;
 					} else {
-						let def = new b2DefaultChainDef();
-						def.SetPoints([vecs[0], ...vecs, vecs.at(-1)]);
-						def.isLoop = vecs.isLoop;
-						def.SetMaterials([{ customColor: this._uid }]);
+						let packedData = shape.def.material.customColor;
 
-						id = b2CreateChain(bdID, def);
-						shape._init(id, 6, geom);
+						shape.def = new b2DefaultChainDef();
+						shape.def.SetPoints([vecs[0], ...vecs, vecs.at(-1)]);
+						shape.def.isLoop = vecs.isLoop;
+						shape.def.SetMaterials([{ customColor: packedData }]);
+
+						id = b2CreateChain(bdID, shape.def);
+						shape._init(id, 6);
+
+						let count = b2Chain_GetSegmentCount(id);
+						let segments = b2Chain_GetSegments(id, count);
+						for (let segID of segments) {
+							let sh = new Collider(this);
+							sh._init(segID, 6);
+							shapes.push(sh);
+							shapeDict[segID.index1] = sh;
+						}
+						this._hasChain = true;
 					}
 				}
 			} else {
@@ -1493,7 +1504,7 @@ async function q5playPreSetup() {
 					shape._init(id, 0, geom);
 				}
 
-				// TODO: use AABB to get extents for multiple shapes
+				// TODO: use AABB to get extents
 				this._w = w;
 				this._hw = w * 0.5;
 				this._h = h;
@@ -1569,20 +1580,6 @@ async function q5playPreSetup() {
 			return body;
 		}
 
-		get autoUpdate() {
-			return this._autoUpdate;
-		}
-		set autoUpdate(val) {
-			this._autoUpdate = val;
-		}
-
-		get autoDraw() {
-			return this._autoDraw;
-		}
-		set autoDraw(val) {
-			this._autoDraw = val;
-		}
-
 		get allowSleeping() {
 			return b2Body_IsSleepEnabled(this.bdID);
 		}
@@ -1647,10 +1644,10 @@ async function q5playPreSetup() {
 
 		_parseColor(val) {
 			// false if color was copied with Object.assign
-			if (val instanceof p5.Color) {
+			if (val instanceof Q5.Color) {
 				return val;
 			} else if (typeof val != 'object' && val.length == 1) {
-				return $.colorPal(val);
+				return colorPal(val);
 			}
 			return $.color(val);
 		}
@@ -1699,24 +1696,12 @@ async function q5playPreSetup() {
 			this._strokeWeightData = [sw, hsw, qsw, hswScaled];
 		}
 
-		get textColor() {
-			return this._textFill;
-		}
-		set textColor(val) {
-			if (this.watch) this.mod[32] = true;
-			this._textFill = this._parseColor(val);
-		}
-		get textColour() {
-			return this._textFill;
-		}
-		set textColour(val) {
-			this.textColor = val;
-		}
 		get textFill() {
 			return this._textFill;
 		}
 		set textFill(val) {
-			this.textColor = val;
+			if (this.watch) this.mod[32] = true;
+			this._textFill = this._parseColor(val);
 		}
 
 		get textStroke() {
@@ -1842,6 +1827,7 @@ async function q5playPreSetup() {
 			return this._display;
 		}
 		set draw(val) {
+			this._userDefinedDraw = true;
 			this._draw = val;
 		}
 
@@ -1961,7 +1947,7 @@ async function q5playPreSetup() {
 			return this.colliders[0].rollingResistance;
 		}
 		set rollingResistance(val) {
-			if (this.watch) this.mod[43] = true;
+			if (this.watch) this.mod[27] = true;
 			for (let collider of this.colliders) {
 				collider.rollingResistance = val;
 			}
@@ -1971,7 +1957,7 @@ async function q5playPreSetup() {
 			if (!this._physicsEnabled || !usePhysics) return this._rotation || 0;
 			let val = b2Body_GetRotation(this.bdID).GetAngle();
 			if (friendlyRounding) val = fixRoundAngular(val);
-			return $._angleMode == DEGREES ? $.degrees(val) : val;
+			return (this._rotation = $._angleMode == DEGREES ? $.degrees(val) : val);
 		}
 		set rotation(val) {
 			this._rotation = val;
@@ -2006,6 +1992,8 @@ async function q5playPreSetup() {
 			b2Body_SetMotionLocks(this.bdID, locks);
 
 			// this.mass = mass;
+
+			console.error('rotationLock is not implemented yet');
 		}
 
 		get rotationSpeed() {
@@ -2128,13 +2116,6 @@ async function q5playPreSetup() {
 			this._tint = this._parseColor(val);
 		}
 
-		get tintColor() {
-			return this._tint;
-		}
-		set tintColor(val) {
-			this.tint = val;
-		}
-
 		get visible() {
 			return this._visible;
 		}
@@ -2152,6 +2133,7 @@ async function q5playPreSetup() {
 			this._posX = val;
 
 			if (this._physicsEnabled) {
+				b2Body_SetAwake(this.bdID, true);
 				let pos = scaleTo(val, this.y);
 				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
 			}
@@ -2165,6 +2147,7 @@ async function q5playPreSetup() {
 			this._posY = val;
 
 			if (this._physicsEnabled) {
+				b2Body_SetAwake(this.bdID, true);
 				let pos = scaleTo(this.x, val);
 				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
 			}
@@ -2174,11 +2157,14 @@ async function q5playPreSetup() {
 			return this._pos;
 		}
 		set pos(val) {
+			let x = val[0] ?? val.x;
+			let y = val[1] ?? val.y;
 			if (this._physicsEnabled) {
-				b2Body_SetTransform(this.bdID, scaleTo(val.x, val.y), b2Body_GetRotation(this.bdID));
+				b2Body_SetAwake(this.bdID, true);
+				b2Body_SetTransform(this.bdID, scaleTo(x, y), b2Body_GetRotation(this.bdID));
 			}
-			this._posX = val[0] ?? val.x;
-			this._posY = val[1] ?? val.y;
+			this._posX = x;
+			this._posY = y;
 		}
 
 		get position() {
@@ -2264,13 +2250,15 @@ async function q5playPreSetup() {
 		}
 		set d(val) {
 			if (val < 0) val = 0.01;
-			if (this._w == val) return;
+			// if same size and already a circle, do nothing
+			if (this._w == val && this._shapes[0]?.type == 3) return;
 
 			if (this.watch) this.mod[40] = true;
 
-			if (this._dimensionsUndef) {
-				// TODO change this
-				for (let shape of this._shapes) b2DestroyShape(shape.id, false);
+			if (this._dimensionsUndef || this._shapes[0]?.type != 3) {
+				while (this._shapes.length) {
+					this._shapes.at(-1).delete();
+				}
 				this._add(false, 0, 0, val);
 				this._dimensionsUndef = false;
 				this._w = val;
@@ -2285,20 +2273,6 @@ async function q5playPreSetup() {
 		}
 		set diameter(val) {
 			this.d = val;
-		}
-
-		get r() {
-			return this._hw;
-		}
-		set r(val) {
-			this.d = val * 2;
-		}
-
-		get radius() {
-			return this._hw;
-		}
-		set radius(val) {
-			this.d = val * 2;
 		}
 
 		/*
@@ -2536,7 +2510,7 @@ async function q5playPreSetup() {
 				}
 			}
 
-			if (!this._hasImagery) return;
+			if (!this._hasImagery && !this._userDefinedDraw) return;
 
 			let x = this._posX,
 				y = this._posY;
@@ -2594,17 +2568,20 @@ async function q5playPreSetup() {
 
 		// default draw
 		_draw() {
-			let g = this.ani || this._img;
+			if (this.ani) {
+				let g = this.ani;
 
-			let shouldScale = g._scale._avg != 1;
+				if (g._scale._avg != 1) $.scale(g._scale._x, g._scale._y);
 
-			if (shouldScale) $.scale(g._scale._x, g._scale._y);
+				$.animation(g, g._offset.x, g._offset.y);
+			} else if (this._img) {
+				let g = this._img;
 
-			let ox = g.offset.x;
-			let oy = g.offset.y;
+				let sc = g._scale;
+				if (sc.x != 1 || sc.y != 1) $.scale(sc.x, sc.y);
 
-			if (this.ani) $.animation(g, ox, oy);
-			else $.image(g, ox, oy);
+				$.image(g, g.offset.x, g.offset.y);
+			}
 		}
 
 		_postDraw() {
@@ -2654,7 +2631,16 @@ async function q5playPreSetup() {
 			else b2Body_ApplyForce(this.bdID, forceVector, poa, true);
 		}
 
-		// TODO applyForceScaled possible in Box2D v3?
+		applyForceScaled(amount, origin) {
+			let { forceVector, poa } = this._parseForceArgs(...arguments);
+
+			let mass = this.mass;
+			forceVector.x *= mass;
+			forceVector.y *= mass;
+
+			if (!poa) b2Body_ApplyForceToCenter(this.bdID, forceVector, true);
+			else b2Body_ApplyForce(this.bdID, forceVector, poa, true);
+		}
 
 		attractTo(x, y, force, radius, easing) {
 			if (this._phys != 0) {
@@ -2686,11 +2672,11 @@ async function q5playPreSetup() {
 				return;
 			}
 			if (typeof x != 'number') {
-				let obj = x;
-				if (!obj || (obj == $.mouse && !$.mouse.isActive)) return;
+				let pos = x;
+				if (!pos || (pos == $.mouse && !$.mouse.isActive)) return;
 				force = y;
-				y = obj.y;
-				x = obj.x;
+				y = pos.y;
+				x = pos.x;
 			}
 			this.attractTo(x, y, -force, radius, easing);
 		}
@@ -2701,16 +2687,8 @@ async function q5playPreSetup() {
 
 		angleTo(x, y) {
 			if (typeof x == 'object') {
-				let obj = x;
-				if (obj == $.mouse && !$.mouse.isActive) return 0;
-				if (obj.x === undefined || obj.y === undefined) {
-					console.error(
-						'sprite.angleTo ERROR: rotation destination not defined, object given with no x or y properties'
-					);
-					return 0;
-				}
-				y = obj.y;
-				x = obj.x;
+				y = x.y;
+				x = x.x;
 			}
 			return $.atan2(y - this.y, x - this.x);
 		}
@@ -2730,7 +2708,7 @@ async function q5playPreSetup() {
 
 		angleToFace(x, y, facing) {
 			let ang = this.rotationToFace(x, y, facing);
-			return minAngleDist(ang, this._rotation);
+			return minAngleDist(ang, this.rotation);
 		}
 
 		moveTowards(x, y, tracking) {
@@ -2740,8 +2718,8 @@ async function q5playPreSetup() {
 				let pos = x;
 				if (pos == $.mouse && !$.mouse.isActive) return;
 				tracking = y;
-				y = pos[0] ?? pos.y;
-				x = pos[1] ?? pos.x;
+				y = pos.y;
+				x = pos.x;
 			}
 			tracking ??= 0.1;
 
@@ -2760,9 +2738,30 @@ async function q5playPreSetup() {
 				} else velY = 0;
 			} else velY = this._velY;
 
-			if (velX || velY) {
-				this._setVel(velX, velY);
+			this._setVel(velX, velY);
+			this._vel._magCached = this._vel._directionCached = false;
+		}
+
+		rotateTowards(angle, tracking) {
+			let args = arguments;
+			let x, y, facing;
+			if (typeof args[0] != 'number') {
+				x = args[0].x;
+				y = args[0].y;
+				tracking = args[1];
+				facing = args[2];
+			} else if (arguments.length > 2) {
+				x = args[0];
+				y = args[1];
+				tracking = args[2];
+				facing = args[3];
 			}
+
+			if (x !== undefined) angle = this.angleToFace(x, y, facing);
+			else angle -= this.rotation;
+
+			tracking ??= 0.1;
+			this.rotationSpeed = angle * tracking;
 		}
 
 		_setTargetTransform(x, y, rotation) {
@@ -2842,6 +2841,30 @@ async function q5playPreSetup() {
 						this._relation[s._uid] = r;
 					}
 				}
+			}
+
+			if (r) return;
+
+			if (!this._arePreSolveEventsEnabled) {
+				for (let collider of this.colliders) {
+					collider._enablePreSolveEvents();
+				}
+				this._arePreSolveEventsEnabled = true;
+			}
+			if (target._isGroup) {
+				for (let s of target) {
+					if (!s._arePreSolveEventsEnabled) {
+						for (let collider of s.colliders) {
+							collider._enablePreSolveEvents();
+						}
+						s._arePreSolveEventsEnabled = true;
+					}
+				}
+			} else if (!target._arePreSolveEventsEnabled) {
+				for (let collider of target.colliders) {
+					collider._enablePreSolveEvents();
+				}
+				target._arePreSolveEventsEnabled = true;
 			}
 		}
 
@@ -2990,7 +3013,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	// only used by the q5play-pro Netcode class to convert sprite data to binary
+	// can be used to convert sprite data to binary netcode
 	$.Sprite.propTypes = {
 		x: 'Float64', // 0
 		y: 'Float64', // 1
@@ -3019,12 +3042,12 @@ async function q5playPreSetup() {
 		rotationDrag: 'number', // 24
 		rotationLock: 'boolean', // 25
 		scale: 'Vec2', // 26
-		shape: 'Uint8', // 27
+		rollingResistance: 'number', // 27
 		sleeping: 'boolean', // 28
 		stroke: 'color', // 29
 		strokeWeight: 'number', // 30
 		text: 'string', // 31
-		textColor: 'color', // 32
+		textFill: 'color', // 32
 		textSize: 'number', // 33
 		textStroke: 'color', // 34
 		textStrokeWeight: 'number', // 35
@@ -3034,8 +3057,7 @@ async function q5playPreSetup() {
 		visible: 'boolean', // 39
 		w: 'number', // 40 (width)
 		opacity: 'number', // 41
-		gravityScale: 'number', // 42
-		rollingResistance: 'number' // 43
+		gravityScale: 'number' // 42
 	};
 
 	$.Sprite.props = Object.keys($.Sprite.propTypes);
@@ -3050,19 +3072,18 @@ async function q5playPreSetup() {
 		'fill',
 		'height',
 		'heading',
-		'resetAnimationsOnChange',
+		'resetAniOnChange',
 		'speed',
 		'spriteSheet',
-		'textColour',
-		'textFill',
 		'width'
 	]);
 
 	$.Sprite.types = [$.DYN, $.STA, $.KIN];
 
 	// exclude props that are inherited in a special way or not traits
-	const spriteStdInheritedProps = $.Sprite.props.filter(
-		(p) => !['ani', 'tile', 'h', 'physics', 'scale', 'w', 'vel', 'x', 'y'].includes(p)
+	const spriteStdInheritedProps = $.Sprite.propsAll.filter(
+		(p) =>
+			!['ani', 'd', 'diameter', 'h', 'height', 'physics', 'scale', 'tile', 'w', 'width', 'vel', 'x', 'y'].includes(p)
 	);
 
 	let groupKeys = {};
@@ -3132,8 +3153,8 @@ async function q5playPreSetup() {
 			this._cycles = 0;
 			this.targetFrame = -1;
 			this._scale = new Scale();
-			this.offset = { x: anis?.offset._x ?? 0, y: anis?.offset._y ?? 0 };
-			this.rotationLock = anis?.rotationLock ?? false;
+			this._offset = { x: 0, y: 0 };
+			if (anis) this.offset = anis.offset;
 			this.frameDelay = anis?.frameDelay || 4;
 			this.looping = anis?.looping ?? true;
 			this.frameChanged = false;
@@ -3144,67 +3165,38 @@ async function q5playPreSetup() {
 
 			if (!args.length) return;
 
-			// list mode images can be added as a list of arguments or an array
+			// list of images can be added as a list of arguments or an array
 			if (Array.isArray(args[0]) && typeof args[0][0] == 'string') {
 				args = [...args[0]];
 			}
 
-			// sequence mode - frames parameter must be a string
+			// image sequence format
 			if (args.length == 2 && typeof args[0] == 'string' && typeof args[1] == 'string' && !args[1].includes('.')) {
-				let from = args[0],
-					to = args[1],
-					num2,
-					extIndex = from.lastIndexOf('.'),
-					digits1 = 0,
-					digits2 = 0;
+				let file = args[0],
+					extIndex = file.lastIndexOf('.'),
+					digits = 0;
 
 				// start from ext "."
 				// work backwards to find where the numbers end
 				for (let i = extIndex - 1; i >= 0; i--) {
-					if (!isNaN(from.charAt(i))) digits1++;
+					let c = file.charCodeAt(i);
+					// if char is a digit
+					if (c >= 48 && c <= 57) digits++;
 					else break;
 				}
 
-				if (to) {
-					for (let i = to.length - 5; i >= 0; i--) {
-						if (!isNaN(to.charAt(i))) digits2++;
-						else break;
-					}
+				let ext = file.slice(extIndex),
+					prefix = file.slice(0, extIndex - digits),
+					first = parseInt(file.slice(extIndex - digits, extIndex), 10),
+					last = parseInt(args[1], 10);
+
+				for (let i = first; i <= last; i++) {
+					file = prefix + $.nf(i, digits) + ext;
+					this.push($.loadImage(file));
 				}
+			}
 
-				let ext = from.slice(extIndex);
-				let prefix1 = from.slice(0, extIndex - digits1);
-
-				let num1 = parseInt(from.slice(extIndex - digits1, extIndex), 10);
-				num2 ??= parseInt(to.slice(extIndex - digits2, extIndex), 10);
-
-				// swap if inverted
-				if (num2 < num1) {
-					let t = num2;
-					num2 = num1;
-					num1 = t;
-				}
-
-				let fileName;
-				if (!to || digits1 == digits2) {
-					// load all images
-					for (let i = num1; i <= num2; i++) {
-						// Use nf() to number format 'i' into the amount of digits
-						// ex: 14 with 4 digits is 0014
-						fileName = prefix1 + $.nf(i, digits1) + ext;
-						this.push($.loadImage(fileName));
-					}
-				} // case: case img1, img2
-				else {
-					for (let i = num1; i <= num2; i++) {
-						// Use nf() to number format 'i' into four digits
-						fileName = prefix1 + i + ext;
-						this.push($.loadImage(fileName));
-					}
-				}
-			} // end sequence mode
-
-			// spriteSheet mode
+			// sprite sheet format
 			else if (typeof args[1] != 'string') {
 				let atlas,
 					sheet = anis?.spriteSheet;
@@ -3214,7 +3206,7 @@ async function q5playPreSetup() {
 					args = args.slice(1);
 				}
 
-				if (typeof args[0] == 'number') {
+				if (typeof args[0] == 'number' || Array.isArray(args[0])) {
 					atlas = { frames: args[0] };
 					if (args[1]) atlas.frameSize = args[1];
 				} else {
@@ -3222,8 +3214,6 @@ async function q5playPreSetup() {
 				}
 
 				const findFrames = () => {
-					this.spriteSheet = sheet;
-
 					if (Array.isArray(atlas)) {
 						if (typeof atlas[0] == 'object') {
 							atlas = { frames: atlas };
@@ -3240,7 +3230,8 @@ async function q5playPreSetup() {
 					let framesAmt = frames?.length || frames || 1;
 					frameSize ??= anis?.frameSize;
 
-					let w, h;
+					let w = atlas.w || atlas.width,
+						h = atlas.h || atlas.height;
 
 					if (frameSize) {
 						if (typeof frameSize == 'string') {
@@ -3264,13 +3255,6 @@ async function q5playPreSetup() {
 								w = h = sheet.height;
 							}
 						}
-
-						// sprites will be given default dimensions, but groups
-						// are not, _dimensionsUndef is only for sprites
-						// if (!owner._dimensionsUndef && owner.w && owner.h) {
-						// 	w ??= owner.w;
-						// 	h ??= owner.h;
-						// }
 					}
 
 					let x = 0,
@@ -3354,7 +3338,8 @@ async function q5playPreSetup() {
 						this._resolve(this);
 					});
 				}
-			} // end SpriteSheet mode
+				this.spriteSheet = sheet;
+			} // end sprite sheet format
 
 			// list of images
 			else {
@@ -3392,27 +3377,25 @@ async function q5playPreSetup() {
 			this._cycles = 0;
 		}
 
-		/*
-		 * TODO frameChange
-		 * Set the animation's frame delay in seconds.
-		 */
-		// get frameChange() {
-
-		// }
-		// set frameChange(val) {
-
-		// }
+		// TODO implement a way to set the animation's frame delay in seconds
 
 		get scale() {
 			return this._scale;
 		}
 		set scale(val) {
-			if (typeof val == 'number') {
-				val = { x: val, y: val };
-			}
-			this._scale._x = val.x;
-			this._scale._y = val.y;
-			this._scale._avg = val.x;
+			let x = val.x ?? val[0] ?? val;
+			let y = val.y ?? val[1] ?? val;
+			this._scale._x = x;
+			this._scale._y = y;
+			this._scale._avg = (x + y) * 0.5;
+		}
+
+		get offset() {
+			return this._offset;
+		}
+		set offset(val) {
+			this._offset.x = val[0] ?? val.x ?? val ?? 0;
+			this._offset.y = val[1] ?? val.y ?? val ?? 0;
 		}
 
 		clone() {
@@ -3435,8 +3418,8 @@ async function q5playPreSetup() {
 			}
 
 			ani.name = this.name;
-			ani.offset.x = this.offset.x;
-			ani.offset.y = this.offset.y;
+			ani._offset.x = this._offset.x;
+			ani._offset.y = this._offset.y;
 			ani.frameDelay = this.frameDelay;
 			ani.playing = this.playing;
 			ani.looping = this.looping;
@@ -3533,7 +3516,7 @@ async function q5playPreSetup() {
 			let { x, y, w, h } = img; // image info
 
 			let image = $.createImage(w, h);
-			image.copy(this.spriteSheet, this.offset.x, this.offset.y, w, h, x, y, w, h);
+			image.copy(this.spriteSheet, this._offset.x, this._offset.y, w, h, x, y, w, h);
 			return image;
 		}
 
@@ -3564,16 +3547,7 @@ async function q5playPreSetup() {
 		}
 	};
 
-	$.Ani.props = [
-		'frameSize',
-		'frameDelay',
-		'offset',
-		'scale',
-		'rotationLock',
-		'looping',
-		'endOnFirstFrame',
-		'_spriteSheetDemo'
-	];
+	$.Ani.props = ['frameSize', 'frameDelay', 'offset', 'scale', 'looping', 'endOnFirstFrame', '_spriteSheetDemo'];
 
 	$.Anis = class {
 		#_ = {};
@@ -3884,7 +3858,7 @@ async function q5playPreSetup() {
 			this.contains = this.includes;
 		}
 
-		addTiles(tiles, x = 0, y = 0, colGap, rowGap) {
+		addTiles(tiles, x, y, colWidth, rowHeight) {
 			if (typeof tiles == 'string') {
 				if (tiles[0] == '\n') tiles = tiles.slice(1);
 				tiles = tiles.replaceAll('\t', '  ');
@@ -3898,13 +3872,11 @@ async function q5playPreSetup() {
 
 					if (!tile) continue;
 
-					if (colGap === undefined) {
-						colGap = tile.w || tile.ani.w;
-						rowGap = tile.h || tile.ani.h;
-					}
+					colWidth ??= tile.w || tile.ani.w;
+					rowHeight ??= tile.h || tile.ani.h;
 
-					let tileX = x + col * colGap;
-					let tileY = y + row * rowGap;
+					let tileX = x + col * colWidth;
+					let tileY = y + row * rowHeight;
 
 					if (tile._isAni) {
 						let ani = tile;
@@ -3922,7 +3894,7 @@ async function q5playPreSetup() {
 					if (tile._isGroup) {
 						let g = tile;
 						let sprite = new g.Sprite(tileX, tileY);
-						this.push(sprite);
+						if (this != g) this.push(sprite);
 					} else if (tile._isSprite) {
 						let sprite = tile;
 						sprite.pos = [tileX, tileY];
@@ -3936,14 +3908,15 @@ async function q5playPreSetup() {
 			return this._scale;
 		}
 		set scale(val) {
-			let x = val.x ?? val[0] ?? val;
-			let y = val.y ?? val[1] ?? val;
-
-			this._scale._x = x;
-			this._scale._y = y;
+			if (typeof val == 'function') {
+				this._scale = val;
+			} else {
+				this._scale._x = val.x ?? val[0] ?? val;
+				this._scale._y = val.y ?? val[1] ?? val;
+			}
 
 			for (let g of this.subgroups) {
-				g['_' + prop] = val;
+				g[prop] = val;
 			}
 			for (let i = 0; i < this.length; i++) {
 				let s = this[i];
@@ -4097,6 +4070,36 @@ async function q5playPreSetup() {
 					}
 				}
 			}
+
+			if (r) return;
+
+			if (!this._arePreSolveEventsEnabled) {
+				for (let s of this) {
+					if (!s._arePreSolveEventsEnabled) {
+						for (let collider of s.colliders) {
+							collider._enablePreSolveEvents();
+						}
+						s._arePreSolveEventsEnabled = true;
+					}
+				}
+				this._arePreSolveEventsEnabled = true;
+			}
+			if (target._isGroup) {
+				for (let s of target) {
+					if (!s._arePreSolveEventsEnabled) {
+						for (let collider of s.colliders) {
+							collider._enablePreSolveEvents();
+						}
+						s._arePreSolveEventsEnabled = true;
+					}
+				}
+				target._arePreSolveEventsEnabled = true;
+			} else if (!target._arePreSolveEventsEnabled) {
+				for (let collider of target.colliders) {
+					collider._enablePreSolveEvents();
+				}
+				target._arePreSolveEventsEnabled = true;
+			}
 		}
 
 		_ensureCollide(target) {
@@ -4227,12 +4230,11 @@ async function q5playPreSetup() {
 			}
 		}
 
-		// TODO: implement
-		// applyForceScaled() {
-		// 	for (let s of this) {
-		// 		s.applyForceScaled(...arguments);
-		// 	}
-		// }
+		applyForceScaled() {
+			for (let s of this) {
+				s.applyForceScaled(...arguments);
+			}
+		}
 
 		attractTo() {
 			for (let s of this) {
@@ -4279,8 +4281,8 @@ async function q5playPreSetup() {
 				let pos = x;
 				if (pos == $.mouse && !$.mouse.isActive) return;
 				tracking = y;
-				y = pos[0] ?? pos.y;
-				x = pos[1] ?? pos.x;
+				y = pos.y;
+				x = pos.x;
 			}
 			tracking ??= 0.1;
 
@@ -4326,9 +4328,7 @@ async function q5playPreSetup() {
 			let culled = 0;
 			for (let i = 0; i < this.length; i++) {
 				let s = this[i];
-
-				// TODO: if sprite has a chain shape, never cull it
-				// if (s.shape == 'chain') continue;
+				if (s._hasChain) continue;
 
 				if (s._posX < minX || s._posY < minY || s._posX > maxX || s._posY > maxY) {
 					culled++;
@@ -4436,7 +4436,7 @@ async function q5playPreSetup() {
 						rel = this._relation[tuid];
 
 						if (rel == 2 && !s._hasSensors) {
-							s.addDefaultSensors(); // TODO: implement
+							s.addDefaultSensors();
 						}
 						if (tuid >= 1000) b = $.q5play.sprites[tuid];
 						else b = $.q5play.groups[tuid];
@@ -4444,7 +4444,8 @@ async function q5playPreSetup() {
 						if (!b || b.deleted) continue;
 
 						if (rel == 0) b._ensureCollide(s);
-						else if (rel == 1) b._ensureContactRelationship(s, 1); // passes
+						else if (rel == 1)
+							b._ensureContactRelationship(s, 1); // passes
 						else if (rel == 2) b._ensureOverlap(s);
 					}
 					for (let event in eventTypes) {
@@ -4541,6 +4542,9 @@ async function q5playPreSetup() {
 		}
 
 		draw() {
+			let ogImgMode = $._imageMode || $._getImageMode();
+			$.imageMode($.CENTER);
+
 			let g = [...this];
 			g.sort((a, b) => a._layer - b._layer);
 			for (let s of g) {
@@ -4549,6 +4553,8 @@ async function q5playPreSetup() {
 				}
 			}
 			if (this._autoDraw) this._autoDraw = null;
+
+			$.imageMode(ogImgMode);
 		}
 
 		postDraw() {
@@ -4609,6 +4615,21 @@ async function q5playPreSetup() {
 			this.subSteps = 4;
 
 			this.step = this.physicsUpdate;
+
+			b2World_SetPreSolveCallback(wID, (shapeIdA, shapeIdB, point, normal) => {
+				const shapeA = shapeDict[shapeIdA.index1];
+				const shapeB = shapeDict[shapeIdB.index1];
+				if (!shapeA || !shapeB) return true;
+
+				const spriteA = shapeA.sprite;
+				const spriteB = shapeB.sprite;
+				if (!spriteA || !spriteB) return true;
+
+				if (spriteA._relation[spriteB._uid] === 1) return false;
+				if (spriteB._relation[spriteA._uid] === 1) return false;
+
+				return true;
+			});
 
 			b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
 				const shapeA = shapeDict[shapeIdA.index1],
@@ -4908,6 +4929,8 @@ async function q5playPreSetup() {
 		}
 
 		rayCastAll(startPos, direction, maxDistance, limiter) {
+			// TODO
+			return [];
 			let start = scaleTo(startPos.x, startPos.y);
 
 			let end;
@@ -5270,11 +5293,11 @@ async function q5playPreSetup() {
 			b2Joint_SetCollideConnected(this.jID, val);
 		}
 
-		get constraintForce() {
+		get reactionForce() {
 			return b2Joint_GetConstraintForce(this.jID);
 		}
 
-		get constraintTorque() {
+		get reactionTorque() {
 			return b2Joint_GetConstraintTorque(this.jID);
 		}
 
@@ -5408,11 +5431,11 @@ async function q5playPreSetup() {
 			super(spriteA, spriteB, 'distance');
 
 			let j = this._init(b2DefaultDistanceJointDef());
+			j.length = $.dist(spriteA.x, spriteA.y, spriteB.x, spriteB.y) / meterSize;
+			j.enableSpring = true;
+
 			this.jID = b2CreateDistanceJoint(wID, j);
 			jointDict[this.jID.index1] = this;
-
-			this.length = $.dist(spriteA.x, spriteA.y, spriteB.x, spriteB.y);
-			this.springEnabled = true;
 		}
 
 		get currentLength() {
@@ -5426,10 +5449,10 @@ async function q5playPreSetup() {
 			Box2D.b2DistanceJoint_SetLength(this.jID, val / meterSize);
 		}
 
-		get limitEnabled() {
+		get limitsEnabled() {
 			return Box2D.b2DistanceJoint_IsLimitEnabled(this.jID);
 		}
-		set limitEnabled(val) {
+		set limitsEnabled(val) {
 			return Box2D.b2DistanceJoint_EnableLimit(this.jID, val);
 		}
 
@@ -5441,9 +5464,17 @@ async function q5playPreSetup() {
 			return Box2D.b2DistanceJoint_GetMaxLength(this.jID) * meterSize;
 		}
 
-		set lengthRange(val) {
-			this.limitEnabled = true;
-			Box2D.b2DistanceJoint_SetLengthRange(this.jID, val[0] / meterSize, val[1] / meterSize);
+		set range(val) {
+			let min, max;
+			if (typeof val == 'number') {
+				val /= 2;
+				min = -val;
+				max = val;
+			} else {
+				min = val[0];
+				max = val[1];
+			}
+			Box2D.b2DistanceJoint_SetLengthRange(this.jID, min / meterSize, max / meterSize);
 		}
 
 		get springEnabled() {
@@ -5476,21 +5507,21 @@ async function q5playPreSetup() {
 		}
 
 		get speed() {
-			return Box2D.b2DistanceJoint_GetMotorSpeed(this.jID) * meterSize;
+			return Box2D.b2DistanceJoint_GetMotorSpeed(this.jID);
 		}
 		set speed(val) {
-			Box2D.b2DistanceJoint_SetMotorSpeed(this.jID, val / meterSize);
+			Box2D.b2DistanceJoint_SetMotorSpeed(this.jID, val);
 		}
 
 		get maxPower() {
-			return Box2D.b2DistanceJoint_GetMaxMotorForce(this.jID) * meterSize;
+			return Box2D.b2DistanceJoint_GetMaxMotorForce(this.jID);
 		}
 		set maxPower(val) {
-			Box2D.b2DistanceJoint_SetMaxMotorForce(this.jID, val / meterSize);
+			Box2D.b2DistanceJoint_SetMaxMotorForce(this.jID, val);
 		}
 
-		get motorForce() {
-			return Box2D.b2DistanceJoint_GetMotorForce(this.jID) * meterSize;
+		get power() {
+			return Box2D.b2DistanceJoint_GetMotorForce(this.jID);
 		}
 	};
 
@@ -5498,47 +5529,34 @@ async function q5playPreSetup() {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'wheel');
 
-			let j = pl.WheelJoint(
-				{
-					maxMotorTorque: 1000,
-					frequencyHz: 4,
-					dampingRatio: 0.7
-				},
-				spriteA.body,
-				spriteB.body,
-				spriteB.body.getWorldCenter(),
-				new b2Vec2(0, 1)
-			);
-			this._createJoint(j);
-			this._angle = $._angleMode == DEGREES ? 90 : 1.5707963267948966;
+			let j = this._init(b2DefaultWheelJointDef(wID));
+			j.enableSpring = true;
+			j.hertz = 4;
+			j.dampingRatio = 0.7;
+			j.enableMotor = true;
+			j.maxMotorTorque = 1000;
+
+			this.jID = b2CreateWheelJoint(wID, j);
+			jointDict[this.jID.index1] = this;
 		}
 
-		_display() {
-			let xA = this.spriteA.x;
-			let yA = this.spriteA.y;
+		_init(j) {
+			let a = this.spriteA,
+				b = this.spriteB;
 
-			let xB, yB;
-			if (!this.offsetB.x && !this.offsetB.y) {
-				xB = this.spriteB.x;
-				yB = this.spriteB.y;
-			} else {
-				let ancB = this.spriteB.body.getWorldPoint(this._j.m_localAnchorB);
-				ancB = scaleFrom(ancB.x, ancB.y);
-				xB = ancB.x;
-				yB = ancB.y;
-			}
+			j.base.bodyIdA = a.bdID;
+			j.base.bodyIdB = b.bdID;
 
-			// Calculate the slopes of the lines
-			let slopeA = $.tan(this.spriteA.rotation);
-			let slopeB = $.tan(this._angle + this.spriteA.rotation);
+			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
 
-			// Calculate the intersection point
-			let xI = (yB - yA + slopeA * xA - slopeB * xB) / (slopeA - slopeB);
-			let yI = slopeA * (xI - xA) + yA;
+			// let qA = b2Body_GetRotation(a.bdID);
+			// let qB = b2Body_GetRotation(b.bdID);
+			// j.base.localFrameA.q = b2InvMulRot(qA, qB);
 
-			this._draw(xI, yI, xB, yB);
-			this.visible = null;
+			return j;
 		}
+
+		_display() {}
 
 		get angle() {
 			return this._angle;
@@ -5549,6 +5567,72 @@ async function q5playPreSetup() {
 			this._j.m_localXAxisA = new b2Vec2($.cos(val), $.sin(val));
 			this._j.m_localXAxisA.normalize();
 			this._j.m_localYAxisA = b2Vec2.crossNumVec2(1.0, this._j.m_localXAxisA);
+		}
+
+		get springEnabled() {
+			return Box2D.b2WheelJoint_IsSpringEnabled(this.jID);
+		}
+		set springEnabled(val) {
+			Box2D.b2WheelJoint_EnableSpring(this.jID, val);
+		}
+
+		get springiness() {
+			return Box2D.b2WheelJoint_GetSpringHertz(this.jID);
+		}
+		set springiness(val) {
+			val = this._springMap(val);
+			Box2D.b2WheelJoint_SetSpringHertz(this.jID, val);
+		}
+
+		get damping() {
+			return Box2D.b2WheelJoint_GetSpringDampingRatio(this.jID);
+		}
+		set damping(val) {
+			Box2D.b2WheelJoint_SetSpringDampingRatio(this.jID, val);
+		}
+
+		get limitsEnabled() {
+			return Box2D.b2WheelJoint_IsLimitEnabled(this.jID);
+		}
+		set limitsEnabled(val) {
+			Box2D.b2WheelJoint_EnableLimit(this.jID, val);
+		}
+
+		get lowerLimit() {
+			return Box2D.b2WheelJoint_GetLowerLimit(this.jID);
+		}
+
+		get upperLimit() {
+			return Box2D.b2WheelJoint_GetUpperLimit(this.jID);
+		}
+
+		set limits(val) {
+			Box2D.b2WheelJoint_SetLimits(this.jID, val[0], val[1]);
+		}
+
+		get motorEnabled() {
+			return Box2D.b2WheelJoint_IsMotorEnabled(this.jID);
+		}
+		set motorEnabled(val) {
+			Box2D.b2WheelJoint_EnableMotor(this.jID, val);
+		}
+
+		get maxPower() {
+			return Box2D.b2WheelJoint_GetMaxMotorTorque(this.jID);
+		}
+		set maxPower(val) {
+			Box2D.b2WheelJoint_SetMaxMotorTorque(this.jID, val);
+		}
+
+		get power() {
+			return Box2D.b2WheelJoint_GetMotorTorque(this.jID);
+		}
+
+		get speed() {
+			return Box2D.b2WheelJoint_GetMotorSpeed(this.jID);
+		}
+		set speed(val) {
+			Box2D.b2WheelJoint_SetMotorSpeed(this.jID, val);
 		}
 	};
 
@@ -5556,158 +5640,198 @@ async function q5playPreSetup() {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'hinge');
 
-			let j = pl.RevoluteJoint({}, spriteA.body, spriteB.body, spriteA.body.getWorldCenter());
-			this._createJoint(j);
-		}
+			let j = this._init(b2DefaultRevoluteJointDef());
 
-		_display() {
-			const offsetAx = this.offsetA.x;
-			const offsetAy = this.offsetA.y;
-			const rotationA = this.spriteA.rotation;
-
-			const rotatedOffsetAx = offsetAx * $.cos(rotationA) - offsetAy * $.sin(rotationA);
-			const rotatedOffsetAy = offsetAx * $.sin(rotationA) + offsetAy * $.cos(rotationA);
-
-			this._draw(this.spriteA.x + rotatedOffsetAx, this.spriteA.y + rotatedOffsetAy);
-			this.visible = null;
-		}
-
-		get range() {
-			return this.upperLimit - this.lowerLimit;
-		}
-		set range(val) {
-			val /= 2;
-			this.upperLimit = val;
-			this.lowerLimit = -val;
-		}
-
-		get lowerLimit() {
-			let val = this._j.getLowerLimit();
-			if ($._angleMode == 'radians') return val;
-			return $.degrees(val);
-		}
-		set lowerLimit(val) {
-			if (!this._j.isLimitEnabled()) {
-				this._j.enableLimit(true);
-			}
-			this.spriteA.body.setAwake(true);
-			this.spriteB.body.setAwake(true);
-			if ($._angleMode == DEGREES) val *= $._DEGTORAD;
-			this._j.m_lowerAngle = val;
-		}
-
-		get upperLimit() {
-			let val = this._j.getUpperLimit();
-			if ($._angleMode == 'radians') return val;
-			return $.degrees(val);
-		}
-		set upperLimit(val) {
-			if (!this._j.isLimitEnabled()) {
-				this._j.enableLimit(true);
-			}
-			this.spriteA.body.setAwake(true);
-			this.spriteB.body.setAwake(true);
-			if ($._angleMode == DEGREES) val *= $._DEGTORAD;
-			this._j.m_upperAngle = val;
+			this.jID = b2CreateRevoluteJoint(wID, j);
+			jointDict[this.jID.index1] = this;
 		}
 
 		get angle() {
-			let ang = this._j.getJointAngle();
+			let ang = Box2D.b2RevoluteJoint_GetAngle(this.jID);
 			if ($._angleMode == 'radians') return ang;
 			return ang * $._DEGTORAD;
 		}
+
+		get springEnabled() {
+			return Box2D.b2RevoluteJoint_IsSpringEnabled(this.jID);
+		}
+		set springEnabled(val) {
+			return Box2D.b2RevoluteJoint_EnableSpring(this.jID, val);
+		}
+
+		get springiness() {
+			return Box2D.b2RevoluteJoint_GetSpringHertz(this.jID);
+		}
+		set springiness(val) {
+			val = this._springMap(val);
+			Box2D.b2RevoluteJoint_SetSpringHertz(this.jID, val);
+		}
+
+		get damping() {
+			return Box2D.b2RevoluteJoint_GetSpringDampingRatio(this.jID);
+		}
+		set damping(val) {
+			Box2D.b2RevoluteJoint_SetSpringDampingRatio(this.jID, val);
+		}
+
+		get limitsEnabled() {
+			return Box2D.b2RevoluteJoint_IsLimitEnabled(this.jID);
+		}
+		set limitsEnabled(val) {
+			return Box2D.b2RevoluteJoint_EnableLimit(this.jID, val);
+		}
+
+		get minAngle() {
+			return Box2D.b2RevoluteJoint_GetLowerLimit(this.jID);
+		}
+
+		get maxAngle() {
+			return Box2D.b2RevoluteJoint_GetUpperLimit(this.jID);
+		}
+
+		set range(val) {
+			let min, max;
+			if (typeof val == 'number') {
+				val /= 2;
+				min = -val;
+				max = val;
+			} else {
+				min = val[0];
+				max = val[1];
+			}
+			if ($._angleMode == DEGREES) {
+				min *= $._RADTODEG;
+				max *= $._RADTODEG;
+			}
+			Box2D.b2RevoluteJoint_SetLimits(this.jID, min, max);
+		}
+
+		get motorEnabled() {
+			return Box2D.b2RevoluteJoint_IsMotorEnabled(this.jID);
+		}
+		set motorEnabled(val) {
+			Box2D.b2RevoluteJoint_EnableMotor(this.jID, val);
+		}
+
+		get speed() {
+			return Box2D.b2RevoluteJoint_GetMotorSpeed(this.jID);
+		}
+		set speed(val) {
+			Box2D.b2RevoluteJoint_SetMotorSpeed(this.jID, val);
+		}
+
+		get power() {
+			return Box2D.b2RevoluteJoint_GetMotorTorque(this.jID);
+		}
+
+		get maxPower() {
+			return Box2D.b2RevoluteJoint_GetMaxMotorTorque(this.jID);
+		}
+		set maxPower(val) {
+			Box2D.b2RevoluteJoint_SetMaxMotorTorque(this.jID, val);
+		}
+
+		_display() {}
 	};
-	$.RevoluteJoint = $.HingeJoint;
 
 	$.SliderJoint = class extends $.Joint {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'slider');
 
-			let j = pl.PrismaticJoint(
-				{
-					lowerTranslation: -1,
-					upperTranslation: 1,
-					enableLimit: true,
-					maxMotorForce: 50,
-					motorSpeed: 0,
-					enableMotor: true
-				},
-				spriteA.body,
-				spriteB.body,
-				spriteA.body.getWorldCenter(),
-				new b2Vec2(1, 0)
-			);
-			this._createJoint(j);
-			this._angle = 0;
+			let j = this._init(b2DefaultPrismaticJointDef());
+			j.enableLimit = true;
+			j.lowerTranslation = -1;
+			j.upperTranslation = 1;
+			j.enableMotor = true;
+			j.maxMotorForce = 50;
+			j.motorSpeed = 0;
+
+			this.jID = b2CreatePrismaticJoint(wID, j);
+			jointDict[this.jID.index1] = this;
 		}
 
-		get angle() {
-			return this._angle;
-		}
-		set angle(val) {
-			if (val == this._angle) return;
-			this._angle = val;
-			this._j.m_localXAxisA = new b2Vec2($.cos(val), $.sin(val));
-			this._j.m_localXAxisA.normalize();
-			this._j.m_localYAxisA = b2Vec2.crossNumVec2(1.0, this._j.m_localXAxisA);
+		get translation() {
+			return Box2D.b2PrismaticJoint_GetTranslation(this.jID) * meterSize;
 		}
 
-		get range() {
-			return this.upperLimit - this.lowerLimit;
+		get limitsEnabled() {
+			return Box2D.b2PrismaticJoint_IsLimitEnabled(this.jID);
 		}
-		set range(val) {
-			val /= 2;
-			this.upperLimit = val;
-			this.lowerLimit = -val;
+		set limitsEnabled(val) {
+			Box2D.b2PrismaticJoint_EnableLimit(this.jID, val);
 		}
 
 		get lowerLimit() {
-			return this._j.getLowerLimit() * meterSize;
-		}
-		set lowerLimit(val) {
-			if (!this._j.isLimitEnabled()) {
-				this._j.enableLimit(true);
-			}
-			val = val / meterSize;
-			this._j.setLimits(val, this._j.getUpperLimit());
+			return Box2D.b2PrismaticJoint_GetLowerLimit(this.jID) * meterSize;
 		}
 
 		get upperLimit() {
-			return this._j.getUpperLimit() * meterSize;
+			return Box2D.b2PrismaticJoint_GetUpperLimit(this.jID) * meterSize;
 		}
-		set upperLimit(val) {
-			if (!this._j.isLimitEnabled()) {
-				this._j.enableLimit(true);
+
+		set range(val) {
+			let min, max;
+			if (typeof val == 'number') {
+				val /= 2;
+				min = -val;
+				max = val;
+			} else {
+				min = val[0];
+				max = val[1];
 			}
-			val = val / meterSize;
-			this._j.setLimits(this._j.getLowerLimit(), val);
-		}
-	};
-	$.PrismaticJoint = $.SliderJoint;
-
-	$.RopeJoint = class extends $.Joint {
-		constructor(spriteA, spriteB) {
-			super(spriteA, spriteB, 'rope');
-
-			let j = pl.RopeJoint(
-				{
-					maxLength: 1
-				},
-				spriteA.body,
-				spriteB.body,
-				spriteA.body.getWorldCenter()
-			);
-			this._createJoint(j);
-			this._j.m_localAnchorB.x = 0;
-			this._j.m_localAnchorB.y = 0;
+			Box2D.b2PrismaticJoint_SetLimits(this.jID, min / meterSize, max / meterSize);
 		}
 
-		get maxLength() {
-			return this._j.getMaxLength() * meterSize;
+		get springEnabled() {
+			return Box2D.b2PrismaticJoint_IsSpringEnabled(this.jID);
 		}
-		set maxLength(val) {
-			this._j.setMaxLength(val / meterSize);
+		set springEnabled(val) {
+			Box2D.b2PrismaticJoint_EnableSpring(this.jID, val);
 		}
+
+		get springiness() {
+			return Box2D.b2PrismaticJoint_GetSpringHertz(this.jID);
+		}
+		set springiness(val) {
+			val = this._springMap ? this._springMap(val) : val;
+			Box2D.b2PrismaticJoint_SetSpringHertz(this.jID, val);
+		}
+
+		get damping() {
+			return Box2D.b2PrismaticJoint_GetSpringDampingRatio(this.jID);
+		}
+		set damping(val) {
+			Box2D.b2PrismaticJoint_SetSpringDampingRatio(this.jID, val);
+		}
+
+		get motorEnabled() {
+			return Box2D.b2PrismaticJoint_IsMotorEnabled(this.jID);
+		}
+		set motorEnabled(val) {
+			Box2D.b2PrismaticJoint_EnableMotor(this.jID, val);
+		}
+
+		get speed() {
+			return Box2D.b2PrismaticJoint_GetMotorSpeed(this.jID);
+		}
+		set speed(val) {
+			Box2D.b2PrismaticJoint_SetMotorSpeed(this.jID, val);
+		}
+
+		get maxPower() {
+			return Box2D.b2PrismaticJoint_GetMaxMotorForce(this.jID);
+		}
+		set maxPower(val) {
+			Box2D.b2PrismaticJoint_SetMaxMotorForce(this.jID, val);
+		}
+
+		get power() {
+			return Box2D.b2PrismaticJoint_GetMotorForce(this.jID);
+		}
+
+		// get energy() {
+		// 	return Box2D.b2PrismaticJoint_GetSpeed(this.jID);
+		// }
 	};
 
 	$.GrabberJoint = class extends $.Joint {
@@ -5728,7 +5852,7 @@ async function q5playPreSetup() {
 
 			let data = b2Body_GetMassData(sprite.bdID);
 
-			let mg = data.mass * Math.abs($.world.gravity.y);
+			let mg = data.mass * Math.abs($.world.gravity.y || 1);
 			j.maxSpringForce = 100 * mg;
 
 			if (data.mass) {
@@ -5758,8 +5882,6 @@ async function q5playPreSetup() {
 			t.q = ZERO_ROT;
 
 			b2Body_SetTargetTransform(this._target.bdID, t, $.world._timeStep);
-
-			// b2Body_SetTransform(this._target.bdID, scaleTo(x, y), b2Rot_identity);
 		}
 
 		get maxForce() {
@@ -5848,11 +5970,11 @@ async function q5playPreSetup() {
 		else if (n == 'square') l = [l, -90, 4];
 		else if (n == 'pentagon') l = [l, -72, 5];
 		else if (n == 'hexagon') l = [l, -60, 6];
-		else if (n == 'septagon') l = [l, -51.4285714286, 7];
+		else if (n == 'septagon') l = [l, -360 / 7, 7];
 		else if (n == 'octagon') l = [l, -45, 8];
 		else if (n == 'enneagon') l = [l, -40, 9];
 		else if (n == 'decagon') l = [l, -36, 10];
-		else if (n == 'hendecagon') l = [l, -32.7272727273, 11];
+		else if (n == 'hendecagon') l = [l, -360 / 11, 11];
 		else if (n == 'dodecagon') l = [l, -30, 12];
 		if (l == lineLength) throw new Error('Invalid, not a regular polygon: ' + name);
 		return l;
@@ -5890,8 +6012,8 @@ async function q5playPreSetup() {
 		}
 	];
 
-	$.colorPal = (c, palette) => {
-		if (c instanceof p5.Color) return c;
+	function colorPal(c, palette) {
+		if (c instanceof Q5.Color) return c;
 		if (typeof palette == 'number') {
 			palette = $.q5play.palettes[palette];
 		}
@@ -5899,9 +6021,9 @@ async function q5playPreSetup() {
 		let clr = palette[c];
 		if (!clr) return $.color(0, 0, 0, 0);
 		return $.color(clr);
-	};
+	}
 
-	$.EmojiImage = function (emoji, textSize) {
+	$.EmojiImage = function (emoji, textSize = 50) {
 		textSize *= $.q5play.emojiScale;
 		let size = textSize * 1.25;
 		let g = $.createGraphics(size, size, $.P2D);
@@ -5938,9 +6060,12 @@ async function q5playPreSetup() {
 		left = Math.floor(left / pd);
 		right = Math.floor(right / pd);
 
-		g = g.get(left, top, right - left + 1, bottom - top + 1);
-		g.src = emoji;
-		return g;
+		let img = g.get(left, top, right - left + 1, bottom - top + 1);
+		img.src = emoji;
+
+		g.remove();
+
+		return img;
 	};
 
 	$.spriteArt = (txt, scale, palette) => {
@@ -5968,15 +6093,13 @@ async function q5playPreSetup() {
 			for (let j = 0; j < lines[i].length; j++) {
 				for (let sX = 0; sX < scale; sX++) {
 					for (let sY = 0; sY < scale; sY++) {
-						let c = this.colorPal(lines[i][j], palette);
+						let c = colorPal(lines[i][j], palette);
 						img.set(j * scale + sX, i * scale + sY, c);
 					}
 				}
 			}
 		}
 		img.updatePixels();
-		img.w = img.width;
-		img.h = img.height;
 		$.q5play.onImageLoad(img);
 		return img; // return the p5 graphics object
 	};
@@ -6132,7 +6255,6 @@ async function q5playPreSetup() {
 			case 'jsfiddle.net':
 			case 'codevre.com':
 			case 'preview.codevre.com':
-			case 'quintos-org.github.io':
 				break;
 			default:
 				if (
@@ -6151,20 +6273,19 @@ async function q5playPreSetup() {
 		}
 	}
 
-	let userDisabledP5Errors = p5.disableFriendlyErrors;
-	p5.disableFriendlyErrors = true;
+	// let userDisabledP5Errors = p5.disableFriendlyErrors;
+	// p5.disableFriendlyErrors = true;
 
 	let didCreateCanvas = false;
 
 	const _createCanvas = $.createCanvas;
 
-	$.createCanvas = function () {
+	$.Canvas = $.createCanvas = function () {
 		let args = [...arguments];
 
-		// prevent p5.js v1 overriding the user's canvas with a new default canvas
+		// prevent p5 v1 overriding the user's canvas with a new default canvas
 		if (didCreateCanvas && args[0] == 100 && args[1] == 100) return;
 
-		let display, renderQuality, displayScale;
 		if (typeof args[0] == 'string') {
 			if (args[0].includes(':')) {
 				let ratio = args[0].split(':');
@@ -6178,7 +6299,6 @@ async function q5playPreSetup() {
 				}
 				args[0] = Math.round(w);
 				args.splice(1, 0, Math.round(h));
-				display = 'maxed';
 			} else {
 				args = [0, 0, ...args];
 			}
@@ -6186,22 +6306,6 @@ async function q5playPreSetup() {
 		if (!args[0]) {
 			args[0] = window.innerWidth;
 			args[1] = window.innerHeight;
-			display = 'maxed';
-		}
-		if (typeof args[2] == 'string') {
-			let rend = args[2].toLowerCase().split(' ');
-			if (rend[0] == 'pixelated') {
-				renderQuality = 'pixelated';
-				if (!rend[1]) display = 'maxed';
-				else {
-					display = 'centered';
-					displayScale = Number(rend[1].slice(1));
-				}
-				args.splice(2, 1);
-			} else if (rend[0] == 'maxed') {
-				display = 'maxed';
-				args.splice(2, 1);
-			}
 		}
 		let rend = _createCanvas.call($, ...args);
 		$.ctx = $.drawingContext;
@@ -6235,15 +6339,14 @@ async function q5playPreSetup() {
 				$.mouse.isOnCanvas = false;
 			});
 			c.addEventListener('wheel', (e) => {
-				$.mouse.scrollDelta.x = e.deltaX;
-				$.mouse.scrollDelta.y = e.deltaY;
+				let sd = $.mouse.scrollDelta;
+				sd.x = e.deltaX;
+				sd.y = e.deltaY;
 			});
 			c.addEventListener('touchstart', (e) => e.preventDefault());
 			// this stops the right click menu from appearing
 			c.addEventListener('contextmenu', (e) => e.preventDefault());
 		}
-		c.save ??= $.saveCanvas.bind($);
-		c.resize ??= $.resizeCanvas.bind($);
 		c.hw = c.w * 0.5;
 		c.hh = c.h * 0.5;
 		c.mouse = { x: $.mouseX, y: $.mouseY };
@@ -6259,9 +6362,7 @@ async function q5playPreSetup() {
 				rs.y = -c.hh + 20;
 			}
 		}
-		p5.disableFriendlyErrors = userDisabledP5Errors;
-
-		$.displayMode(display, renderQuality, displayScale);
+		// p5.disableFriendlyErrors = userDisabledP5Errors;
 
 		let pointer = window.PointerEvent ? 'pointer' : 'mouse';
 		c.addEventListener(pointer + 'down', onpointerdown);
@@ -6279,23 +6380,16 @@ async function q5playPreSetup() {
 	const _resizeCanvas = $.resizeCanvas;
 
 	$.resizeCanvas = (w, h) => {
-		w ??= window.innerWidth;
-		h ??= window.innerHeight;
 		_resizeCanvas.call($, w, h);
+
+		let pd = $.pixelDensity();
+
 		let c = $.canvas;
-		c.w = c.width / $.pixelDensity();
-		c.h = c.height / $.pixelDensity();
+		c.w = c.width / pd;
+		c.h = c.height / pd;
 		c.hw = c.w * 0.5;
 		c.hh = c.h * 0.5;
-		if (c.maxed) {
-			if (c.w / c.h > window.innerWidth / window.innerHeight) {
-				c.style.width = '100%!important';
-				c.style.height = 'auto!important';
-			} else {
-				c.style.width = 'auto!important';
-				c.style.height = '100%!important';
-			}
-		}
+
 		if (c.c2d) {
 			$.camera.x = c.hw;
 			$.camera.y = c.hh;
@@ -6531,7 +6625,7 @@ async function q5playPreSetup() {
 				center: 0,
 				right: 0
 			};
-			this._dragFrame = {
+			this._dragging = {
 				left: false,
 				center: false,
 				right: false
@@ -6606,21 +6700,77 @@ async function q5playPreSetup() {
 
 	let pressAmt = 0;
 
+	$._Pointer = class extends $.InputDevice {
+		constructor(e) {
+			super();
+			this.x = 0;
+			this.y = 0;
+			this.id = e.pointerId;
+			this.type = e.pointerType;
+			this._default = 'duration';
+			this.holdThreshold = 12;
+			this.duration = 1;
+			this.drag = 0;
+			this._dragging = false;
+			this.canvasPos = {};
+		}
+
+		_update(e) {
+			const c = $.canvas,
+				rect = c.getBoundingClientRect(),
+				sx = c.scrollWidth / c.w || 1,
+				sy = c.scrollHeight / c.h || 1,
+				x = (this.canvasPos.x = (e.clientX - rect.left) / sx),
+				y = (this.canvasPos.y = (e.clientY - rect.top) / sy);
+
+			// Calculate world position based on camera
+			if ($.camera.x == c.hw && $.camera.y == c.hh && $.camera.zoom == 1) {
+				this.x = x;
+				this.y = y;
+			} else {
+				this.x = (x - c.hw) / $.camera.zoom + $.camera.x;
+				this.y = (y - c.hh) / $.camera.zoom + $.camera.y;
+			}
+			this.pressure = e.pressure !== undefined ? e.pressure : 1;
+			this.event = e;
+		}
+	};
+
+	$.pointers = [];
+
+	$._updatePointer = (e) => {
+		let id = e.pointerId ?? $.pointers[0]?.id;
+
+		// backwards compatibility for mouse events
+		if (id == undefined) {
+			if (e instanceof MouseEvent) id = 0;
+			else return;
+		}
+
+		let p = $.pointers.find((p) => p.id === id);
+		if (!p) {
+			p = new $._Pointer(e);
+			$.pointers.push(p);
+		}
+		p._update(e);
+	};
+
 	let onpointerdown = function (e) {
 		if (!$._setupDone) return;
 		pressAmt++;
-
 		if (!$._isQ5 && $.userStartAudio) $.userStartAudio();
 
-		let btn = 'left';
-		if (e.button === 1) btn = 'center';
-		else if (e.button === 2) btn = 'right';
-
+		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
 		$.mouse.isActive = true;
 		$.mouse[btn]++;
+
+		if (e.pointerId == undefined || !$.pointers[0] || e.pointerId == $.pointers[0].id) {
+			$.mouse._update();
+			$.world.mouseSprites = $.world.getMouseSprites();
+		}
+
 		if ($.world.mouseSprites.length) {
 			let msm = $.world.mouseSprite?.mouse;
-			// old mouse sprite didn't have the mouse released on it
 			if (msm) {
 				msm[btn] = 0;
 				msm.hover = 0;
@@ -6636,13 +6786,15 @@ async function q5playPreSetup() {
 
 	let onpointermove = function (e) {
 		if (!$._setupDone) return;
+		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
+		if ($.mouse[btn] > 0) $.mouse._dragging[btn] = true;
 
-		let btn = 'left';
-		if (e.button === 1) btn = 'center';
-		else if (e.button === 2) btn = 'right';
-
-		let m = $.mouse;
-		if (m[btn] > 0) m._dragFrame[btn] = true;
+		let p = $.pointers.find((p) => p.id === e.pointerId);
+		if (p) {
+			p._update(e);
+			if ($.mouse[btn] > 0) p._dragging = true;
+			if (p.id == $.pointers[0].id) $.mouse._update();
+		}
 	};
 
 	let onpointerup = function (e) {
@@ -6650,132 +6802,38 @@ async function q5playPreSetup() {
 		if (pressAmt > 0) pressAmt--;
 		else return;
 
-		let btn = 'left';
-		if (e.button === 1) btn = 'center';
-		else if (e.button === 2) btn = 'right';
-
+		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
 		let m = $.mouse;
+
+		// Logic for durations/states
 		if (m[btn] >= m.holdThreshold) m[btn] = -2;
 		else if (m[btn] > 1) m[btn] = -1;
 		else m[btn] = -3;
-
 		if (m.drag[btn] > 0) m.drag[btn] = -1;
 
 		let msm = $.world.mouseSprite?.mouse;
-		if (!msm) return;
-
-		if (msm.hover > 1) {
-			if (msm[btn] >= $.mouse.holdThreshold) msm[btn] = -2;
-			else if (msm[btn] > 1) msm[btn] = -1;
-			else msm[btn] = -3;
-
-			if (msm.drag[btn] > 0) msm.drag[btn] = -1;
-		} else {
-			msm[btn] = 0;
-			msm.drag[btn] = 0;
-		}
-	};
-
-	$._Touch = class extends $.InputDevice {
-		constructor(touch) {
-			super();
-
-			this.x;
-
-			this.y;
-
-			this.id = touch.identifier;
-			this._default = 'duration';
-
-			this.holdThreshold = $.touches.holdThreshold;
-
-			this.duration = 1;
-
-			this.drag = 0;
-			this._dragFrame = false;
-
-			this.canvasPos = {};
-			this._update(touch);
-		}
-
-		_update(v) {
-			let c = $.canvas;
-			const rect = c.getBoundingClientRect();
-			const sx = c.scrollWidth / c.w || 1;
-			const sy = c.scrollHeight / c.h || 1;
-			const x = (this.canvasPos.x = (v.clientX - rect.left) / sx);
-			const y = (this.canvasPos.y = (v.clientY - rect.top) / sy);
-			if ($.camera.x == c.hw && $.camera.y == c.hh && $.camera.zoom == 1) {
-				this.x = x;
-				this.y = y;
+		if (msm) {
+			if (msm.hover > 1) {
+				if (msm[btn] >= $.mouse.holdThreshold) msm[btn] = -2;
+				else if (msm[btn] > 1) msm[btn] = -1;
+				else msm[btn] = -3;
+				if (msm.drag[btn] > 0) msm.drag[btn] = -1;
 			} else {
-				this.x = (x - c.hw) / $.camera.zoom + $.camera.x;
-				this.y = (y - c.hh) / $.camera.zoom + $.camera.y;
-			}
-			this.force = v.force;
-		}
-	};
-
-	$.touches = [];
-	$.touches.holdThreshold = 12;
-
-	$._ontouchstart = function (e) {
-		if (!$._setupDone) return;
-
-		if ($.getAudioContext && $.getAudioContext()?.state == 'suspended') $.userStartAudio();
-
-		for (let touch of e.changedTouches) {
-			$.touches.push(new $._Touch(touch));
-
-			if ($.touches.length == 1) {
-				$.mouseX = $.touches[0].x;
-				$.mouseY = $.touches[0].y;
-				$.mouse._update();
-				$.world.mouseSprites = $.world.getMouseSprites();
-				if (using_p5v1) $._onmousedown(e);
+				msm[btn] = 0;
+				msm.drag[btn] = 0;
 			}
 		}
-		if ($.touchStarted && !$.touchStarted(e)) e.preventDefault();
-	};
 
-	$._ontouchmove = function (e) {
-		if (!$._setupDone) return;
+		let p = $.pointers.find((p) => p.id === e.pointerId);
+		if (p) {
+			p._update(e);
+			if (p.duration >= p.holdThreshold) p.duration = -2;
+			else if (p.duration > 1) p.duration = -1;
+			else p.duration = -3;
+			if (p.drag > 0) p.drag = -1;
 
-		for (let touch of e.changedTouches) {
-			let t = $.touches.find((t) => t.id == touch.identifier);
-			t._update(touch);
-			t._dragFrame = true;
-			if (t.id == $.touches[0].id) {
-				$.mouseX = $.touches[0].x;
-				$.mouseY = $.touches[0].y;
-				$.mouse._update();
-				if (using_p5v1) $._onmousemove(e);
-			}
+			if (p.id == $.pointers[0].id) $.mouse._update();
 		}
-		if ($.touchMoved && !$.touchMoved(e)) e.preventDefault();
-	};
-
-	$._ontouchend = function (e) {
-		if (!$._setupDone) return;
-
-		for (let touch of e.changedTouches) {
-			let t = $.touches.find((t) => t.id == touch.identifier);
-			t._update(touch);
-
-			if (t.duration >= t.holdThreshold) t.duration = -2;
-			else if (t.duration > 1) t.duration = -1;
-			else t.duration = -3;
-
-			if (t.drag > 0) t.drag = -1;
-
-			if (t.id == $.touches[0].id) {
-				$.mouseX = $.touches[0].x;
-				$.mouseY = $.touches[0].y;
-				$.mouse._update();
-				if (using_p5v1) $._onmouseup(e);
-			}
-		}
-		if ($.touchEnded && !$.touchEnded(e)) e.preventDefault();
 	};
 
 	$._Keyboard = class extends $.InputDevice {
@@ -6876,9 +6934,6 @@ async function q5playPreSetup() {
 			return this['control'];
 		}
 		get space() {
-			return this[' '];
-		}
-		get spacebar() {
 			return this[' '];
 		}
 		get opt() {
@@ -7502,7 +7557,7 @@ async function q5playPreSetup() {
 			s._velSynced = false;
 			s._vel._magCached = false;
 
-			if (s._hasImagery) {
+			if (s._hasImagery || s._userDefinedDraw) {
 				s._rotation = Math.atan2(data[2], data[3]) * $._RADTODEG;
 			}
 
@@ -7510,7 +7565,7 @@ async function q5playPreSetup() {
 			// 	for (let s of $.allSprites) s._syncWithPhysicsBody();
 			// }
 
-			if (!s._hasImagery || s.debug) {
+			if (s.debug || (!s._hasImagery && !s._userDefinedDraw)) {
 				shapeStack.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
 			}
 		}
@@ -7525,7 +7580,11 @@ async function q5playPreSetup() {
 	$._debugDraw = () => {
 		$.scale(meterSize);
 
-		let ogStroke = $._getStrokeIdx(),
+		let ta = $.textAlign();
+		$.textAlign($.CENTER, $.CENTER);
+
+		let ogFill = $._getFillIdx(),
+			ogStroke = $._getStrokeIdx(),
 			strokeChanged = false,
 			strokeWeightChanged = false;
 
@@ -7657,32 +7716,34 @@ async function q5playPreSetup() {
 				}
 			}
 
-			// TODO: draw sprite text
-			// if (!s.debug && this.text !== undefined) {
-			// 	$.textAlign($.CENTER, $.CENTER);
-			// 	$.fill(this._textFill);
-			// 	if (this._textStrokeWeight) $.strokeWeight(this._textStrokeWeight);
-			// 	if (this._textStroke) $.stroke(this._textStroke);
-			// 	else $.noStroke();
-			// 	$.textSize(this.textSize);
-			// 	$.text(this.text, 0, 0);
-			// }
+			if (!s.debug && s.text !== undefined) {
+				$.fill(s._textFill);
+				if (s._textStrokeWeight) {
+					$.strokeWeight(s._textStrokeWeight);
+					strokeWeightChanged = true;
+				}
+				if (s._textStroke) {
+					$.stroke(s._textStroke);
+					strokeChanged = true;
+				} else $.noStroke();
+
+				$.textSize(s._textSize / meterSize);
+				$.text(s.text, cmd.data[0], cmd.data[1]);
+
+				$._doStroke();
+			}
 		}
 
 		drawCmds.ClearCommands();
 		$.resetMatrix();
+		$._setFillIdx(ogFill);
 		$._setStrokeIdx(ogStroke);
 		$._setStrokeWeight(ogSW);
+		if (ta) $.textAlign(ta.horizontal, ta.vertical);
 	};
 
-	if ($.q5play.background) {
-		$.update = () => {
-			background($.q5play.background);
-		};
-	}
-
 	// prettier-ignore
-	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Ani','Anis','Group','Visual','Visuals','World','world','createCanvas','Canvas','canvas','MAXED','SMOOTH','PIXELATED','displayMode','Camera','camera','Tiles','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','RopeJoint','GrabberJoint','kb','keyboard','mouse','touches','allSprites','camera','contro','contros','controllers','spriteArt','EmojiImage','getFPS','animation'];
+	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','camera','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
@@ -7698,13 +7759,17 @@ function q5playPostSetup() {
 
 	if ($._isGlobal && window.update) {
 		$.update = window.update;
-		// p5.js won't run the draw loop without a draw function defined
+		// p5 won't run the draw loop without a draw function defined
 		if (!$._q5) window.draw = () => {};
 	}
 
-	$.update ??= () => {};
+	$.update ??= $.clear;
 
 	$._setupDone = true;
+
+	if ($._c2d || $._webgpuFallback) {
+		throw new Error('Support for Canvas2D will be added in a future update, but currently q5play requires WebGPU.');
+	}
 }
 
 // called before each draw function call
@@ -7737,10 +7802,6 @@ function q5playPreDraw() {
 		$.allSprites.cull(10000);
 	}
 	$.allSprites.autoCull ??= true;
-
-	if ($.camera.__pos.x != 0 || $.camera.__pos.y != 0 || $.camera._zoom != 1) {
-		$.camera.on();
-	}
 }
 
 // called after each draw function call
@@ -7749,14 +7810,13 @@ function q5playPostDraw() {
 
 	$.q5play._inPostDraw = true;
 
-	if ($.allSprites._autoDraw) {
-		let ogImgMode = $._imageMode || $._getImageMode();
-		$.imageMode($.CENTER);
+	if ($.camera.__pos.x != 0 || $.camera.__pos.y != 0 || $.camera._zoom != 1) {
+		$.camera.on();
+	}
 
+	if ($.allSprites._autoDraw) {
 		$.allSprites.draw();
 		$._debugDraw();
-
-		$.imageMode(ogImgMode);
 	}
 	$.allSprites._autoDraw ??= true;
 
@@ -7772,18 +7832,14 @@ function q5playPostDraw() {
 		else if ($.kb[k] > 0) $.kb[k]++;
 	}
 
-	for (let i = 0; i < $.touches.length; i++) {
-		let t = $.touches[i];
-		t.duration++;
-		if (t._dragFrame) {
-			t.drag++;
-			t._dragFrame = false;
-		} else if (t.drag < 0) {
-			t.drag = 0;
-		}
-		if (t.duration <= 0) {
-			$.touches.splice(i, 1);
-			i--;
+	for (let p of $.pointers) {
+		if (p.type != 'mouse' || $.mouseIsPressed) p.duration++;
+		else p.duration = 0;
+		if (p._dragging) {
+			p.drag++;
+			p._dragging = false;
+		} else if (p.drag < 0) {
+			p.drag = 0;
 		}
 	}
 
@@ -7798,10 +7854,10 @@ function q5playPostDraw() {
 		else if (m[btn] > 0) m[btn]++;
 		if (msm?.hover) msm[btn] = m[btn];
 
-		if (m._dragFrame[btn]) {
+		if (m._dragging[btn]) {
 			m.drag[btn]++;
 			if (msm) msm.drag[btn] = m.drag[btn];
-			m._dragFrame[btn] = false;
+			m._dragging[btn] = false;
 		} else if (m.drag[btn] < 0) {
 			m.drag[btn] = 0;
 			if (msm) msm.drag[btn] = 0;

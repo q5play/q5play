@@ -1,7 +1,0 @@
-{
-	"compilerOptions": {
-		"target": "ESNext"
-	},
-	"include": ["*.js", "**/*.js", "node_modules/q5/q5.d.ts", "q5play.d.ts"],
-	"exclude": ["types"]
-}
