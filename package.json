@@ -1,6 +1,6 @@
 {
 	"name": "q5play",
-	"version": "4.0.1",
+	"version": "4.0.0",
 	"author": "quinton-ashley",
 	"license": "SEE LICENSE IN q5play_Personal_License.md",
 	"description": "JavaScript game engine that uses q5.js for graphics and Box2D for physics.",
