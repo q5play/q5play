@@ -136,6 +136,11 @@ declare global {
 		x: number;
 		y: number;
 		/**
+		 * Draws the visual to the canvas at its [x, y] position
+		 * with respect to the camera.
+		 */
+		draw(): void;
+		/**
 		 * Current image or frame of animation being displayed.
 		 */
 		get img(): Q5.Image;
@@ -160,7 +165,7 @@ declare global {
 		addAni(spriteSheetURL: string, frameCount: number): Promise<void>;
 		/**
 		 * Add multiple animations to the Sprite or Visual.
-		 * 
+		 *
 		 * @param atlases an object with animation names as keys and
 		 * an animation or animation atlas as values
 		 * @returns A promise that fulfills when the animations are loaded
@@ -175,7 +180,7 @@ declare global {
 		changeAni(aniName: string): void;
 		/**
 		 * Plays a sequence of animations.
-		 * 
+		 *
 		 * @param aniNames the names of animations to be played in sequence
 		 * @returns A promise that fulfills when the animation sequence completes
 		 */
@@ -1081,24 +1086,12 @@ declare global {
 		/**
 		 * Make a copy of the animation, with its own playback state,
 		 * independent of the original animation.
-		 *
 		 * @return {Ani}
 		 */
 		clone(): Ani;
 		/**
-		 * Draws the animation at coordinate x and y.
-		 * Updates the frames automatically.
-		 *
-		 * Optional parameters effect the current draw cycle only and
-		 * are not saved between draw cycles.
-		 *
-		 * @param x horizontal position
-		 * @param y vertical position
-		 * @param r rotation
-		 * @param sx scale x
-		 * @param sy scale y
+		 * Updates the animation's playback state. This is called automatically
 		 */
-		draw(x: number, y: number, r?: number, sx?: number, sy?: number): void;
 		update(): void;
 		/**
 		 * Plays the animation, starting from the specified frame.
@@ -1305,11 +1298,6 @@ declare global {
 		get ani(): Ani;
 		set ani(val: Ani);
 		/**
-		 * Reference to the group's current animation.
-		 */
-		get animation(): Ani;
-		set animation(val: Ani);
-		/**
 		 * The group's animations.
 		 */
 		get anis(): Anis;
@@ -1401,11 +1389,6 @@ declare global {
 		moveTowards(x: any, y: any, tracking: any): void;
 		moveAway(x: any, y: any, repel: any): void;
 		repelFrom(...args: any[]): void;
-		/**
-		 * Alias for group.length
-		 * @deprecated
-		 */
-		size(): number;
 		/**
 		 * Detects when sprites go outside the given culling boundary
 		 * relative to the camera.

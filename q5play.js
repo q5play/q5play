@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta1
+ * @version 4.0-beta3
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta1';
+let q5play_version = 'beta3';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -333,6 +333,9 @@ async function q5playPreSetup($, q) {
 	// in q5play the default angle mode is degrees
 	const DEGREES = $.DEGREES;
 	$.angleMode(DEGREES);
+
+	// in q5play the default color mode is float RGB
+	$.colorMode($.RGB, 1);
 
 	const ZERO_ROT = b2MakeRot(0);
 
@@ -1689,7 +1692,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			if (this.watch) this.mod[30] = true;
 			this._strokeWeight = val;
 
-			const sw = val * meterSize,
+			const sw = val / meterSize,
 				hsw = sw * 0.5,
 				qsw = sw * 0.25,
 				hswScaled = val * 0.5;
@@ -4296,10 +4299,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			}
 		}
 
-		size() {
-			return this.length;
-		}
-
 		toString() {
 			return 'g' + this.idNum;
 		}
@@ -6280,19 +6279,19 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 	const _createCanvas = $.createCanvas;
 
-	$.Canvas = $.createCanvas = function () {
+	$.Canvas = $.createCanvas = function (w, h) {
 		let args = [...arguments];
 
 		// prevent p5 v1 overriding the user's canvas with a new default canvas
-		if (didCreateCanvas && args[0] == 100 && args[1] == 100) return;
+		if (didCreateCanvas && w == 100 && h == 100) return;
 
 		if (typeof args[0] == 'string') {
 			if (args[0].includes(':')) {
-				let ratio = args[0].split(':');
-				let rW = Number(ratio[0]);
-				let rH = Number(ratio[1]);
-				let w = window.innerWidth;
-				let h = window.innerWidth * (rH / rW);
+				let ratio = args[0].split(':'),
+					rW = Number(ratio[0]),
+					rH = Number(ratio[1]),
+					w = window.innerWidth,
+					h = window.innerWidth * (rH / rW);
 				if (h > window.innerHeight) {
 					w = window.innerHeight * (rW / rH);
 					h = window.innerHeight;
@@ -6307,6 +6306,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			args[0] = window.innerWidth;
 			args[1] = window.innerHeight;
 		}
+		args[0] = Math.floor(args[0] / 2) * 2;
+		args[1] = Math.floor(args[1] / 2) * 2;
 		let rend = _createCanvas.call($, ...args);
 		$.ctx = $.drawingContext;
 		let c = rend.canvas || rend;
@@ -6354,8 +6355,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			$.camera.x = $.camera.ogX = c.hw;
 			$.camera.y = $.camera.ogY = c.hh;
 		} else {
-			$.camera.x = 0;
-			$.camera.y = 0;
+			$.camera.x = $.camera.ogX = 0;
+			$.camera.y = $.camera.ogY = 0;
 			if ($._webgpu) {
 				let rs = $.q5play._renderStats;
 				rs.x = -c.hw + 10;
@@ -7577,7 +7578,17 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		debugYellow = $.color(colorMax, colorMax, 0, colorMax * 0.9),
 		debugYellowFill = $.color(colorMax, colorMax, 0, colorMax * 0.1);
 
-	$._debugDraw = () => {
+	if ($._c2d) {
+		// polyfill for q5 WebGPU high efficiency functions
+		$._getFillIdx = () => $._fill;
+		$._setFillIdx = (v) => ($._fill = v);
+		$._getStrokeIdx = () => $._stroke;
+		$._setStrokeIdx = (v) => ($._stroke = v);
+		$._getStrokeWeight = () => [$._strokeWeight];
+		$._setStrokeWeight = (v) => $.strokeWeight(...v);
+	}
+
+	$._q5playDraw = () => {
 		$.scale(meterSize);
 
 		let ta = $.textAlign();
@@ -7766,10 +7777,6 @@ function q5playPostSetup() {
 	$.update ??= $.clear;
 
 	$._setupDone = true;
-
-	if ($._c2d || $._webgpuFallback) {
-		throw new Error('Support for Canvas2D will be added in a future update, but currently q5play requires WebGPU.');
-	}
 }
 
 // called before each draw function call
@@ -7816,7 +7823,7 @@ function q5playPostDraw() {
 
 	if ($.allSprites._autoDraw) {
 		$.allSprites.draw();
-		$._debugDraw();
+		$._q5playDraw();
 	}
 	$.allSprites._autoDraw ??= true;
 
