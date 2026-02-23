@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta3
+ * @version 4.0-beta4
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta3';
+let q5play_version = 'beta4';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -331,7 +331,8 @@ async function q5playPreSetup($, q) {
 	let using_p5v2 = !$._q5 && p5.VERSION[0] == 2;
 
 	// in q5play the default angle mode is degrees
-	const DEGREES = $.DEGREES;
+	const DEGREES = $.DEGREES,
+		DEGTORAD = Math.PI / 180;
 	$.angleMode(DEGREES);
 
 	// in q5play the default color mode is float RGB
@@ -1277,8 +1278,9 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			}
 
 			let offsetX, offsetY, w, h, path;
+			let originAtCenteroid = true;
 			let rr; // rounded radius
-			let id, geom, originMode, absVerts;
+			let id, geom, absVerts;
 			let shapes = this._shapes;
 			// Track how many shapes existed before
 			let startingShapeCount = shapes.length;
@@ -1316,7 +1318,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			rr ??= 0;
 
 			if (path) {
-				let vecs = [{ x: 0, y: 0 }],
+				let start,
+					vecs = [{ x: 0, y: 0 }],
 					isLoop = (vecs.isLoop = false);
 
 				if (typeof path[0] != 'number') {
@@ -1325,17 +1328,12 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 						y = 0;
 					for (let i = 0; i < path.length; i++) {
 						let p = path[i];
-						if (p.dist) {
-							x += p.dist * $.cos(p.angle);
-							y += p.dist * $.sin(p.angle);
-						} else {
-							x = p[0] ?? p.x;
-							y = p[1] ?? p.y;
-						}
+						x = p[0] ?? p.x;
+						y = p[1] ?? p.y;
 
 						if (absVerts) {
 							if (i == 0) {
-								this.pos = [x, y];
+								start = { x, y };
 								posX = x;
 								posY = y;
 								continue;
@@ -1346,6 +1344,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 						vecs.push({ x, y });
 					}
+					if (!absVerts) originAtCenteroid = false;
 				} else {
 					let rep = 1;
 					if (path.length % 2) rep = path[path.length - 1];
@@ -1357,14 +1356,15 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 					for (let i = 0; i < rep; i++) {
 						for (let j = 0; j < path.length - 1; j += 2) {
 							let len = path[j];
-							ang += path[j + 1];
+							if (!path.absoluteAngles) ang += path[j + 1];
+							else ang = path[j + 1];
 							x += len * $.cos(ang);
 							y += len * $.sin(ang);
 							vecs.push({ x, y });
 						}
 						ang *= mod;
 					}
-					originMode = 'center';
+					if (path.absoluteAngles) originAtCenteroid = false;
 				}
 
 				let isConvex = false;
@@ -1372,19 +1372,19 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 					isSlop(Math.abs(vecs[0].x) - Math.abs(vecs.at(-1).x)) &&
 					isSlop(Math.abs(vecs[0].y) - Math.abs(vecs.at(-1).y))
 				) {
-					originMode = 'center';
 					vecs.isLoop = isLoop = true;
+					originAtCenteroid = true;
 					if (this._isConvexPoly(vecs.slice(0, -1))) isConvex = true;
 				}
 
-				if (originMode == 'center') {
-					// the center relative to the first vertex
-					let centerX = 0;
-					let centerY = 0;
-					// use centroid of a triangle method to get center
-					// average of all vertices
-					let sumX = 0;
-					let sumY = 0;
+				if (originAtCenteroid) {
+					// the centroid relative to the first vertex
+					let recenterX = 0,
+						recenterY = 0;
+					// use centroid of a triangle method to get average of all vertices
+					// it's the same way Box2D calculates default center of mass
+					let sumX = 0,
+						sumY = 0;
 
 					let vl = vecs.length;
 					// last vertex is same as first
@@ -1393,29 +1393,34 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 						sumX += vecs[i].x;
 						sumY += vecs[i].y;
 					}
-					centerX = sumX / vl;
-					centerY = sumY / vl;
+					recenterX = sumX / vl;
+					recenterY = sumY / vl;
 
 					for (let i = 0; i < vecs.length; i++) {
 						let vec = vecs[i];
-						vecs[i] = scaleTo(vec.x + offsetX - centerX, vec.y + offsetY - centerY);
+						vecs[i] = scaleTo(vec.x + offsetX - recenterX, vec.y + offsetY - recenterY);
+					}
+
+					if (absVerts) {
+						this.pos = [start.x + recenterX, start.y + recenterY];
 					}
 				} else {
 					for (let i = 0; i < vecs.length; i++) {
-						vecs[i] = scaleTo(vecs[i].x, vecs[i].y);
+						let vec = vecs[i];
+						vecs[i] = scaleTo(vec.x + offsetX, vec.y + offsetY);
 					}
 				}
 
 				if (isLoop && isConvex && vecs.length - 1 <= 8) {
-					let hull = b2ComputeHull(vecs);
+					let hull = b2ComputeHull(vecs.slice(0, -1));
 					geom = b2MakePolygon(hull, 0);
 
 					id = b2CreatePolygonShape(bdID, shape.def, geom);
 					shape._init(id, 1, geom);
 				} else {
-					if (!isLoop && this._phys == 0) this.physics = 1;
 					if (vecs.length == 2) {
 						if (!rr) {
+							// if (this._phys == 0) this.physics = 1;
 							geom = new b2Segment();
 							geom.point1 = vecs[0];
 							geom.point2 = vecs[1];
@@ -1429,7 +1434,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 							id = b2CreateCapsuleShape(bdID, shape.def, geom);
 							shape._init(id, 4, geom);
 						}
-					} else if (this._phys == 2 || isLoop) {
+					} else if (rr || isLoop || this._phys == 2) {
 						// create several capsules to approximate a hollow shape (closed chain)
 						for (let i = 1; i < vecs.length; i++) {
 							geom = new b2Capsule();
@@ -1445,6 +1450,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 						shape = null;
 						this.isSuperFast = true;
 					} else {
+						if (!isLoop && this._phys == 0) this.physics = 1;
 						let packedData = shape.def.material.customColor;
 
 						shape.def = new b2DefaultChainDef();
@@ -1482,7 +1488,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 					let hh = (h * 0.5) / meterSize;
 					rr /= meterSize;
 
-					if (!rr) {
+					if (rr) {
 						hw = Math.max(hw - rr, 0.001);
 						hh = Math.max(hh - rr, 0.001);
 					}
@@ -1796,7 +1802,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 				backward: this.rotation + 180
 			};
 			let val = dirs[name];
-			if ($._angleMode == 'radians') val *= $._DEGTORAD;
+			if ($._angleMode == 'radians') val *= DEGTORAD;
 			return val;
 		}
 
@@ -1966,7 +1972,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			this._rotation = val;
 
 			if (this._physicsEnabled) {
-				if ($._angleMode == DEGREES) val = (val % 360) * $._DEGTORAD;
+				if ($._angleMode == DEGREES) val = (val % 360) * DEGTORAD;
 				b2Body_SetTransform(this.bdID, b2Body_GetPosition(this.bdID), b2MakeRot(val));
 			}
 		}
@@ -2009,7 +2015,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		set rotationSpeed(val) {
 			if (this._physicsEnabled) {
 				val *= 60;
-				if ($._angleMode == DEGREES) val *= $._DEGTORAD;
+				if ($._angleMode == DEGREES) val *= DEGTORAD;
 				b2Body_SetAngularVelocity(this.bdID, val);
 			} else this._rotationSpeed = val;
 		}
@@ -2128,7 +2134,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		get x() {
-			// let val = this._posX : b2Body_GetPosition(this.bdID).x;
 			let val = this._posX;
 			return friendlyRounding ? fixRound(val) : val;
 		}
@@ -2285,18 +2290,18 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			loopk: for (let k = 0; k < 2; k++) {
 				if (k == 1) vecs = vecs.reverse();
 				for (let i = 0; i < vecs.length; ++i) {
-					const i1 = i;
-					const i2 = i < vecs.length - 1 ? i1 + 1 : 0;
-					const p = vecs[i1];
-					const e = { x: vecs[i2].x - p.x, y: vecs[i2].y - p.y };
+					const i1 = i,
+						i2 = i < vecs.length - 1 ? i1 + 1 : 0,
+						p = vecs[i1],
+						e = { x: vecs[i2].x - p.x, y: vecs[i2].y - p.y };
 
 					for (let j = 0; j < vecs.length; ++j) {
 						if (j == i1 || j == i2) {
 							continue;
 						}
 
-						const v = { x: vecs[j].x - p.x, y: vecs[j].y - p.y };
-						const c = e.x * v.y - e.y * v.x;
+						const v = { x: vecs[j].x - p.x, y: vecs[j].y - p.y },
+							c = e.x * v.y - e.y * v.x;
 						if (c < 0.0) {
 							if (k == 0) continue loopk;
 							else return false;
@@ -5648,7 +5653,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		get angle() {
 			let ang = Box2D.b2RevoluteJoint_GetAngle(this.jID);
 			if ($._angleMode == 'radians') return ang;
-			return ang * $._DEGTORAD;
+			return ang * DEGTORAD;
 		}
 
 		get springEnabled() {
@@ -7550,10 +7555,11 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 				continue;
 			}
 
-			// low performance cost to always sync position
-			// actually way better than retrieving it when needed
-			s._posX = data[0] * meterSize;
-			s._posY = data[1] * meterSize;
+			// always keeping position in sync has a low performance cost
+			if (type < 4) {
+				s._posX = data[0] * meterSize;
+				s._posY = data[1] * meterSize;
+			}
 
 			s._velSynced = false;
 			s._vel._magCached = false;
@@ -7561,10 +7567,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			if (s._hasImagery || s._userDefinedDraw) {
 				s._rotation = Math.atan2(data[2], data[3]) * $._RADTODEG;
 			}
-
-			// if (!this._syncedToFrameRate) {
-			// 	for (let s of $.allSprites) s._syncWithPhysicsBody();
-			// }
 
 			if (s.debug || (!s._hasImagery && !s._userDefinedDraw)) {
 				shapeStack.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });

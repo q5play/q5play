@@ -2,7 +2,7 @@
 
 ## Visit [q5play.org][]! 🎮🧑‍💻
 
-q5play is a JavaScript game engine that uses q5.js for graphics and Box2D v3 for physics.
+q5play is a JavaScript game engine that uses [q5.js WebGPU][] for graphics and [Box2D v3 WASM][] for physics.
 
 [Join us on Discord][] to ask questions and meet other people making games with q5play. 👾
 
@@ -18,7 +18,7 @@ q5play and p5play v3 were created by Quinton Ashley.
 
 Huge thanks to everyone that's helped with q5play! 🙏
 
-Erik Sombroek and Alex Birch, creators of Box2D v3 WASM.
+Erik Sombroek and Alex Birch, creators of [Box2D v3 WASM][].
 
 Erin Catto, creator of the Box2D physics simulator.
 
@@ -31,6 +31,8 @@ Contributors: @Tezumie, Oliver Zell, Caleb Foss, and Bobby S.
 Testers and bug reporters: Lachlan Noble, Raj Raizada, Nathan Anil, Chayarat Wangweera, Zhiyuan Guo, Aarnav Gupta, and Carter Noa.
 
 [q5play.org]: https://q5play.org
+[q5.js WebGPU]: https://q5js.org
+[Box2D v3 WASM]: https://github.com/Birch-san/box2d3-wasm
 [Join us on Discord]: https://discord.gg/EJwnJATmj7
 [q5play Personal License]: q5play_Personal_License.md
 [q5play Educational License]: https://q5play.org/teach
