@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta4
+ * @version 4.0-beta5
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta4';
+let q5play_version = 'beta5';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -338,7 +338,8 @@ async function q5playPreSetup($, q) {
 	// in q5play the default color mode is float RGB
 	$.colorMode($.RGB, 1);
 
-	const ZERO_ROT = b2MakeRot(0);
+	const ZERO_VEC = new b2Vec2(0, 0),
+		ZERO_ROT = b2MakeRot(0);
 
 	let meterSize = 60;
 
@@ -1305,8 +1306,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			}
 
 			if (typeof a3 == 'string') {
-				path = getRegularPolygon(a2, a3);
-				rr = a4;
+				rr = a4 || 0;
+				path = getRegularPolygon(a2 - rr, a3);
 			} else if (Array.isArray(a2)) {
 				path = a2;
 				rr = a3;
@@ -1413,14 +1414,15 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 				if (isLoop && isConvex && vecs.length - 1 <= 8) {
 					let hull = b2ComputeHull(vecs.slice(0, -1));
-					geom = b2MakePolygon(hull, 0);
-
+					if (rr) {
+						geom = b2MakeOffsetRoundedPolygon(hull, ZERO_VEC, ZERO_ROT, rr / meterSize);
+					} else geom = b2MakePolygon(hull, 0);
 					id = b2CreatePolygonShape(bdID, shape.def, geom);
 					shape._init(id, 1, geom);
 				} else {
 					if (vecs.length == 2) {
 						if (!rr) {
-							// if (this._phys == 0) this.physics = 1;
+							if (this._phys == 0) this.physics = 1;
 							geom = new b2Segment();
 							geom.point1 = vecs[0];
 							geom.point2 = vecs[1];
@@ -1435,7 +1437,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 							shape._init(id, 4, geom);
 						}
 					} else if (rr || isLoop || this._phys == 2) {
-						// create several capsules to approximate a hollow shape (closed chain)
+						// make a capsule chain
 						for (let i = 1; i < vecs.length; i++) {
 							geom = new b2Capsule();
 							geom.center1 = vecs[i - 1];
@@ -1449,6 +1451,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 						}
 						shape = null;
 						this.isSuperFast = true;
+						this._hasCapsuleChain = true;
 					} else {
 						if (!isLoop && this._phys == 0) this.physics = 1;
 						let packedData = shape.def.material.customColor;
@@ -2001,8 +2004,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			b2Body_SetMotionLocks(this.bdID, locks);
 
 			// this.mass = mass;
-
-			console.error('rotationLock is not implemented yet');
 		}
 
 		get rotationSpeed() {
@@ -2134,7 +2135,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		get x() {
-			let val = this._posX;
+			let val = !this._hasCapsuleChain ? this._posX : b2Body_GetPosition(this.bdID).x * meterSize;
 			return friendlyRounding ? fixRound(val) : val;
 		}
 		set x(val) {
@@ -2148,7 +2149,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		get y() {
-			let val = this._posY;
+			let val = !this._hasCapsuleChain ? this._posY : b2Body_GetPosition(this.bdID).y * meterSize;
 			return friendlyRounding ? fixRound(val) : val;
 		}
 		set y(val) {
@@ -6152,7 +6153,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 					'"' +
 					' animation not loaded yet or frame ' +
 					ani._frame +
-					" doesn't exist. Load this animation in the preload function if you need to use it at the start of your program."
+					" doesn't exist. Use `await sprite.addAni` to wait for it to finish loading."
 			);
 		}
 
@@ -7555,8 +7556,9 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 				continue;
 			}
 
-			// always keeping position in sync has a low performance cost
-			if (type < 4) {
+			// always keep position in sync since it has a low performance cost
+			// unless the shape is a chain
+			if (type < 4 || (type == 4 && !s._hasCapsuleChain)) {
 				s._posX = data[0] * meterSize;
 				s._posY = data[1] * meterSize;
 			}
@@ -7708,25 +7710,32 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 				$.q5play.spritesDrawn++;
 			}
 			// draw a triangle at the shape's center to indicate rotation
-			if (s.debug && cmd.type < 5) {
+			if (s.debug && cmd.type < 5 && !s._hasCapsuleChain) {
 				$._setFillIdx($._getStrokeIdx());
 				$._doFill();
 				$.noStroke();
 				if (!isSensor && isFirstShape) {
-					$.beginShape();
-					let a = 0.05,
-						b = 0.03;
-					let tri = [-b, -b, -b, b, a, 0];
-					for (let i = 0; i < 6; i += 2) {
-						v.x = tri[i];
-						v.y = tri[i + 1];
-						transformPoint(xf, v);
-						$.vertex(v.x, v.y);
+					if (cmd.type != 4) {
+						$.beginShape();
+						let a = 0.05,
+							b = 0.03;
+						let tri = [-b, -b, -b, b, a, 0];
+						for (let i = 0; i < 6; i += 2) {
+							v.x = tri[i];
+							v.y = tri[i + 1];
+							transformPoint(xf, v);
+							$.vertex(v.x, v.y);
+						}
+						$.endShape(true);
+					} else {
+						let x = (cmd.data[0] + cmd.data[2]) / 2,
+							y = (cmd.data[1] + cmd.data[3]) / 2;
+						$.circle(x, y, 0.05);
 					}
-					$.endShape(true);
 				} else {
 					$.circle(cmd.data[0], cmd.data[1], 0.03);
 				}
+				$._doStroke();
 			}
 
 			if (!s.debug && s.text !== undefined) {
