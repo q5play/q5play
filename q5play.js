@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta5
+ * @version 4.0-beta6
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta5';
+let q5play_version = 'beta6';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -337,6 +337,9 @@ async function q5playPreSetup($, q) {
 
 	// in q5play the default color mode is float RGB
 	$.colorMode($.RGB, 1);
+
+	// in q5play the default image mode is center
+	$.imageMode($.CENTER);
 
 	const ZERO_VEC = new b2Vec2(0, 0),
 		ZERO_ROT = b2MakeRot(0);
@@ -4839,13 +4842,13 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		getSpritesAt(x, y, group, cameraActiveWhenDrawn = true) {
-			if (x.x) {
+			if (x?.x) {
 				cameraActiveWhenDrawn = group ?? true;
 				group = y;
 				y = x.y;
 				x = x.x;
 			}
-			const point = new b2Vec2(x / meterSize, y / meterSize);
+			const point = scaleTo(x, y);
 			const filter = new b2QueryFilter();
 
 			// TODO
@@ -5332,7 +5335,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 		_setOffsetA(x, y) {
 			const a = this.spriteA,
-				vec = scaleTo(a.x + x, a.y + y),
+				vec = scaleTo(a.x - this._oAx + x, a.y - this._oAy + y),
 				t = new b2Transform();
 
 			t.p = b2Body_GetLocalPoint(a.bdID, vec);
@@ -5345,7 +5348,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 		_setOffsetB(x, y) {
 			const a = this.spriteA,
-				vec = scaleTo(a.x + x, a.y + y),
+				vec = scaleTo(a.x - this._oBx + x, a.y - this._oBy + y),
 				t = new b2Transform();
 
 			t.p = b2Body_GetLocalPoint(this.spriteB.bdID, vec);
@@ -6356,7 +6359,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 		c.hw = c.w * 0.5;
 		c.hh = c.h * 0.5;
-		c.mouse = { x: $.mouseX, y: $.mouseY };
 		if ($._c2d) {
 			$.camera.x = $.camera.ogX = c.hw;
 			$.camera.y = $.camera.ogY = c.hh;
@@ -6648,19 +6650,9 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		_update() {
-			$.mouse.canvasPos.x = $.mouseX;
-			$.mouse.canvasPos.y = $.mouseY;
-
-			if ($.camera.x == $.camera.ogX && $.camera.y == $.camera.ogY && $.camera.zoom == 1) {
-				this.x = $.mouseX;
-				this.y = $.mouseY;
-			} else if (!$._webgpu) {
-				this.x = ($.mouseX - $.canvas.hw) / $.camera.zoom + $.camera.x;
-				this.y = ($.mouseY - $.canvas.hh) / $.camera.zoom + $.camera.y;
-			} else {
-				this.x = $.mouseX / $.camera.zoom + $.camera.x;
-				this.y = $.mouseY / $.camera.zoom + $.camera.y;
-			}
+			let cam = $.camera;
+			this.x = $.mouseX / cam.zoom + cam.x;
+			this.y = $.mouseY / cam.zoom + cam.y;
 		}
 
 		get pos() {
@@ -6726,18 +6718,21 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			const c = $.canvas,
 				rect = c.getBoundingClientRect(),
 				sx = c.scrollWidth / c.w || 1,
-				sy = c.scrollHeight / c.h || 1,
-				x = (this.canvasPos.x = (e.clientX - rect.left) / sx),
-				y = (this.canvasPos.y = (e.clientY - rect.top) / sy);
+				sy = c.scrollHeight / c.h || 1;
+			let x = (e.clientX - rect.left) / sx,
+				y = (e.clientY - rect.top) / sy;
+
+			if ($._webgpu) {
+				x -= c.hw;
+				y -= c.hh;
+			}
+
+			this.canvasPos.x = x;
+			this.canvasPos.y = y;
 
 			// Calculate world position based on camera
-			if ($.camera.x == c.hw && $.camera.y == c.hh && $.camera.zoom == 1) {
-				this.x = x;
-				this.y = y;
-			} else {
-				this.x = (x - c.hw) / $.camera.zoom + $.camera.x;
-				this.y = (y - c.hh) / $.camera.zoom + $.camera.y;
-			}
+			this.x = x / $.camera.zoom + $.camera.x;
+			this.y = y / $.camera.zoom + $.camera.y;
 			this.pressure = e.pressure !== undefined ? e.pressure : 1;
 			this.event = e;
 		}
@@ -7507,28 +7502,27 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		v.y = y;
 	}
 
-	let drawCmds = new DebugDrawCommandBuffer();
-	let jointStack = [];
-	let shapeStack = [];
+	let drawCmds = new DebugDrawCommandBuffer(),
+		jointStack = [],
+		shapeStack = [];
 
 	$._syncWorld = () => {
 		jointStack = [];
 		shapeStack = [];
-		b2World_Draw(wID, drawCmds.GetDebugDraw());
-		let cmdPtr = drawCmds.GetCommandsData();
-		let cmdSize = drawCmds.GetCommandsSize();
-		let cmdStride = drawCmds.GetCommandStride();
 
-		// Collect commands with their associated sprites
-		let offset = cmdPtr;
-		let s;
+		b2World_Draw(wID, drawCmds.GetDebugDraw());
+
+		let cmdPtr = drawCmds.GetCommandsData(),
+			cmdSize = drawCmds.GetCommandsSize(),
+			cmdStride = drawCmds.GetCommandStride(),
+			offset = cmdPtr,
+			s;
 
 		for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
 			// workaround that unpacks data from
 			// the shape material's customColor
-			const customColor = Box2D.HEAPU32[(offset + 4) >> 2];
-
-			const uid = customColor & 0xffffff,
+			const customColor = Box2D.HEAPU32[(offset + 4) >> 2],
+				uid = customColor & 0xffffff,
 				isSensor = (customColor >>> 25) & 0x1,
 				isFirstShape = (customColor >>> 26) & 0x1;
 
@@ -7552,7 +7546,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
 
 			if (!s) {
-				if (type == 0) jointStack.push(...data);
+				if (type == 0) jointStack.push(data);
 				continue;
 			}
 
@@ -7610,8 +7604,9 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 		$._setStrokeWeight(swData);
 
-		for (let i = 0; i < jointStack.length; i += 8) {
-			$.line(jointStack[i], jointStack[i + 1], jointStack[i + 4], jointStack[i + 5]);
+		for (const data of jointStack) {
+			if (data.length == 4) $.point(data[0], data[1]);
+			else $.line(data[0], data[1], data[4], data[5]);
 		}
 
 		// Sort by layer
