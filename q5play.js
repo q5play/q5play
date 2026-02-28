@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta6
+ * @version 4.0-beta7
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta6';
+let q5play_version = 'beta7';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -84,6 +84,7 @@ async function q5playPreSetup($, q) {
 		b2World_GetProfile,
 		b2World_GetCounters,
 		b2World_OverlapAABB,
+		b2World_OverlapShape,
 		b2World_CastRay,
 		b2World_CastRayClosest,
 		b2World_SetCustomFilterCallback,
@@ -103,6 +104,7 @@ async function q5playPreSetup($, q) {
 		b2MakeOffsetRoundedBox,
 		b2MakePolygon,
 		b2MakeOffsetRoundedPolygon,
+		b2MakeProxy,
 		b2Circle,
 		b2Capsule,
 		b2Segment,
@@ -115,6 +117,7 @@ async function q5playPreSetup($, q) {
 
 		b2Shape_IsValid,
 		b2Shape_TestPoint,
+		b2Shape_GetBody,
 		b2Shape_RayCast,
 		b2Shape_SetDensity,
 		b2Shape_SetFriction,
@@ -154,6 +157,7 @@ async function q5playPreSetup($, q) {
 		b2DefaultBodyDef,
 		b2CreateBody,
 		b2DestroyBody,
+		b2Body_GetPointer,
 		b2Body_GetPosition,
 		b2Body_GetRotation,
 		b2Body_GetTransform,
@@ -578,7 +582,7 @@ async function q5playPreSetup($, q) {
 
 		get anis() {
 			if (!this._anis) {
-				this._anis = new $.Anis();
+				this._anis = new $.Anis(this);
 			}
 			return this._anis;
 		}
@@ -643,9 +647,8 @@ async function q5playPreSetup($, q) {
 				this._anis[name] = ani;
 			} else if (this.ani) {
 				// Only create anis object if this is not the first animation
-				this._anis = new $.Anis();
 				// Add the previously added animation to anis
-				this._anis[this.ani.name] = this.ani;
+				this.anis[this.ani.name] = this.ani;
 			}
 
 			this.ani = ani;
@@ -888,6 +891,7 @@ async function q5playPreSetup($, q) {
 			this._overlappers = {};
 
 			group ??= $.allSprites;
+			this.parent = group._uid;
 
 			this._tile = '';
 
@@ -1142,8 +1146,6 @@ async function q5playPreSetup($, q) {
 			this._destIdx = 0;
 			this._debug = false;
 
-			this.text;
-
 			if (!group._isAllSpritesGroup) $.allSprites.push(this);
 			group.push(this);
 
@@ -1274,23 +1276,21 @@ async function q5playPreSetup($, q) {
 		_add(isSensor, a0, a1, a2, a3, a4) {
 			if (this._shapes.length >= $.Sprite.maxColliders) {
 				if (!this._warnedMaxColliders) {
-					console.warn(`Sprite has too many colliders (${this._shapes.length}).
-This may be due to a memory leak. Increase Sprite.maxColliders to disable this warning.`);
+					console.warn(
+						`Sprite has ${this._shapes.length} colliders and sensors, which is greater than Sprite.maxColliders. Increasing the limit may cause performance issues.`
+					);
 					this._warnedMaxColliders = true;
 				}
 				return;
 			}
 
-			let offsetX, offsetY, w, h, path;
-			let originAtCenteroid = true;
-			let rr; // rounded radius
-			let id, geom, absVerts;
-			let shapes = this._shapes;
-			// Track how many shapes existed before
-			let startingShapeCount = shapes.length;
-			let bdID = this.bdID;
+			let offsetX, offsetY, w, h, path, rr;
+			let shape, id, geom, absVerts;
+			let originAtCenteroid = true,
+				shapes = this._shapes,
+				startingShapeCount = shapes.length,
+				bdID = this.bdID;
 
-			let shape;
 			if (isSensor) shape = new Sensor(this);
 			else shape = new Collider(this);
 
@@ -1456,6 +1456,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 						this.isSuperFast = true;
 						this._hasCapsuleChain = true;
 					} else {
+						// make a segment chain
 						if (!isLoop && this._phys == 0) this.physics = 1;
 						let packedData = shape.def.material.customColor;
 
@@ -1476,6 +1477,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 							shapeDict[segID.index1] = sh;
 						}
 						this._hasChain = true;
+						shape = null; // don't add chain parent to the shapes array
 					}
 				}
 			} else {
@@ -1772,10 +1774,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			return this._deleted;
 		}
 		set deleted(val) {
-			if (!val || this._deleted) return;
-			if (this.watch) this.mod[23] = true;
-			this._deleted = true;
-			this._delete();
+			if (val) this.delete();
 		}
 
 		get density() {
@@ -2169,6 +2168,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			return this._pos;
 		}
 		set pos(val) {
+			if (val == $.mouse && !$.mouse.isActive) return;
 			let x = val[0] ?? val.x;
 			let y = val[1] ?? val.y;
 			if (this._physicsEnabled) {
@@ -2353,6 +2353,14 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 		set velocity(val) {
 			this.vel = val;
+		}
+
+		get grabbable() {
+			return this._grabbable;
+		}
+		set grabbable(val) {
+			this._grabbable = val;
+			$.pointers.grabTracking = true;
 		}
 
 		get gravityScale() {
@@ -2597,10 +2605,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		_postDraw() {
-			for (let prop in this.mouse) {
-				if (this.mouse[prop] == -1) this.mouse[prop] = 0;
-			}
-
 			if (this._customPostDraw) this._customPostDraw();
 
 			this.autoDraw ??= true;
@@ -2784,10 +2788,12 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		delete() {
-			this.deleted = true;
-		}
+			if (this._deleted) return;
+			this._deleted = true;
+			if (this.watch) this.mod[23] = true;
 
-		_delete() {
+			this.joints.deleteAll();
+
 			b2DestroyBody(this.bdID);
 
 			// when deleted from the world also remove all the sprite
@@ -3086,7 +3092,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		'heading',
 		'resetAniOnChange',
 		'speed',
-		'spriteSheet',
 		'width'
 	]);
 
@@ -3559,20 +3564,29 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 	};
 
-	$.Ani.props = ['frameSize', 'frameDelay', 'offset', 'scale', 'looping', 'endOnFirstFrame', '_spriteSheetDemo'];
+	$.Ani.props = ['frameDelay', 'offset', 'scale', 'looping', 'endOnFirstFrame', '_spriteSheetDemo'];
 
 	$.Anis = class {
 		#_ = {};
-		constructor() {
-			let _this = this;
+		#owner;
+		constructor(owner) {
+			this.#owner = owner;
 
-			let props = $.Ani.props;
-			let vecProps = ['offset', 'scale'];
+			const _this = this,
+				props = $.Anis.props,
+				vecProps = ['offset', 'scale'];
 
 			for (let prop of props) {
 				Object.defineProperty(this, prop, {
 					get() {
-						return _this.#_[prop];
+						let val = _this.#_[prop];
+						if (val === undefined && !_this._isAllSpritesGroup) {
+							let parent = $.q5play.groups[_this.#owner.parent];
+							if (parent) {
+								val = parent.anis[prop];
+							}
+						}
+						return val;
 					},
 					set(val) {
 						_this.#_[prop] = val;
@@ -3625,6 +3639,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 	};
 
+	$.Anis.props = [...$.Ani.props, 'frameSize', 'spriteSheet'];
+
 	$.Visuals = class extends Array {
 		constructor(...args) {
 			super(...args);
@@ -3637,7 +3653,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 		get anis() {
 			if (!this._anis) {
-				this._anis = new $.Anis();
+				this._anis = new $.Anis(this);
 			}
 			return this._anis;
 		}
@@ -3762,27 +3778,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 					super(_this, ...arguments);
 				}
 			};
-
-			this.mouse = {
-				presses: null,
-				pressing: null,
-				pressed: null,
-				holds: null,
-				holding: null,
-				held: null,
-				released: null,
-				hovers: null,
-				hovering: null,
-				hovered: null
-			};
-			for (let state in this.mouse) {
-				this.mouse[state] = function (inp) {
-					for (let s of _this) {
-						if (s.mouse[state](inp)) return true;
-					}
-					return false;
-				};
-			}
 
 			let skipProps = ['ani', 'tile', 'scale', 'velocity', 'width', 'height', 'diameter'];
 
@@ -4616,9 +4611,6 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			this._setTimeStep();
 			this.bounceThreshold = 0.19;
 			this.physicsTime = 0;
-			this.mouseTracking ??= true;
-			this.mouseSprite = null;
-			this.mouseSprites = [];
 			this.autoStep = true;
 			this.subSteps = 4;
 
@@ -4841,56 +4833,59 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			b2World_Explode(wID, e);
 		}
 
-		getSpritesAt(x, y, group, cameraActiveWhenDrawn = true) {
+		getSpritesAt(x, y, radius, group, cameraActiveWhenDrawn) {
+			if (x == $.mouse && !$.mouse.isActive) return [];
 			if (x?.x) {
-				cameraActiveWhenDrawn = group ?? true;
-				group = y;
-				y = x.y;
-				x = x.x;
+				// shift args if first arg is a position object
+				let args = [x.x, x.y, y, radius, group];
+				[x, y, radius, group, cameraActiveWhenDrawn] = args;
 			}
-			const point = scaleTo(x, y);
-			const filter = new b2QueryFilter();
 
-			// TODO
-			return [];
+			radius ??= 0;
+			cameraActiveWhenDrawn ??= true;
 
-			// Query the world for fixture AABBs that overlap the point AABB
-			// narrowing down the number of fixtures to check with
-			// the more expensive testPoint method
-			let fxts = [];
-			b2World_OverlapPoint(wID, point, this._origin, filter, (fxt) => {
-				// we need to make sure the point is actually within the shape
-				if (fxt.getShape().testPoint(fxt.getBody().getTransform(), point)) {
-					fxts.push(fxt);
+			const point = scaleTo(x, y),
+				proxy = b2MakeProxy(point, 1, radius / meterSize),
+				filter = new b2QueryFilter(),
+				shapes = [];
+
+			// no filter
+			filter.categoryBits = 0xffffffff;
+			filter.maskBits = 0xffffffff;
+
+			b2World_OverlapShape(wID, proxy, filter, (overlapResult) => {
+				const { shapeId } = overlapResult;
+				if (shapeId) {
+					shapes.push(shapeDict[shapeId.index1]);
 				}
-				return true;
+				return true; // continue searching
 			});
-			if (fxts.length == 0) return [];
+
+			proxy.delete();
+			filter.delete();
+
+			if (!shapes.length) return [];
 
 			group ??= $.allSprites;
-			let sprites = [];
-			for (let fxt of fxts) {
-				const s = fxt.m_body.sprite;
+
+			let spriteSet = new Set();
+
+			for (const shape of shapes) {
+				const s = shape.sprite;
+				if (!s) continue;
 				if (s._cameraActiveWhenDrawn == cameraActiveWhenDrawn) {
-					if (!sprites.find((x) => x._uid == s._uid)) sprites.push(s);
+					spriteSet.add(s);
 				}
 			}
+
+			const sprites = [...spriteSet].filter((s) => group.includes(s));
 			sprites.sort((a, b) => (a._layer - b._layer) * -1);
 			return sprites;
 		}
 
-		getSpriteAt(x, y, group) {
-			const sprites = this.getSpritesAt(x, y, group);
+		getSpriteAt(x, y, radius, group) {
+			const sprites = this.getSpritesAt(x, y, radius, group);
 			return sprites[0];
-		}
-
-		getMouseSprites() {
-			let sprites = this.getSpritesAt($.mouse.x, $.mouse.y);
-			if ($.camera._wasOff) {
-				let uiSprites = this.getSpritesAt($.mouse.canvasPos.x, $.mouse.canvasPos.y, $.allSprites, false);
-				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
-			}
-			return sprites;
 		}
 
 		physicsUpdate(timeStep) {
@@ -5187,6 +5182,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			this.spriteB = b;
 			this.type = type ??= 'glue';
 			this.visible = true;
+			this.deleted = false;
 
 			if (!a._shapes.length) a.addDefaultSensors();
 			if (!b._shapes.length) b.addDefaultSensors();
@@ -5397,7 +5393,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 
 		delete() {
-			if (this._deleted) return;
+			if (this.deleted) return;
 
 			const a = this.spriteA,
 				b = this.spriteB;
@@ -5407,7 +5403,7 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 
 			b2DestroyJoint(this.jID, true);
 
-			this._deleted = true;
+			this.deleted = true;
 		}
 	};
 
@@ -5869,6 +5865,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			}
 
 			this.jID = b2CreateMotorJoint(wID, j);
+
+			this.sprite = sprite;
 		}
 
 		_draw() {
@@ -6549,8 +6547,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		pressing(inp) {
 			inp ??= this._default;
 			if (this[inp] === undefined) inp = this._ac(inp);
-			if (this[inp] == -3) return 1;
-			return this[inp] > 0 ? this[inp] : 0;
+			const v = this[inp];
+			return v == -3 ? 1 : v > 0 ? v : 0;
 		}
 
 		pressed(inp) {
@@ -6566,7 +6564,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		holding(inp) {
 			inp ??= this._default;
 			if (this[inp] === undefined) inp = this._ac(inp);
-			return this[inp] >= this.holdThreshold ? this[inp] : 0;
+			const v = this[inp];
+			return v >= this.holdThreshold ? v : 0;
 		}
 
 		held(inp) {
@@ -6605,6 +6604,11 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			this.right = 0;
 			this.scroll = 0;
 			this.scrollDelta = { x: 0, y: 0 };
+
+			this.hoverTracking = true;
+			this._hovering = {};
+			this.sprite = null;
+			this.sprites = [];
 
 			let _this = this;
 
@@ -6655,6 +6659,15 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			this.y = $.mouseY / cam.zoom + cam.y;
 		}
 
+		_getPointerSprites() {
+			let sprites = $.world.getSpritesAt(this.x, this.y);
+			if ($.camera._wasOff) {
+				let uiSprites = $.world.getSpritesAt(this.canvasPos.x, this.canvasPos.y, 0, $.allSprites, false);
+				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
+			}
+			return sprites;
+		}
+
 		get pos() {
 			return this._pos;
 		}
@@ -6687,11 +6700,23 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		}
 		dragging(inp) {
 			inp ??= this._default;
-			return this.drag[inp] > 0 ? this.drag[inp] : 0;
+			const v = this.drag[inp];
+			return v > 0 ? v : 0;
 		}
 		dragged(inp) {
 			inp ??= this._default;
 			return this.drag[inp] <= -1;
+		}
+
+		hoversOn(sprite) {
+			return this._hovering[sprite._uid];
+		}
+		hoveringOn(sprite) {
+			const v = this._hovering[sprite._uid];
+			return v > 0 ? v : 0;
+		}
+		hoveredOn(sprite) {
+			return this._hovering[sprite._uid] <= -1;
 		}
 	};
 
@@ -6706,11 +6731,12 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			this.y = 0;
 			this.id = e.pointerId;
 			this.type = e.pointerType;
-			this._default = 'duration';
-			this.holdThreshold = 12;
 			this.duration = 1;
-			this.drag = 0;
+			this._default = 'press';
+			this.press = 0;
+			this.holdThreshold = 12;
 			this._dragging = false;
+			this.drag = 0;
 			this.canvasPos = {};
 		}
 
@@ -6733,8 +6759,19 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 			// Calculate world position based on camera
 			this.x = x / $.camera.zoom + $.camera.x;
 			this.y = y / $.camera.zoom + $.camera.y;
-			this.pressure = e.pressure !== undefined ? e.pressure : 1;
+			this.pressure = e.pressure ?? 0;
 			this.event = e;
+		}
+
+		drags() {
+			return this.drag == 1;
+		}
+		dragging() {
+			const v = this.drag;
+			return v > 0 ? v : 0;
+		}
+		dragged() {
+			return this.drag <= -1;
 		}
 	};
 
@@ -6763,39 +6800,28 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		if (!$._isQ5 && $.userStartAudio) $.userStartAudio();
 
 		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
-		$.mouse.isActive = true;
-		$.mouse[btn]++;
+		let m = $.mouse;
+		m.isActive = true;
+		m[btn]++;
 
-		if (e.pointerId == undefined || !$.pointers[0] || e.pointerId == $.pointers[0].id) {
-			$.mouse._update();
-			$.world.mouseSprites = $.world.getMouseSprites();
-		}
-
-		if ($.world.mouseSprites.length) {
-			let msm = $.world.mouseSprite?.mouse;
-			if (msm) {
-				msm[btn] = 0;
-				msm.hover = 0;
-				msm.drag[btn] = 0;
-			}
-			let ms = $.world.mouseSprites[0];
-			$.world.mouseSprite = ms;
-			msm = ms.mouse;
-			msm[btn] = 1;
-			if (msm.hover <= 0) msm.hover = 1;
+		if (e.pointerId == undefined) m._update();
+		else if (e.pointerId == $.pointers[0]?.id) {
+			m._update();
+			$.pointers[0].press++;
 		}
 	};
 
 	let onpointermove = function (e) {
 		if (!$._setupDone) return;
 		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
-		if ($.mouse[btn] > 0) $.mouse._dragging[btn] = true;
+		let m = $.mouse;
+		if (m[btn] > 0) m._dragging[btn] = true;
 
 		let p = $.pointers.find((p) => p.id === e.pointerId);
 		if (p) {
 			p._update(e);
-			if ($.mouse[btn] > 0) p._dragging = true;
-			if (p.id == $.pointers[0].id) $.mouse._update();
+			p._dragging = e.pressure >= 0.5;
+			if (p.id == $.pointers[0].id) m._update();
 		}
 	};
 
@@ -6813,28 +6839,17 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 		else m[btn] = -3;
 		if (m.drag[btn] > 0) m.drag[btn] = -1;
 
-		let msm = $.world.mouseSprite?.mouse;
-		if (msm) {
-			if (msm.hover > 1) {
-				if (msm[btn] >= $.mouse.holdThreshold) msm[btn] = -2;
-				else if (msm[btn] > 1) msm[btn] = -1;
-				else msm[btn] = -3;
-				if (msm.drag[btn] > 0) msm.drag[btn] = -1;
-			} else {
-				msm[btn] = 0;
-				msm.drag[btn] = 0;
-			}
-		}
-
 		let p = $.pointers.find((p) => p.id === e.pointerId);
 		if (p) {
 			p._update(e);
-			if (p.duration >= p.holdThreshold) p.duration = -2;
-			else if (p.duration > 1) p.duration = -1;
-			else p.duration = -3;
+			if (p.press >= p.holdThreshold) p.press = -2;
+			else if (p.press > 1) p.press = -1;
+			else p.press = -3;
+
+			p._dragging = false;
 			if (p.drag > 0) p.drag = -1;
 
-			if (p.id == $.pointers[0].id) $.mouse._update();
+			if (p.id == $.pointers[0].id) m._update();
 		}
 	};
 
@@ -7624,6 +7639,8 @@ This may be due to a memory leak. Increase Sprite.maxColliders to disable this w
 				isSensor = cmd.isSensor,
 				isFirstShape = cmd.isFirstShape;
 
+			s._cameraActiveWhenDrawn = true;
+
 			if (!s.debug) {
 				if (isSensor) continue;
 				$.fill(s.fill);
@@ -7846,18 +7863,39 @@ function q5playPostDraw() {
 	}
 
 	for (let p of $.pointers) {
-		if (p.type != 'mouse' || $.mouseIsPressed) p.duration++;
-		else p.duration = 0;
-		if (p._dragging) {
-			p.drag++;
-			p._dragging = false;
-		} else if (p.drag < 0) {
-			p.drag = 0;
+		if ($.pointers.grabTracking) {
+			if (p.drags()) {
+				let s = $.world.getSpriteAt(p);
+				if (s?.grabbable) {
+					p.grabber ??= new $.GrabberJoint(s);
+					// p.grabPos = { x: s.x - p.x, y: s.y - p.y };
+				}
+			}
+
+			if (p.grabber) {
+				// p.grabber.target = [p.x + p.grabPos.x, p.y + p.grabPos.y];
+				p.grabber.target = p;
+
+				if (p.released()) {
+					if (!p.grabber.deleted) p.grabber.delete();
+					p.grabber = null;
+				}
+			}
 		}
+
+		p.duration++;
+		if (p.pressure >= 0.5) {
+			p.press++;
+			if (p._dragging) {
+				p.drag++;
+				p._dragging = false;
+			}
+		}
+		if (p.press < 0) p.press = 0;
+		if (p.drag < 0) p.drag = 0;
 	}
 
 	let m = $.mouse;
-	let msm = $.world.mouseSprite?.mouse;
 
 	m.scrollDelta.x = 0;
 	m.scrollDelta.y = 0;
@@ -7865,57 +7903,44 @@ function q5playPostDraw() {
 	for (let btn of ['left', 'center', 'right']) {
 		if (m[btn] < 0) m[btn] = 0;
 		else if (m[btn] > 0) m[btn]++;
-		if (msm?.hover) msm[btn] = m[btn];
 
 		if (m._dragging[btn]) {
 			m.drag[btn]++;
-			if (msm) msm.drag[btn] = m.drag[btn];
 			m._dragging[btn] = false;
 		} else if (m.drag[btn] < 0) {
 			m.drag[btn] = 0;
-			if (msm) msm.drag[btn] = 0;
 		}
 	}
 
-	if ($.world.mouseTracking && $.mouse.isActive) {
-		let sprites = $.world.getMouseSprites();
-
+	if (m.hoverTracking) {
+		let sprites = $.world.getSpritesAt(m);
 		for (let i = 0; i < sprites.length; i++) {
-			let s = sprites[i];
-			if (i == 0) s.mouse.hover++;
-			else if (s.mouse.hover > 0) s.mouse.hover = -1;
-			else if (s.mouse.hover < 0) s.mouse.hover = 0;
+			let s = sprites[i],
+				v = m._hovering[s._uid] || 0;
+			if (i == 0) {
+				v++;
+				m.sprite = s;
+			} else if (v > 0) v = -1;
+			else if (v < 0) v = 0;
+			m._hovering[s._uid] = v;
 		}
-
-		// if the user is not pressing any mouse buttons
-		if (m.left <= 0 && m.center <= 0 && m.right <= 0) {
-			$.world.mouseSprite = null;
-		}
-
-		let ms = $.world.mouseSprite;
-
-		let isDragging = m.drag.left > 0 || m.drag.center > 0 || m.drag.right > 0;
-
-		for (let s of $.world.mouseSprites) {
-			// if the mouse stopped hovering over the sprite
+		let isPressing = m.left > 0 || m.center > 0 || m.right > 0;
+		for (let s of m.sprites) {
+			// if the pointer stopped hovering over the sprite
 			if (!sprites.includes(s)) {
-				let sm = s.mouse;
-				if (sm.hover > 0) {
-					sm.hover = -1;
-					sm.left = sm.center = sm.right = 0;
+				// if pointer is not dragging and the sprite is the current pointer sprite
+				if (!isPressing && s == m.sprite) {
+					m._hovering[s._uid] = -1;
+					m.sprite = null;
 				}
-				// if mouse is not dragging and the sprite is the current mouse sprite
-				if (!isDragging && s == ms) $.world.mouseSprite = ms = null;
 			}
 		}
-		if (ms) {
+		if (m.sprite) {
 			// if the user is dragging on a sprite, but not currently hovering
-			// over it, the mouse sprite should still be added to the mouseSprites array
-			if (!sprites.includes(ms)) sprites.push(ms);
-			msm.x = ms.x - m.x;
-			msm.y = ms.y - m.y;
+			// over it, the pointer sprite should still be added to the sprites array
+			if (!sprites.includes(m.sprite)) sprites.push(m.sprite);
 		}
-		$.world.mouseSprites = sprites;
+		m.sprites = sprites;
 	}
 
 	if (!$._q5) {

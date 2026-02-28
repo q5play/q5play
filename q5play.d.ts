@@ -654,8 +654,8 @@ declare global {
 		 * to double the sprite's scale.
 		 * @default {x: 1, y: 1}
 		 */
-		get scale(): number | { x: number, y: number };
-		set scale(val: number | [] | { x: number, y: number });
+		get scale(): number | { x: number; y: number };
+		set scale(val: number | [] | { x: number; y: number });
 		/**
 		 * Scales the the sprite.
 		 * @param x scaleX or uniform scale factor
@@ -794,6 +794,11 @@ declare global {
 		 */
 		get velocity(): Q5.Vector;
 		set velocity(val: [] | { x: number; y: number } | Q5.Vector);
+		/**
+		 * Whether the sprite can be grabbed by a pointer.
+		 */
+		get grabbable(): boolean;
+		set grabbable(val: boolean);
 		/**
 		 * A ratio that defines how much the sprite is affected by gravity.
 		 * @default 1
@@ -1173,7 +1178,19 @@ declare global {
 	 * In instances of this class, the keys are animation names,
 	 * values are Ani objects.
 	 */
-	class Anis {}
+	class Anis {
+		/**
+		 * Frame size of the animations in the collection, in the format "WIDTHxHEIGHT", for example "32x32".
+		 */
+		get frameSize(): string;
+		set frameSize(val: string);
+
+		/**
+		 * The sprite sheet image used by the animations in the collection.
+		 */
+		get spriteSheet(): Q5.Image;
+		set spriteSheet(val: Q5.Image);
+	}
 
 	class Group extends Array<Sprite> {
 		/**
@@ -1213,6 +1230,7 @@ declare global {
 		drag: number;
 		// fill is an Array method
 		friction: number;
+		grabbable: boolean;
 		gravityScale: number;
 		heading: string;
 		h: number;
@@ -1500,19 +1518,6 @@ declare global {
 		 */
 		meterSize: number;
 		/**
-		 * The sprite the mouse is hovering over.
-		 *
-		 * If the mouse is hovering over several sprites, the mouse
-		 * sprite will be the one with the highest layer value.
-		 * @default null
-		 */
-		mouseSprite: Sprite;
-		/**
-		 * The sprite(s) that the mouse is hovering over.
-		 * @default []
-		 */
-		mouseSprites: Sprite[];
-		/**
 		 * @default true
 		 */
 		autoStep: boolean;
@@ -1595,7 +1600,13 @@ declare global {
 		 * sprites drawn when the camera was active, true by default
 		 * @returns an array of sprites
 		 */
-		getSpritesAt(x: number | any, y?: number, group?: Group, cameraActiveWhenDrawn?: boolean): Sprite[];
+		getSpritesAt(
+			x: number | any,
+			y?: number,
+			radius?: number,
+			group?: Group,
+			cameraActiveWhenDrawn?: boolean
+		): Sprite[];
 		/**
 		 * Returns the sprite at the specified position
 		 * on the top most layer, drawn when the camera was on.
@@ -1606,8 +1617,7 @@ declare global {
 		 * @param group the group to search
 		 * @returns a sprite
 		 */
-		getSpriteAt(x: number | any, y?: number, group?: Group): Sprite;
-		getMouseSprites(): Sprite[];
+		getSpriteAt(x: number | any, y?: number, radius?: number, group?: Group): Sprite;
 		/**
 		 * "Sleeping" sprites get temporarily ignored during physics
 		 * simulation. A sprite starts "sleeping" when it stops moving and
@@ -1623,7 +1633,7 @@ declare global {
 		 * Finds the first sprite (with a physics body) that
 		 * intersects a ray (line), excluding any sprites that intersect
 		 * with the starting point.
-		 * 
+		 *
 		 * @param startPos starting position of the ray cast
 		 * @param direction direction of the ray
 		 * @param maxDistance max distance the ray should check
@@ -1634,7 +1644,7 @@ declare global {
 		 * Finds sprites (with physics bodies) that intersect
 		 * a line (ray), excluding any sprites that intersect the
 		 * starting point.
-		 * 
+		 *
 		 * @param startPos starting position of the ray cast
 		 * @param direction direction of the ray
 		 * @param maxDistance max distance the ray should check
@@ -2130,6 +2140,10 @@ declare global {
 		 */
 		constructor(sprite: Sprite);
 		/**
+		 * The sprite being grabbed by the joint.
+		 */
+		sprite: Sprite;
+		/**
 		 * The target position of the joint that the sprite will be
 		 * moved towards. Can be a coordinate array or object with x and y properties.
 		 */
@@ -2144,29 +2158,11 @@ declare global {
 		get maxForce(): number;
 		set maxForce(val: number);
 	}
+
 	class Scale {
 		valueOf(): number;
 	}
-	function colorPal(c: string, palette: number | any): string;
-	function EmojiImage(emoji: string, textSize: number): Q5.Image;
-	function spriteArt(txt: string, scale: number, palette: number | any): Q5.Image;
-	function createSprite(...args: any[]): Sprite;
-	function createGroup(...args: any[]): Group;
-	function loadAnimation(...args: any[]): Ani;
-	function loadAni(...args: any[]): Ani;
-	function animation(ani: Ani, x: number, y: number, r: number, sX: number, sY: number): void;
-	function delay(milliseconds: any): Promise<any>;
-	function sleep(milliseconds: any): Promise<any>;
-	function play(sound: any): Promise<any>;
-	let userDisabledP5Errors: boolean;
 
-	function resizeCanvas(w: any, h: any): void;
-	function frameRate(hz: any): any;
-	function background(...args: any[]): void;
-	function fill(...args: any[]): void;
-	function stroke(...args: any[]): void;
-	function loadImage(...args: any[]): Q5.Image;
-	function loadImg(...args: any[]): Q5.Image;
 	/**
 	 * A FriendlyError is a custom error class that extends the native JS
 	 * Error class. It's used internally by q5play to make error messages
@@ -2180,9 +2176,6 @@ declare global {
 	class FriendlyError extends Error {
 		constructor(func: any, errorNum: any, e: any);
 	}
-	let allSprites: Group;
-	let world: World;
-	let camera: Camera;
 
 	class InputDevice {
 		/**
@@ -2243,7 +2236,7 @@ declare global {
 		 * @property {Number} x
 		 * @property {Number} y
 		 */
-		canvasPos: {};
+		canvasPos: { x: number; y: number };
 		/**
 		 * The mouse's left button.
 		 */
@@ -2261,7 +2254,7 @@ declare global {
 		 * @property {Number} x the horizontal scroll amount
 		 * @property {Number} y the vertical scroll amount
 		 */
-		scrollDelta: {};
+		scrollDelta: { x: number; y: number };
 		/**
 		 * Contains the drag status of each of the mouse's buttons.
 		 */
@@ -2284,18 +2277,18 @@ declare global {
 		 * The mouse's position. Alias for pos.
 		 */
 		get position(): {};
-		set cursor(val: string);
 		/**
 		 * The mouse's CSS cursor style.
 		 * @default 'default'
 		 */
 		get cursor(): string;
-		set visible(val: boolean);
+		set cursor(val: string);
 		/**
 		 * Controls whether the mouse is visible or not.
 		 * @default true
 		 */
 		get visible(): boolean;
+		set visible(val: boolean);
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user moves the mouse while pressing the input
@@ -2311,13 +2304,24 @@ declare global {
 		 * @returns true on the first frame that the user releases the input after dragging the mouse
 		 */
 		dragged(inp: string): boolean;
+		/**
+		 * @param sprite
+		 * @returns true on the first frame that the mouse hovers over the sprite
+		 */
+		hoversOn(sprite: Sprite): boolean;
+		/**
+		 * @param sprite
+		 * @returns the amount of frames the mouse has been hovering over the sprite
+		 */
+		hoveringOn(sprite: Sprite): number;
+		/**
+		 * @param sprite
+		 * @returns true on the first frame that the mouse stops hovering over the sprite
+		 */
+		hoveredOn(sprite: Sprite): boolean;
 	}
-	let mouse: _Mouse;
 
 	class _Pointer extends InputDevice {
-		/**
-		 * Used internally to create pointer input objects in the `pointeres` array.
-		 */
 		constructor(pointer: any);
 		/**
 		 * The pointer's x position in the physics world.
@@ -2332,13 +2336,9 @@ declare global {
 		 */
 		id: number;
 		/**
-		 * The amount of frames the user has been pressing on the screen with the pointer.
+		 * The amount of frames the pointer has been active for.
 		 */
 		duration: number;
-		/**
-		 * The amount of frames the user has been dragging on the screen with the pointer.
-		 */
-		drag: number;
 		/**
 		 * The pointer's absolute position on the canvas.
 		 */
@@ -2346,11 +2346,44 @@ declare global {
 		/**
 		 * The pointer's pressure level, from 0 to 1.
 		 *
-		 * Not all devices support pressure sensitivity.
+		 * On devices that do not support pressure sensitivity,
+		 * the value is 0.5 when the pointer is pressing.
 		 */
 		pressure: number;
+		/**
+		 * The amount of frames the user has been clicking, touching,
+		 * or drawing on the screen with the pointer.
+		 */
+		press: number;
+		/**
+		 * @returns true on the first frame that the user clicks, touches, or draws on the screen with the pointer
+		 */
+		presses(): boolean;
+		/**
+		 * @returns the amount of frames the user has been clicking, touching, or drawing on the screen with the pointer
+		 */
+		pressing(): number;
+		/**
+		 * @returns true on the first frame that the user stops clicking, touching, or drawing on the screen with the pointer
+		 */
+		pressed(): boolean;
+		/**
+		 * The amount of frames the user has been dragging on the screen with the pointer.
+		 */
+		drag: number;
+		/**
+		 * @returns true on the first frame that the user moves the mouse while pressing the input
+		 */
+		drags(): boolean;
+		/**
+		 * @returns the amount of frames the user has been moving the mouse while pressing the input
+		 */
+		dragging(): number;
+		/**
+		 * @returns true on the first frame that the user releases the input after dragging the mouse
+		 */
+		dragged(): boolean;
 	}
-	let pointers: _Pointer[];
 
 	class _Keyboard extends InputDevice {
 		alt: number;
@@ -2376,8 +2409,6 @@ declare global {
 		get win(): number;
 		get windows(): number;
 	}
-	let kb: _Keyboard;
-	let keyboard: _Keyboard;
 
 	class Contro extends InputDevice {
 		/**
@@ -2570,6 +2601,20 @@ declare global {
 		 */
 		onDisconnect(gamepad: Gamepad): boolean;
 	}
+
+	function colorPal(c: string, palette: number | any): string;
+	function EmojiImage(emoji: string, textSize: number): Q5.Image;
+	function spriteArt(txt: string, scale: number, palette: number | any): Q5.Image;
+	function animation(ani: Ani, x: number, y: number, r: number, sX: number, sY: number): void;
+	function delay(milliseconds: number): Promise<any>;
+
+	let allSprites: Group;
+	let world: World;
+	let camera: Camera;
+	let mouse: _Mouse;
+	let pointers: _Pointer[];
+	let kb: _Keyboard;
+	let keyboard: _Keyboard;
 	let contros: _Contros;
 	let controllers: _Contros;
 	let contro: Contro;

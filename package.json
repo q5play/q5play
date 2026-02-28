@@ -5,6 +5,7 @@
 	"license": "SEE LICENSE IN q5play_Personal_License.md",
 	"description": "JavaScript game engine that uses q5.js for graphics and Box2D for physics.",
 	"main": "q5play.js",
+	"types": "q5play.d.ts",
 	"homepage": "https://q5play.org",
 	"repository": {
 		"type": "git",
