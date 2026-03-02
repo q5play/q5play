@@ -2136,9 +2136,10 @@ declare global {
 		 * A Grabber joint enables you to grab sprites and move them with
 		 * a max force towards a target position.
 		 *
+		 * @param pointer the point at which the sprite is grabbed
 		 * @param sprite the sprite to grab
 		 */
-		constructor(sprite: Sprite);
+		constructor(pointer: any, sprite: Sprite);
 		/**
 		 * The sprite being grabbed by the joint.
 		 */
@@ -2304,21 +2305,6 @@ declare global {
 		 * @returns true on the first frame that the user releases the input after dragging the mouse
 		 */
 		dragged(inp: string): boolean;
-		/**
-		 * @param sprite
-		 * @returns true on the first frame that the mouse hovers over the sprite
-		 */
-		hoversOn(sprite: Sprite): boolean;
-		/**
-		 * @param sprite
-		 * @returns the amount of frames the mouse has been hovering over the sprite
-		 */
-		hoveringOn(sprite: Sprite): number;
-		/**
-		 * @param sprite
-		 * @returns true on the first frame that the mouse stops hovering over the sprite
-		 */
-		hoveredOn(sprite: Sprite): boolean;
 	}
 
 	class _Pointer extends InputDevice {
@@ -2368,21 +2354,32 @@ declare global {
 		 */
 		pressed(): boolean;
 		/**
-		 * The amount of frames the user has been dragging on the screen with the pointer.
+		 * @returns true on the first frame that the pointer grabs a sprite
 		 */
-		drag: number;
+		grabs(): boolean;
 		/**
-		 * @returns true on the first frame that the user moves the mouse while pressing the input
+		 * @returns the amount of frames the pointer has been grabbing a sprite
 		 */
-		drags(): boolean;
+		grabbing(): number;
 		/**
-		 * @returns the amount of frames the user has been moving the mouse while pressing the input
+		 * @returns true on the first frame that the pointer releases a grabbed sprite
 		 */
-		dragging(): number;
+		grabbed(): boolean;
 		/**
-		 * @returns true on the first frame that the user releases the input after dragging the mouse
+		 * @param sprite
+		 * @returns true on the first frame that the pointer overlaps the sprite
 		 */
-		dragged(): boolean;
+		overlaps(sprite: Sprite): boolean;
+		/**
+		 * @param sprite
+		 * @returns the amount of frames the pointer has been overlapping the sprite
+		 */
+		overlapping(sprite: Sprite): number;
+		/**
+		 * @param sprite
+		 * @returns true on the first frame that the pointer stops overlapping the sprite
+		 */
+		overlapped(sprite: Sprite): boolean;
 	}
 
 	class _Keyboard extends InputDevice {

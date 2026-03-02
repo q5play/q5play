@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta7
+ * @version 4.0-beta8
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta7';
+let q5play_version = 'beta8';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -245,7 +245,6 @@ async function q5playPreSetup($, q) {
 			this.spritesDrawn = 0;
 			this.images = {};
 			this.palettes = [];
-			this.storeDeletedGroupRefs = true;
 			this.snapToGrid = false;
 			this.gridSize = 0.5;
 			this.emojiScale = 1;
@@ -2499,7 +2498,7 @@ async function q5playPreSetup($, q) {
 			if (this._deleted) {
 				if (Object.keys(this._collisions).length == 0 && Object.keys(this._overlappers).length == 0) {
 					if (this._isSprite) delete $.q5play.sprites[this._uid];
-					else if (!$.q5play.storeDeletedGroupRefs) delete $.q5play.groups[this._uid];
+					else delete $.q5play.groups[this._uid];
 
 					// remove contact events
 					for (let eventType in eventTypes) {
@@ -3720,9 +3719,7 @@ async function q5playPreSetup($, q) {
 					}
 				}
 				if (!this.idNum) {
-					console.warn(
-						'ERROR: Surpassed the limit of 999 groups in memory. Try setting `q5play.storeDeletedGroupRefs = false`. Use less groups or delete groups from the q5play.groups array to recycle ids.'
-					);
+					console.warn('ERROR: Surpassed the limit of 999 groups in memory. Delete groups to recycle group ids.');
 					// if there are no empty slots, try to prevent a crash by
 					// finding the first slot that has a group with no sprites in it
 					for (let i = 1; i < $.q5play.groups.length; i++) {
@@ -5839,7 +5836,8 @@ async function q5playPreSetup($, q) {
 	};
 
 	$.GrabberJoint = class extends $.Joint {
-		constructor(sprite) {
+		constructor(pointer, sprite) {
+			sprite ??= pointer;
 			super(sprite, sprite, 'grabber');
 
 			let bd = b2DefaultBodyDef();
@@ -5866,11 +5864,18 @@ async function q5playPreSetup($, q) {
 
 			this.jID = b2CreateMotorJoint(wID, j);
 
+			let offX = sprite.x - (pointer[0] || pointer.x),
+				offY = sprite.y - (pointer[1] || pointer.y);
+			if (!isSlop(offX) || !isSlop(offY)) {
+				this._setOffsetB(-offX, -offY);
+				this.target = pointer;
+			}
+
 			this.sprite = sprite;
 		}
 
 		_draw() {
-			$.line(this.spriteA.x, this.spriteA.y, this._target.x, this._target.y);
+			$.line(this._target.x, this._target.y, this.spriteB.x, this.spriteB.y);
 		}
 
 		get target() {
@@ -6605,11 +6610,6 @@ async function q5playPreSetup($, q) {
 			this.scroll = 0;
 			this.scrollDelta = { x: 0, y: 0 };
 
-			this.hoverTracking = true;
-			this._hovering = {};
-			this.sprite = null;
-			this.sprites = [];
-
 			let _this = this;
 
 			// this.x and this.y store the actual position values of the mouse
@@ -6659,15 +6659,6 @@ async function q5playPreSetup($, q) {
 			this.y = $.mouseY / cam.zoom + cam.y;
 		}
 
-		_getPointerSprites() {
-			let sprites = $.world.getSpritesAt(this.x, this.y);
-			if ($.camera._wasOff) {
-				let uiSprites = $.world.getSpritesAt(this.canvasPos.x, this.canvasPos.y, 0, $.allSprites, false);
-				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
-			}
-			return sprites;
-		}
-
 		get pos() {
 			return this._pos;
 		}
@@ -6707,17 +6698,6 @@ async function q5playPreSetup($, q) {
 			inp ??= this._default;
 			return this.drag[inp] <= -1;
 		}
-
-		hoversOn(sprite) {
-			return this._hovering[sprite._uid];
-		}
-		hoveringOn(sprite) {
-			const v = this._hovering[sprite._uid];
-			return v > 0 ? v : 0;
-		}
-		hoveredOn(sprite) {
-			return this._hovering[sprite._uid] <= -1;
-		}
 	};
 
 	$.mouse = new $._Mouse();
@@ -6729,15 +6709,16 @@ async function q5playPreSetup($, q) {
 			super();
 			this.x = 0;
 			this.y = 0;
+			this.canvasPos = {};
 			this.id = e.pointerId;
 			this.type = e.pointerType;
 			this.duration = 1;
 			this._default = 'press';
 			this.press = 0;
 			this.holdThreshold = 12;
-			this._dragging = false;
 			this.drag = 0;
-			this.canvasPos = {};
+			this.grab = 0;
+			this._over = {};
 		}
 
 		_update(e) {
@@ -6757,25 +6738,48 @@ async function q5playPreSetup($, q) {
 			this.canvasPos.y = y;
 
 			// Calculate world position based on camera
-			this.x = x / $.camera.zoom + $.camera.x;
-			this.y = y / $.camera.zoom + $.camera.y;
+			const cam = $.camera;
+			this.x = x / cam.zoom + cam.x;
+			this.y = y / cam.zoom + cam.y;
 			this.pressure = e.pressure ?? 0;
 			this.event = e;
 		}
 
-		drags() {
-			return this.drag == 1;
+		_getSprites() {
+			let sprites = $.world.getSpritesAt(this.x, this.y);
+			if ($.camera._wasOff) {
+				let uiSprites = $.world.getSpritesAt(this.canvasPos.x, this.canvasPos.y, 0, $.allSprites, false);
+				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
+			}
+			return sprites;
 		}
-		dragging() {
-			const v = this.drag;
+
+		grabs() {
+			return this.grab == 1;
+		}
+		grabbing() {
+			const v = this.grab;
 			return v > 0 ? v : 0;
 		}
-		dragged() {
-			return this.drag <= -1;
+		grabbed() {
+			return this.grab <= -1;
+		}
+
+		overlaps(sprite) {
+			return this._over[sprite._uid];
+		}
+		overlapping(sprite) {
+			const v = this._over[sprite._uid];
+			return v > 0 ? v : 0;
+		}
+		overlapped(sprite) {
+			return this._over[sprite._uid] <= -1;
 		}
 	};
 
 	$.pointers = [];
+	$.pointers.overlapTracking = true;
+	$.pointers.grabTracking = false;
 
 	$._updatePointer = (e) => {
 		let id = e.pointerId ?? $.pointers[0]?.id;
@@ -6802,12 +6806,16 @@ async function q5playPreSetup($, q) {
 		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
 		let m = $.mouse;
 		m.isActive = true;
-		m[btn]++;
+		m[btn] = 1;
+
+		let p = $.pointers.find((p) => p.id === e.pointerId);
+		if (p) {
+			p.press = 1;
+		}
 
 		if (e.pointerId == undefined) m._update();
 		else if (e.pointerId == $.pointers[0]?.id) {
 			m._update();
-			$.pointers[0].press++;
 		}
 	};
 
@@ -6820,7 +6828,6 @@ async function q5playPreSetup($, q) {
 		let p = $.pointers.find((p) => p.id === e.pointerId);
 		if (p) {
 			p._update(e);
-			p._dragging = e.pressure >= 0.5;
 			if (p.id == $.pointers[0].id) m._update();
 		}
 	};
@@ -6845,9 +6852,6 @@ async function q5playPreSetup($, q) {
 			if (p.press >= p.holdThreshold) p.press = -2;
 			else if (p.press > 1) p.press = -1;
 			else p.press = -3;
-
-			p._dragging = false;
-			if (p.drag > 0) p.drag = -1;
 
 			if (p.id == $.pointers[0].id) m._update();
 		}
@@ -7856,45 +7860,6 @@ function q5playPostDraw() {
 
 	if ($.q5play.renderStats) $.renderStats();
 
-	for (let k in $.kb) {
-		if (k == 'holdThreshold') continue;
-		if ($.kb[k] < 0) $.kb[k] = 0;
-		else if ($.kb[k] > 0) $.kb[k]++;
-	}
-
-	for (let p of $.pointers) {
-		if ($.pointers.grabTracking) {
-			if (p.drags()) {
-				let s = $.world.getSpriteAt(p);
-				if (s?.grabbable) {
-					p.grabber ??= new $.GrabberJoint(s);
-					// p.grabPos = { x: s.x - p.x, y: s.y - p.y };
-				}
-			}
-
-			if (p.grabber) {
-				// p.grabber.target = [p.x + p.grabPos.x, p.y + p.grabPos.y];
-				p.grabber.target = p;
-
-				if (p.released()) {
-					if (!p.grabber.deleted) p.grabber.delete();
-					p.grabber = null;
-				}
-			}
-		}
-
-		p.duration++;
-		if (p.pressure >= 0.5) {
-			p.press++;
-			if (p._dragging) {
-				p.drag++;
-				p._dragging = false;
-			}
-		}
-		if (p.press < 0) p.press = 0;
-		if (p.drag < 0) p.drag = 0;
-	}
-
 	let m = $.mouse;
 
 	m.scrollDelta.x = 0;
@@ -7912,35 +7877,61 @@ function q5playPostDraw() {
 		}
 	}
 
-	if (m.hoverTracking) {
-		let sprites = $.world.getSpritesAt(m);
-		for (let i = 0; i < sprites.length; i++) {
-			let s = sprites[i],
-				v = m._hovering[s._uid] || 0;
-			if (i == 0) {
-				v++;
-				m.sprite = s;
-			} else if (v > 0) v = -1;
-			else if (v < 0) v = 0;
-			m._hovering[s._uid] = v;
-		}
-		let isPressing = m.left > 0 || m.center > 0 || m.right > 0;
-		for (let s of m.sprites) {
-			// if the pointer stopped hovering over the sprite
-			if (!sprites.includes(s)) {
-				// if pointer is not dragging and the sprite is the current pointer sprite
-				if (!isPressing && s == m.sprite) {
-					m._hovering[s._uid] = -1;
-					m.sprite = null;
+	for (let p of $.pointers) {
+		if ($.pointers.overlapTracking) {
+			let sprites = p._getSprites();
+
+			if (!sprites.length && p.grab <= 0) m.cursor = 'default';
+
+			for (let i = 0; i < sprites.length; i++) {
+				let s = sprites[i],
+					v = p._over[s._uid] || 0;
+				if (i == 0) {
+					v++;
+					if (p.grab <= 0) {
+						if (s._grabbable) m.cursor = 'grab';
+						else m.cursor = 'default';
+					}
+				} else if (v > 0) v = -1;
+				else if (v < 0) v = 0;
+				p._over[s._uid] = v;
+			}
+
+			if ($.pointers.grabTracking) {
+				if (p.press == 1) {
+					let s = sprites[0];
+					if (s?.grabbable) {
+						p.grabber ??= new $.GrabberJoint(p, s);
+						p.grab = 1;
+						m.cursor = 'grabbing';
+					}
 				}
+
+				if (p.grabber) {
+					p.grabber.target = p;
+					p.grab++;
+
+					if (p.released()) {
+						if (!p.grabber.deleted) p.grabber.delete();
+						p.grabber = null;
+						p.grab = p.press;
+						m.cursor = 'default';
+					}
+				} else if (p.grab < 0) p.grab = 0;
 			}
 		}
-		if (m.sprite) {
-			// if the user is dragging on a sprite, but not currently hovering
-			// over it, the pointer sprite should still be added to the sprites array
-			if (!sprites.includes(m.sprite)) sprites.push(m.sprite);
+
+		p.duration++;
+		if (p.pressure >= 0.5) {
+			p.press++;
 		}
-		m.sprites = sprites;
+		if (p.press < 0) p.press = 0;
+	}
+
+	for (let k in $.kb) {
+		if (k == 'holdThreshold') continue;
+		if ($.kb[k] < 0) $.kb[k] = 0;
+		else if ($.kb[k] > 0) $.kb[k]++;
 	}
 
 	if (!$._q5) {
