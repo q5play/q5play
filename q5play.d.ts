@@ -2151,13 +2151,20 @@ declare global {
 		get target(): any;
 		set target(pos: any);
 		/**
-		 * The maximum force that the joint can exert on the sprite.
+		 * The maximum spring force that the joint can exert on the sprite.
 		 * 
-		 * By default it's 100 * the sprite's mass * the absolute force of gravity,
-		 * if there is gravity.
+		 * By default it's 500 * the sprite's mass.
 		 */
 		get maxForce(): number;
 		set maxForce(val: number);
+		/**
+		 * The maximum torque that the joint can exert on the sprite.
+		 *
+		 * By default it's 0.25 * the sprite's mass * the square root
+		 * of the rotational inertia divided by the sprite's mass.
+		 */
+		get maxTorque(): number;
+		set maxTorque(val: number);
 	}
 
 	class Scale {

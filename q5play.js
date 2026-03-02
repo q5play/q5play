@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta8
+ * @version 4.0-beta9
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta8';
+let q5play_version = 'beta9';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -5854,12 +5854,11 @@ async function q5playPreSetup($, q) {
 
 			let data = b2Body_GetMassData(sprite.bdID);
 
-			let mg = data.mass * Math.abs($.world.gravity.y || 1);
-			j.maxSpringForce = 100 * mg;
+			j.maxSpringForce = 500 * data.mass;
 
 			if (data.mass) {
 				let lever = Math.sqrt(data.rotationalInertia / data.mass);
-				j.maxVelocityTorque = 0.25 * lever * mg;
+				j.maxVelocityTorque = 0.25 * lever * data.mass;
 			}
 
 			this.jID = b2CreateMotorJoint(wID, j);
@@ -5900,6 +5899,13 @@ async function q5playPreSetup($, q) {
 		}
 		set maxForce(val) {
 			Box2D.b2MotorJoint_SetMaxSpringForce(this.jID, val);
+		}
+
+		get maxTorque() {
+			return Box2D.b2MotorJoint_GetMaxSpringTorque(this.jID);
+		}
+		set maxTorque(val) {
+			Box2D.b2MotorJoint_SetMaxSpringTorque(this.jID, val);
 		}
 	};
 
@@ -6716,6 +6722,7 @@ async function q5playPreSetup($, q) {
 			this._default = 'press';
 			this.press = 0;
 			this.holdThreshold = 12;
+			this._dragging = false;
 			this.drag = 0;
 			this.grab = 0;
 			this._over = {};
@@ -6751,6 +6758,7 @@ async function q5playPreSetup($, q) {
 				let uiSprites = $.world.getSpritesAt(this.canvasPos.x, this.canvasPos.y, 0, $.allSprites, false);
 				if (uiSprites.length) sprites = [...uiSprites, ...sprites];
 			}
+			this._sprites = sprites;
 			return sprites;
 		}
 
@@ -6828,6 +6836,7 @@ async function q5playPreSetup($, q) {
 		let p = $.pointers.find((p) => p.id === e.pointerId);
 		if (p) {
 			p._update(e);
+			p._dragging = e.pressure >= 0.5;
 			if (p.id == $.pointers[0].id) m._update();
 		}
 	};
@@ -6852,6 +6861,9 @@ async function q5playPreSetup($, q) {
 			if (p.press >= p.holdThreshold) p.press = -2;
 			else if (p.press > 1) p.press = -1;
 			else p.press = -3;
+
+			p._dragging = false;
+			if (p.drag > 0) p.drag = -1;
 
 			if (p.id == $.pointers[0].id) m._update();
 		}
@@ -7815,8 +7827,54 @@ function q5playPreDraw() {
 	}
 	$.q5play.spritesDrawn = 0;
 
-	$.mouse._update();
 	$.contros._update();
+
+	const m = $.mouse;
+	m._update();
+
+	if ($.pointers.overlapTracking) {
+		for (let p of $.pointers) {
+			let sprites = p._getSprites();
+
+			if (!sprites.length && p.grab <= 0) m.cursor = 'default';
+
+			if ($.pointers.grabTracking) {
+				if (p.press == 1 || p.drag == 1) {
+					let s = sprites[0];
+					if (s?.grabbable) {
+						p.grabber ??= new $.GrabberJoint(p, s);
+						m.cursor = 'grabbing';
+					}
+				}
+
+				if (p.grabber) {
+					p.grabber.target = p;
+					p.grab++;
+
+					if (p.released()) {
+						if (!p.grabber.deleted) p.grabber.delete();
+						p.grabber = null;
+						p.grab = p.press;
+						m.cursor = 'default';
+					}
+				} else if (p.grab < 0) p.grab = 0;
+			}
+
+			for (let i = 0; i < sprites.length; i++) {
+				let s = sprites[i],
+					v = p._over[s._uid] || 0;
+				if (i == 0) {
+					v++;
+					if (p.grab <= 0) {
+						if (s._grabbable) m.cursor = 'grab';
+						else m.cursor = 'default';
+					}
+				} else if (v > 0) v = -1;
+				else if (v < 0) v = 0;
+				p._over[s._uid] = v;
+			}
+		}
+	}
 
 	$.update();
 
@@ -7844,8 +7902,11 @@ function q5playPostDraw() {
 
 	$.q5play._inPostDraw = true;
 
-	if ($.camera.__pos.x != 0 || $.camera.__pos.y != 0 || $.camera._zoom != 1) {
-		$.camera.on();
+	const m = $.mouse,
+		cam = $.camera;
+
+	if (cam.__pos.x != 0 || cam.__pos.y != 0 || cam._zoom != 1) {
+		cam.on();
 	}
 
 	if ($.allSprites._autoDraw) {
@@ -7854,13 +7915,11 @@ function q5playPostDraw() {
 	}
 	$.allSprites._autoDraw ??= true;
 
-	if ($.camera.isActive) $.camera.off();
+	if (cam.isActive) cam.off();
 
 	$.allSprites.postDraw();
 
 	if ($.q5play.renderStats) $.renderStats();
-
-	let m = $.mouse;
 
 	m.scrollDelta.x = 0;
 	m.scrollDelta.y = 0;
@@ -7878,54 +7937,14 @@ function q5playPostDraw() {
 	}
 
 	for (let p of $.pointers) {
-		if ($.pointers.overlapTracking) {
-			let sprites = p._getSprites();
-
-			if (!sprites.length && p.grab <= 0) m.cursor = 'default';
-
-			for (let i = 0; i < sprites.length; i++) {
-				let s = sprites[i],
-					v = p._over[s._uid] || 0;
-				if (i == 0) {
-					v++;
-					if (p.grab <= 0) {
-						if (s._grabbable) m.cursor = 'grab';
-						else m.cursor = 'default';
-					}
-				} else if (v > 0) v = -1;
-				else if (v < 0) v = 0;
-				p._over[s._uid] = v;
-			}
-
-			if ($.pointers.grabTracking) {
-				if (p.press == 1) {
-					let s = sprites[0];
-					if (s?.grabbable) {
-						p.grabber ??= new $.GrabberJoint(p, s);
-						p.grab = 1;
-						m.cursor = 'grabbing';
-					}
-				}
-
-				if (p.grabber) {
-					p.grabber.target = p;
-					p.grab++;
-
-					if (p.released()) {
-						if (!p.grabber.deleted) p.grabber.delete();
-						p.grabber = null;
-						p.grab = p.press;
-						m.cursor = 'default';
-					}
-				} else if (p.grab < 0) p.grab = 0;
-			}
-		}
-
 		p.duration++;
-		if (p.pressure >= 0.5) {
+		if (p.press > 0 && p.pressure >= 0.5) {
 			p.press++;
+			if (p._dragging) p.drag++;
 		}
+		p._dragging = false;
 		if (p.press < 0) p.press = 0;
+		if (p.drag < 0) p.drag = 0;
 	}
 
 	for (let k in $.kb) {
