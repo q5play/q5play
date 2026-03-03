@@ -1471,36 +1471,26 @@ declare global {
 	}
 
 	class World {
-		mod: {};
 		/**
-		 * Changes the world's origin point,
-		 * where (0, 0) is on the canvas.
+		 * Gravity force vector that affects all dynamic physics colliders.
 		 * @property {Number} x
 		 * @property {Number} y
 		 * @default { x: 0, y: 0 }
 		 */
-		origin: any;
-		contacts: any[];
-		/**
-		 * @default 8
-		 */
-		velocityIterations: number;
-		/**
-		 * @default 3
-		 */
-		positionIterations: number;
+		get gravity(): any;
+		set gravity(val: any);
 		/**
 		 * The lowest velocity an object can have before it is considered
 		 * to be at rest.
 		 *
-		 * Adjust the velocity threshold to allow for slow moving objects
+		 * Adjust the bounce threshold to allow for slow moving objects
 		 * but don't have it be too low, or else objects will never sleep,
 		 * which will hurt performance.
 		 *
 		 * @default 0.19
 		 */
-		get velocityThreshold(): number;
-		set velocityThreshold(val: number);
+		get bounceThreshold(): number;
+		set bounceThreshold(val: number);
 		/**
 		 * The time elapsed in the physics simulation in seconds.
 		 */
@@ -1521,16 +1511,11 @@ declare global {
 		 * @default true
 		 */
 		autoStep: boolean;
-		step: (timeStep?: number, velocityIterations?: number, positionIterations?: number) => void;
-		steppedEvent: Event;
 		/**
-		 * Gravity force vector that affects all dynamic physics colliders.
-		 * @property {Number} x
-		 * @property {Number} y
-		 * @default { x: 0, y: 0 }
+		 * Performs a physics simulation step that advances all sprites
+		 * forward in time by 1 / updateRate * timeScale if no timeStep is given.
 		 */
-		get gravity(): any;
-		set gravity(val: any);
+		physicsUpdate(timeStep?: number): void;
 		/**
 		 * A time scale of 1.0 represents real time.
 		 * Accepts decimal values between 0 and 2.
@@ -1551,39 +1536,6 @@ declare global {
 		get updateRate(): number;
 		set updateRate(val: number);
 		/**
-		 * Performs a physics simulation step that advances all sprites'
-		 * forward in time by 1/60th of a second if no timeStep is given.
-		 *
-		 * This function is automatically called at the end of the draw
-		 * loop, unless it was already called inside the draw loop.
-		 *
-		 * Setting the timeStep below 1/50th of a second will
-		 * significantly degrade simulation quality, without improving
-		 * performance. Decreasing `velocityIterations` and
-		 * `positionIterations` will improve performance but decrease
-		 * simulation quality.
-		 *
-		 * @param timeStep time step in seconds
-		 * @param velocityIterations 8 by default
-		 * @param positionIterations 3 by default
-		 */
-		physicsUpdate(timeStep?: number, velocityIterations?: number, positionIterations?: number): void;
-		/**
-		 * Experimental!
-		 *
-		 * Visually moves all sprites forward in time by the given
-		 * time step, based on their current velocity vector and
-		 * rotation speed.
-		 *
-		 * Does not perform any physics calculations.
-		 *
-		 * This function may be useful for making extrapolated frames
-		 * between physics steps, if a frame rate of 100hz or more
-		 * is desired.
-		 * @param timeStep time step in seconds
-		 */
-		extrapolationUpdate(timeStep?: number): void;
-		/**
 		 * The real time in seconds since the world was created, including
 		 * time spent paused.
 		 */
@@ -1594,6 +1546,7 @@ declare global {
 		 * Sprites must have a physics body to be detected.
 		 * @param x x coordinate or coordinate array or object with x and y properties
 		 * @param y
+		 * @param radius the distance from the point that sprites can be detected at, default is 0 (only sprites that overlap the point will be detected)
 		 * @param group limit results to a specific group,
 		 * allSprites by default
 		 * @param cameraActiveWhenDrawn limit results to
@@ -1614,6 +1567,7 @@ declare global {
 		 * The sprite must have a physics body to be detected.
 		 * @param x x coordinate or coordinate array or object with x and y properties
 		 * @param y
+		 * @param radius the distance from the point that sprites can be detected at, default is 0 (only sprites that overlap the point will be detected)
 		 * @param group the group to search
 		 * @returns a sprite
 		 */
@@ -1652,6 +1606,16 @@ declare global {
 		 * @returns An array of sprites that the ray cast hit, sorted by distance. The sprite closest to the starting point will be at index 0.
 		 */
 		rayCastAll(startPos: any, direction: number, maxDistance: number, limiter?: Function): Sprite[];
+		/**
+		 * Applies an explosive force to sprites within the radius of the explosion.
+		 *
+		 * @param x x coordinate or coordinate array or object with x and y properties of the center of the explosion
+		 * @param y
+		 * @param radius the distance from the center of the explosion that sprites can be affected by the explosion
+		 * @param magnitude the strength of the explosion force, default is 1
+		 * @param falloff how much the explosion force decreases as sprites are farther from the center of the explosion, default is 0.1 (10% decrease per pixel)
+		 */
+		explodeAt(x: number | any, y?: number, radius?: number, magnitude?: number, falloff?: number): void;
 	}
 
 	class Camera {
@@ -2195,39 +2159,40 @@ declare global {
 		 * @param inp
 		 * @returns true on the first frame that the user presses the input
 		 */
-		presses(inp: string): boolean;
+		presses(inp?: string): boolean;
 		/**
 		 * @param inp
 		 * @returns the amount of frames the user has been pressing the input
 		 */
-		pressing(inp: string): number;
+		pressing(inp?: string): number;
 		/**
 		 * Same as the `released` function, which is preferred.
+		 * @deprecated
 		 * @param inp
 		 * @returns true on the first frame that the user released the input
 		 */
-		pressed(inp: string): boolean;
+		pressed(inp?: string): boolean;
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user holds the input
 		 */
-		holds(inp: string): boolean;
+		holds(inp?: string): boolean;
 		/**
 		 * @param inp
 		 * @returns the amount of frames the user has been holding the input
 		 */
-		holding(inp: string): number;
+		holding(inp?: string): number;
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user released a held input
 		 */
-		held(inp: string): boolean;
+		held(inp?: string): boolean;
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user released the input
 		 */
-		released(inp: string): boolean;
-		releases(inp: any): boolean;
+		released(inp?: string): boolean;
+		releases(inp?: any): boolean;
 	}
 
 	class _Mouse extends InputDevice {
@@ -2301,17 +2266,17 @@ declare global {
 		 * @param inp
 		 * @returns true on the first frame that the user moves the mouse while pressing the input
 		 */
-		drags(inp: string): boolean;
+		drags(inp?: string): boolean;
 		/**
 		 * @param inp
 		 * @returns the amount of frames the user has been moving the mouse while pressing the input
 		 */
-		dragging(inp: string): number;
+		dragging(inp?: string): number;
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user releases the input after dragging the mouse
 		 */
-		dragged(inp: string): boolean;
+		dragged(inp?: string): boolean;
 	}
 
 	class _Pointer extends InputDevice {
@@ -2348,18 +2313,6 @@ declare global {
 		 * or drawing on the screen with the pointer.
 		 */
 		press: number;
-		/**
-		 * @returns true on the first frame that the user clicks, touches, or draws on the screen with the pointer
-		 */
-		presses(): boolean;
-		/**
-		 * @returns the amount of frames the user has been clicking, touching, or drawing on the screen with the pointer
-		 */
-		pressing(): number;
-		/**
-		 * @returns true on the first frame that the user stops clicking, touching, or drawing on the screen with the pointer
-		 */
-		pressed(): boolean;
 		/**
 		 * @returns true on the first frame that the pointer grabs a sprite
 		 */
@@ -2617,6 +2570,7 @@ declare global {
 	let camera: Camera;
 	let mouse: _Mouse;
 	let pointers: _Pointer[];
+	let pointer: _Pointer;
 	let kb: _Keyboard;
 	let keyboard: _Keyboard;
 	let contros: _Contros;

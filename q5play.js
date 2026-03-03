@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta9
+ * @version 4.0-beta10
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta9';
+let q5play_version = 'beta10';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -1454,6 +1454,7 @@ async function q5playPreSetup($, q) {
 						shape = null;
 						this.isSuperFast = true;
 						this._hasCapsuleChain = true;
+						this.strokeWeight = 0;
 					} else {
 						// make a segment chain
 						if (!isLoop && this._phys == 0) this.physics = 1;
@@ -4814,19 +4815,16 @@ async function q5playPreSetup($, q) {
 			b2DestroyWorld(wID);
 		}
 
-		explodeAt(x, y, radius, magnitude = 1, falloff = 0.1) {
+		explodeAt(x, y, radius, magnitude, falloff) {
 			if (x.x) {
-				falloff = magnitude;
-				magnitude = radius;
-				radius = y;
-				y = x.y;
-				x = x.x;
+				let args = [x.x, x.y, y, radius, magnitude, falloff];
+				[x, y, radius, magnitude, falloff] = args;
 			}
 			let e = b2DefaultExplosionDef();
 			e.position = scaleTo(x, y);
 			e.radius = radius / meterSize;
-			e.impulsePerLength = magnitude;
-			e.falloff = falloff;
+			e.impulsePerLength = magnitude || 1;
+			e.falloff = falloff || 0.1;
 			b2World_Explode(wID, e);
 		}
 
@@ -6753,6 +6751,9 @@ async function q5playPreSetup($, q) {
 		}
 
 		_getSprites() {
+			// mock pointer
+			if (this.id == Infinity) return [];
+
 			let sprites = $.world.getSpritesAt(this.x, this.y);
 			if ($.camera._wasOff) {
 				let uiSprites = $.world.getSpritesAt(this.canvasPos.x, this.canvasPos.y, 0, $.allSprites, false);
@@ -6774,7 +6775,7 @@ async function q5playPreSetup($, q) {
 		}
 
 		overlaps(sprite) {
-			return this._over[sprite._uid];
+			return this._over[sprite._uid] == 1;
 		}
 		overlapping(sprite) {
 			const v = this._over[sprite._uid];
@@ -6788,6 +6789,23 @@ async function q5playPreSetup($, q) {
 	$.pointers = [];
 	$.pointers.overlapTracking = true;
 	$.pointers.grabTracking = false;
+
+	let mockPointer = new $._Pointer({ pointerId: Infinity, pointerType: 'mock' });
+
+	// pointer is a proxy for a mock pointer or pointers[0]
+	$.pointer = new Proxy(
+		{},
+		{
+			get(target, prop) {
+				if ($.pointers.length) return $.pointers[0][prop];
+				else return mockPointer[prop];
+			},
+			set(target, prop, value) {
+				if ($.pointers.length) return ($.pointers[0][prop] = value);
+				else return (mockPointer[prop] = value);
+			}
+		}
+	);
 
 	$._updatePointer = (e) => {
 		let id = e.pointerId ?? $.pointers[0]?.id;
@@ -7793,7 +7811,7 @@ async function q5playPreSetup($, q) {
 	};
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','camera','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas'];
+	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','camera','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
@@ -7838,9 +7856,10 @@ function q5playPreDraw() {
 
 			if (!sprites.length && p.grab <= 0) m.cursor = 'default';
 
+			const s = sprites[0];
+
 			if ($.pointers.grabTracking) {
 				if (p.press == 1 || p.drag == 1) {
-					let s = sprites[0];
 					if (s?.grabbable) {
 						p.grabber ??= new $.GrabberJoint(p, s);
 						m.cursor = 'grabbing';
@@ -7860,18 +7879,22 @@ function q5playPreDraw() {
 				} else if (p.grab < 0) p.grab = 0;
 			}
 
-			for (let i = 0; i < sprites.length; i++) {
-				let s = sprites[i],
-					v = p._over[s._uid] || 0;
-				if (i == 0) {
-					v++;
-					if (p.grab <= 0) {
-						if (s._grabbable) m.cursor = 'grab';
-						else m.cursor = 'default';
-					}
-				} else if (v > 0) v = -1;
-				else if (v < 0) v = 0;
-				p._over[s._uid] = v;
+			if (s) p._over[s._uid] ??= 0;
+
+			for (let uid in p._over) {
+				let v = p._over[uid];
+				if (s?._uid == uid) v++;
+				else if (v > 0) v = -1;
+				else if (v < 0) {
+					delete p._over[uid];
+					continue;
+				}
+				p._over[uid] = v;
+			}
+
+			if (p.grab <= 0) {
+				if (s?._grabbable) m.cursor = 'grab';
+				else m.cursor = 'default';
 			}
 		}
 	}
