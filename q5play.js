@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta10
+ * @version 4.0-beta11
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta10';
+let q5play_version = 'beta11';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -6822,6 +6822,18 @@ async function q5playPreSetup($, q) {
 			$.pointers.push(p);
 		}
 		p._update(e);
+
+		if (e.type == 'pointerdown' || e.type == 'mousedown') {
+			p.press = 1;
+		} else if (e.type == 'pointerup' || e.type == 'mouseup') {
+			if (p.press >= p.holdThreshold) p.press = -2;
+			else if (p.press > 1) p.press = -1;
+			else p.press = -3;
+
+			if (p.drag > 0) p.drag = -1;
+		} else if (e.type == 'pointermove') {
+			p._dragging = e.pressure >= 0.5;
+		}
 	};
 
 	let onpointerdown = function (e) {
@@ -6834,13 +6846,7 @@ async function q5playPreSetup($, q) {
 		m.isActive = true;
 		m[btn] = 1;
 
-		let p = $.pointers.find((p) => p.id === e.pointerId);
-		if (p) {
-			p.press = 1;
-		}
-
-		if (e.pointerId == undefined) m._update();
-		else if (e.pointerId == $.pointers[0]?.id) {
+		if (e.pointerId == undefined || e.pointerId == $.pointers[0]?.id) {
 			m._update();
 		}
 	};
@@ -6851,18 +6857,14 @@ async function q5playPreSetup($, q) {
 		let m = $.mouse;
 		if (m[btn] > 0) m._dragging[btn] = true;
 
-		let p = $.pointers.find((p) => p.id === e.pointerId);
-		if (p) {
-			p._update(e);
-			p._dragging = e.pressure >= 0.5;
-			if (p.id == $.pointers[0].id) m._update();
+		if (e.pointerId == undefined || e.pointerId == $.pointers[0]?.id) {
+			m._update();
 		}
 	};
 
 	let onpointerup = function (e) {
-		if (!$._setupDone) return;
-		if (pressAmt > 0) pressAmt--;
-		else return;
+		if (!$._setupDone || pressAmt <= 0) return;
+		pressAmt--;
 
 		let btn = e.button == 1 ? 'center' : e.button == 2 ? 'right' : 'left';
 		let m = $.mouse;
@@ -6872,19 +6874,6 @@ async function q5playPreSetup($, q) {
 		else if (m[btn] > 1) m[btn] = -1;
 		else m[btn] = -3;
 		if (m.drag[btn] > 0) m.drag[btn] = -1;
-
-		let p = $.pointers.find((p) => p.id === e.pointerId);
-		if (p) {
-			p._update(e);
-			if (p.press >= p.holdThreshold) p.press = -2;
-			else if (p.press > 1) p.press = -1;
-			else p.press = -3;
-
-			p._dragging = false;
-			if (p.drag > 0) p.drag = -1;
-
-			if (p.id == $.pointers[0].id) m._update();
-		}
 	};
 
 	$._Keyboard = class extends $.InputDevice {
