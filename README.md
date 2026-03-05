@@ -6,7 +6,7 @@ q5play is a JavaScript game engine that uses [q5.js WebGPU][] for graphics and [
 
 [Join us on Discord][] to ask questions and meet other people making games with q5play. 👾
 
-The [q5play Personal License][] enables free, open source, personal use.
+The [q5play Creator License][] enables free personal and commercial use.
 
 Educational use requires the [q5play Educational License][].
 
@@ -34,6 +34,5 @@ Testers and bug reporters: Lachlan Noble, Raj Raizada, Nathan Anil, Chayarat Wan
 [q5.js WebGPU]: https://q5js.org
 [Box2D v3 WASM]: https://github.com/Birch-san/box2d3-wasm
 [Join us on Discord]: https://discord.gg/EJwnJATmj7
-[q5play Personal License]: q5play_Personal_License.md
+[q5play Creator License]: q5play_Creator_License.md
 [q5play Educational License]: https://q5play.org/teach
-[q5play Professional License]: https://q5play.org/pro
