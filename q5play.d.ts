@@ -1179,17 +1179,24 @@ declare global {
 	 * values are Ani objects.
 	 */
 	class Anis {
+		frameDelay: number;
+		offset: { x: number; y: number };
+		scale: number | { x: number; y: number };
+		looping: boolean;
+		playing: boolean;
+		endOnFirstFrame: boolean;
+		w: number;
+		width: number;
+		h: number;
+		height: number;
 		/**
 		 * Frame size of the animations in the collection, in the format "WIDTHxHEIGHT", for example "32x32".
 		 */
-		get frameSize(): string;
-		set frameSize(val: string);
-
+		frameSize: string;
 		/**
 		 * The sprite sheet image used by the animations in the collection.
 		 */
-		get spriteSheet(): Q5.Image;
-		set spriteSheet(val: Q5.Image);
+		spriteSheet: Q5.Image;
 	}
 
 	class Group extends Array<Sprite> {
@@ -1276,11 +1283,10 @@ declare global {
 		subgroups: {
 			[x: string]: any;
 		}[];
-		parent: any;
 		/**
-		 * Keys are the animation label, values are Ani objects.
+		 * The direct parent group that this group inherits properties from.
 		 */
-		animations: Anis;
+		parent: any;
 		/**
 		 * Creates a new sprite with the traits of the group and adds it to the group.
 		 */
@@ -1298,6 +1304,10 @@ declare global {
 		 * remain false for the rest of the sketch, unless changed.
 		 */
 		autoCull: boolean;
+		/**
+		 * New group sprites will not have physics bodies (can't have colliders).
+		 */
+		visualOnly: boolean;
 		/**
 		 * Alias for `group.push`.
 		 *

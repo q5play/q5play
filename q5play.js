@@ -12,20 +12,18 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta12
+ * @version 4.0-beta13
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta12';
+let q5play_version = 'beta13';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
 	if (typeof globalThis.p5 != 'undefined') {
-		console.error(
-			'p5.js is not compatible with q5play. See this issue: https://github.com/processing/p5.js/issues/7737'
-		);
+		console.error('p5.js is not compatible with q5play. https://github.com/processing/p5.js/issues/7737');
 	}
 }
 
@@ -287,6 +285,8 @@ async function q5playPreSetup($, q) {
 			};
 			this._fps = 60;
 			this._fpsArr = [60];
+
+			this.renderJointForces = false;
 
 			/*
 			 * Ledgers for contact relationship callback functions.
@@ -2541,8 +2541,8 @@ async function q5playPreSetup($, q) {
 					w = this.ani[this.ani._frame].w;
 					h = this.ani[this.ani._frame].h;
 				} else if (this._img) {
-					w = this._img._w;
-					h = this._img._h;
+					w = this._img.defaultWidth ?? this._img.width;
+					h = this._img.defaultHeight ?? this._img.height;
 				} else {
 					return;
 				}
@@ -3285,6 +3285,9 @@ async function q5playPreSetup($, q) {
 						if (col) x = col * w;
 						if (row) y = row * h;
 
+						if (atlas.x) x = atlas.x;
+						if (atlas.y) y = atlas.y;
+
 						for (let i = 0; i < framesAmt; i++) {
 							let f = { x, y, w, h };
 							f.defaultWidth = w * $._defaultImageScale;
@@ -3325,8 +3328,6 @@ async function q5playPreSetup($, q) {
 						}
 					}
 
-					this.cutFrames = atlas.cutFrames ?? anis?.cutFrames;
-
 					if (this.cutFrames) {
 						for (let i = 0; i < this.length; i++) {
 							let f = this[i];
@@ -3337,14 +3338,14 @@ async function q5playPreSetup($, q) {
 				};
 
 				if (sheet instanceof Q5.Image && sheet.width != 1 && sheet.height != 1) {
-					findFrames();
+					if (!this.length) findFrames();
 					this._resolve(this);
 				} else {
 					if (typeof sheet == 'string') {
 						sheet = $.loadImage(sheet);
 					}
 					sheet.promise.then(() => {
-						findFrames();
+						if (!this.length) findFrames();
 
 						if (this._clones) {
 							// propagate frame data to all clones
@@ -3377,7 +3378,7 @@ async function q5playPreSetup($, q) {
 			}
 
 			// play by default but a single frame ani doesn't need to play
-			this.playing = this.length != 1;
+			this.playing = this.length != 1 && anis?.playing != false;
 		}
 
 		// make loading Ani objects awaitable
@@ -3443,6 +3444,7 @@ async function q5playPreSetup($, q) {
 			ani.frameDelay = this.frameDelay;
 			ani.playing = this.playing;
 			ani.looping = this.looping;
+			ani.cutFrames = this.cutFrames;
 			return ani;
 		}
 
@@ -3567,7 +3569,7 @@ async function q5playPreSetup($, q) {
 		}
 	};
 
-	$.Ani.props = ['frameDelay', 'offset', 'scale', 'looping', 'endOnFirstFrame', '_spriteSheetDemo'];
+	$.Ani.props = ['frameDelay', 'offset', 'scale', 'looping', 'playing', 'endOnFirstFrame', '_spriteSheetDemo'];
 
 	$.Anis = class {
 		#_ = {};
@@ -5328,11 +5330,8 @@ async function q5playPreSetup($, q) {
 		}
 
 		_setOffsetA(x, y) {
-			const a = this.spriteA,
-				vec = scaleTo(a.x - this._oAx + x, a.y - this._oAy + y),
-				t = new b2Transform();
-
-			t.p = b2Body_GetLocalPoint(a.bdID, vec);
+			const t = new b2Transform();
+			t.p = scaleTo(x, y);
 			b2Joint_SetLocalFrameA(this.jID, t);
 			b2Joint_WakeBodies(this.jID);
 
@@ -5341,11 +5340,8 @@ async function q5playPreSetup($, q) {
 		}
 
 		_setOffsetB(x, y) {
-			const a = this.spriteA,
-				vec = scaleTo(a.x - this._oBx + x, a.y - this._oBy + y),
-				t = new b2Transform();
-
-			t.p = b2Body_GetLocalPoint(this.spriteB.bdID, vec);
+			const t = new b2Transform();
+			t.p = scaleTo(x, y);
 			b2Joint_SetLocalFrameB(this.jID, t);
 			b2Joint_WakeBodies(this.jID);
 
@@ -6143,7 +6139,7 @@ async function q5playPreSetup($, q) {
 		// Draw the current frame
 		let img = ani[ani._frame];
 		if (img !== undefined) {
-			if (ani.spriteSheet) {
+			if (ani.spriteSheet && !ani.cutFrames) {
 				let { x, y, w, h } = img; // image info
 				if (!ani._spriteSheetDemo) {
 					$.image(ani.spriteSheet, dx, dy, dw || img.defaultWidth || w, dh || img.defaultHeight || h, x, y, w, h);
@@ -7557,6 +7553,7 @@ async function q5playPreSetup($, q) {
 			cmdSize = drawCmds.GetCommandsSize(),
 			cmdStride = drawCmds.GetCommandStride(),
 			offset = cmdPtr,
+			renderJointForces = $.q5play.renderJointForces,
 			s;
 
 		for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
@@ -7587,7 +7584,7 @@ async function q5playPreSetup($, q) {
 			let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
 
 			if (!s) {
-				if (type == 0) jointStack.push(data);
+				if (type == 0 && renderJointForces) jointStack.push(data);
 				continue;
 			}
 
@@ -7708,7 +7705,7 @@ async function q5playPreSetup($, q) {
 					$.strokeWeight(rr * 2);
 					$.strokeJoin('round');
 				} else {
-					$.strokeJoin('none');
+					$.strokeJoin('miter');
 				}
 				$.beginShape();
 				let len = 5 + cmd.vertexCount * 2;
