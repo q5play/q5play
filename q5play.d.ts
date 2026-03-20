@@ -175,16 +175,37 @@ declare global {
 		 * Changes the sprite's animation. Use `addAni` to define the
 		 * animation(s) first.
 		 *
-		 * @param aniName the name of the animation to switch to
+		 * @param name the name of the animation to switch to
 		 */
-		changeAni(aniName: string): void;
+		changeAni(name: string): void;
+		/**
+		 * Plays an animation.
+		 *
+		 * You can put special modifier characters before the name:
+		 * - "!" plays the animation backwards
+		 * - ">" or "<" horizontally flips the animation
+		 * - "^" vertically flips the animation
+		 *
+		 * @param name the name of an animation
+		 * @returns A promise that fulfills when the animation finishes playing
+		 */
+		playAni(name: string): Promise<void>;
 		/**
 		 * Plays a sequence of animations.
 		 *
-		 * @param aniNames the names of animations to be played in sequence
-		 * @returns A promise that fulfills when the animation sequence completes
+		 * You can put special modifier characters before each ani name:
+		 * - "!" plays the animation backwards
+		 * - ">" or "<" horizontally flips the animation
+		 * - "^" vertically flips the animation
+		 * 
+		 * You can put sequence modifiers at the end of the sequence:
+		 * - "**" loops the sequence indefinitely
+		 * - ";;" stops the last ani in the sequence on its last frame
+		 *
+		 * @param sequence the names of animations
+		 * @returns A promise that fulfills when the sequence completes
 		 */
-		playSequence(...aniNames: string[]): Promise<void>;
+		playAnis(...sequence: string[]): Promise<void>;
 	}
 
 	const DYNAMIC: 'dynamic';
@@ -641,7 +662,10 @@ declare global {
 		get rotationDrag(): number;
 		set rotationDrag(val: number);
 		/**
+		 * Known issue, this doesn't work.
+		 *
 		 * If true, the sprite can not rotate.
+		 * @deprecated
 		 * @default false
 		 */
 		get rotationLock(): boolean;
@@ -995,6 +1019,12 @@ declare global {
 		 * and a target sprite or group.
 		 * @param target
 		 */
+		pass(target: Sprite | Group): void;
+		/**
+		 * Sets a pass through contact relationship between the sprite
+		 * and a target sprite or group.
+		 * @param target
+		 */
 		passes(target: Sprite | Group): void;
 		/**
 		 * Creates overlap sensors that are the same size as the sprite's
@@ -1184,6 +1214,14 @@ declare global {
 		scale: number | { x: number; y: number };
 		looping: boolean;
 		playing: boolean;
+		/**
+		 * Cuts sprite sheet frames into separate images, instead of rendering
+		 * sections of the sprite sheet.
+		 * 
+		 * Avoids edge bleeding artifacts caused by rotation and scaling,
+		 * but uses more memory and may cause longer load times.
+		 */
+		cutFrames: boolean;
 		endOnFirstFrame: boolean;
 		w: number;
 		width: number;
@@ -1405,6 +1443,11 @@ declare global {
 		 * @return {Boolean}
 		 */
 		overlapped(target: Group, callback?: Function): boolean;
+		/**
+		 * Sets a pass through contact relationship between the group and the target group.
+		 * @param target
+		 */
+		pass(target: Group): void;
 		/**
 		 * Sets a pass through contact relationship between the group and the target group.
 		 * @param target
@@ -2392,13 +2435,33 @@ declare global {
 		b: number;
 		x: number;
 		y: number;
+		/**
+		 * Left shoulder button.
+		 */
 		l: number;
+		/**
+		 * Right shoulder button.
+		 */
 		r: number;
+		/**
+		 * Digital left trigger.
+		 */
 		lt: number;
+		/**
+		 * Digital right trigger.
+		 */
 		rt: number;
 		select: number;
 		start: number;
+		/**
+		 * Left stick button.
+		 * Activated by pressing down on the left analog stick.
+		 */
 		lsb: number;
+		/**
+		 * Right stick button.
+		 * Activated by pressing down on the right analog stick.
+		 */
 		rsb: number;
 		up: number;
 		down: number;
@@ -2460,43 +2523,43 @@ declare global {
 		 */
 		get rs(): any;
 		/**
-		 * Alias for `l` (left button).
-		 * `lb` is what the button is called on Xbox controllers.
+		 * Alias for `l` (left shoulder button).
+		 * `lb` is what it's called on Xbox controllers.
 		 */
 		get lb(): number;
 		/**
-		 * Alias for `r` (right button).
-		 * `rb` is what the button is called on Xbox controllers.
+		 * Alias for `r` (right shoulder button).
+		 * `rb` is what it's called on Xbox controllers.
 		 */
 		get rb(): number;
 		/**
-		 * Alias for `l` (left button).
-		 * `l1` is what the button is called on PlayStation controllers.
+		 * Alias for `l` (left shoulder button).
+		 * `l1` is what it's called on PlayStation controllers.
 		 */
 		get l1(): number;
 		/**
-		 * Alias for `r` (right button).
-		 * `r1` is what the button is called on PlayStation controllers.
+		 * Alias for `r` (right shoulder button).
+		 * `r1` is what it's called on PlayStation controllers.
 		 */
 		get r1(): number;
 		/**
 		 * Alias for `lt` (digital left trigger).
-		 * `zl` is what the button is called on Nintendo controllers.
+		 * `zl` is what it's called on Nintendo controllers.
 		 */
 		get zl(): number;
 		/**
 		 * Alias for `rt` (digital right trigger).
-		 * `zr` is what the button is called on Nintendo controllers.
+		 * `zr` is what it's called on Nintendo controllers.
 		 */
 		get zr(): number;
 		/**
 		 * Alias for `leftTrigger` (analog left trigger).
-		 * `l2` is what the trigger is called on PlayStation controllers.
+		 * `l2` is what it's called on PlayStation controllers.
 		 */
 		get l2(): number;
 		/**
 		 * Alias for `rightTrigger` (analog right trigger).
-		 * `r2` is what the trigger is called on PlayStation controllers.
+		 * `r2` is what it's called on PlayStation controllers.
 		 */
 		get r2(): number;
 		/**
@@ -2509,12 +2572,12 @@ declare global {
 		get rightStickButton(): number;
 		/**
 		 * Alias for `lsb` (left stick button).
-		 * `l3` is what the trigger is called on PlayStation controllers.
+		 * `l3` is what it's called on PlayStation controllers.
 		 */
 		get l3(): number;
 		/**
 		 * Alias for `rsb` (right stick button).
-		 * `r3` is what the trigger is called on PlayStation controllers.
+		 * `r3` is what it's called on PlayStation controllers.
 		 */
 		get r3(): number;
 	}

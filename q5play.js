@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta13
+ * @version 4.0-beta14
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta13';
+let q5play_version = 'beta14';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -684,11 +684,32 @@ async function q5playPreSetup($, q) {
 			return Promise.all(loaders);
 		}
 
-		async changeAni(label) {
-			this.playSequence(label);
+		changeAni(name) {
+			let ani = this._anis?.[name];
+			if (!ani) {
+				for (let g of this.groups || []) {
+					ani = g._anis?.[name] || g._anis?.[name];
+					if (ani) {
+						ani = ani.clone();
+						break;
+					}
+				}
+				if (!ani) {
+					console.error('Ani not found: ' + name);
+					return;
+				}
+			}
+			// reset to frame 0 of that animation
+			if (this.resetAniOnChange) ani._frame = 0;
+			ani.name = name;
+			this.ani = ani;
 		}
 
-		async playSequence(seq) {
+		playAni(ani) {
+			return this.playAnis(ani);
+		}
+
+		async playAnis(seq) {
 			if (arguments.length > 1) seq = [...arguments];
 			else if (seq instanceof $.Ani) {
 				if (seq == this.ani) return;
@@ -744,7 +765,7 @@ async function q5playPreSetup($, q) {
 		_playPhase(phase) {
 			return new Promise((resolve) => {
 				let { name, start, end, flipX, flipY } = phase;
-				this._changeAni(name);
+				this.changeAni(name);
 
 				let ani = this.ani;
 
@@ -764,27 +785,6 @@ async function q5playPreSetup($, q) {
 					resolve();
 				};
 			});
-		}
-
-		_changeAni(label) {
-			let ani = this._anis?.[label];
-			if (!ani) {
-				for (let g of this.groups || []) {
-					ani = g._anis?.[label] || g._anis?.[label];
-					if (ani) {
-						ani = ani.clone();
-						break;
-					}
-				}
-				if (!ani) {
-					console.error('Ani not found: ' + label);
-					return;
-				}
-			}
-			// reset to frame 0 of that animation
-			if (this.resetAniOnChange) ani._frame = 0;
-			ani.name = label;
-			this.ani = ani;
 		}
 
 		draw() {
@@ -1015,12 +1015,15 @@ async function q5playPreSetup($, q) {
 				else y = 0;
 			}
 
+			let rr;
+
 			let forcedBoxShape = false;
 			if (w === undefined) {
 				w = group.w || group.width || group.d || group.diameter;
 				if (!h && !group.d && !group.diameter) {
 					h = group.h || group.height;
 					forcedBoxShape = true;
+					rr = group.roundedRadius;
 				}
 			}
 
@@ -1028,6 +1031,7 @@ async function q5playPreSetup($, q) {
 			if (typeof y == 'function') y = y(group.length);
 			if (typeof w == 'function') w = w(group.length);
 			if (typeof h == 'function') h = h(group.length);
+			if (typeof rr == 'function') rr = rr(group.length);
 
 			this.pos = { x, y };
 
@@ -1066,7 +1070,7 @@ async function q5playPreSetup($, q) {
 						h ??= this._img.defaultHeight || this._img.h;
 					}
 				} else {
-					if (typeof ani == 'string') this._changeAni(ani);
+					if (typeof ani == 'string') this.changeAni(ani);
 					else this.ani = ani.clone();
 
 					if (!w && (this.ani.w != 1 || this.ani.h != 1)) {
@@ -1134,6 +1138,7 @@ async function q5playPreSetup($, q) {
 					args[1] = 0;
 					args[2] = w;
 					args[3] = h;
+					args[4] = rr;
 				}
 				if (withSensor) this.addSensor(...args);
 				else this.addCollider(...args);
@@ -3070,7 +3075,7 @@ async function q5playPreSetup($, q) {
 		textStroke: 'color', // 34
 		textStrokeWeight: 'number', // 35
 		tile: 'string', // 36
-		tileSize: 'number', // 37
+		roundedRadius: 'number', // 37
 		tint: 'color', // 38
 		visible: 'boolean', // 39
 		w: 'number', // 40 (width)
@@ -3150,8 +3155,18 @@ async function q5playPreSetup($, q) {
 
 			let anis = owner._anis;
 
-			if (!anis && owner._isSprite) {
-				anis = owner.groups[0]._anis;
+			if (!anis) {
+				if (owner._isSprite) {
+					for (let i = owner.groups.length - 1; !anis && i >= 0; i--) {
+						anis = owner.groups[i]._anis;
+					}
+				} else {
+					let g = owner;
+					while (!anis && g.parent >= 0) {
+						g = $.q5play.groups[g.parent];
+						anis = g._anis;
+					}
+				}
 			}
 
 			if (typeof args[0] == 'string' && (args[0].length == 1 || !args[0].includes('.'))) {
@@ -3232,6 +3247,8 @@ async function q5playPreSetup($, q) {
 				} else {
 					atlas = args[0];
 				}
+
+				this.cutFrames = anis?.cutFrames;
 
 				const findFrames = () => {
 					if (Array.isArray(atlas)) {
@@ -3569,7 +3586,16 @@ async function q5playPreSetup($, q) {
 		}
 	};
 
-	$.Ani.props = ['frameDelay', 'offset', 'scale', 'looping', 'playing', 'endOnFirstFrame', '_spriteSheetDemo'];
+	$.Ani.props = [
+		'frameDelay',
+		'offset',
+		'scale',
+		'looping',
+		'playing',
+		'endOnFirstFrame',
+		'cutFrames',
+		'_spriteSheetDemo'
+	];
 
 	$.Anis = class {
 		#_ = {};
@@ -3712,6 +3738,7 @@ async function q5playPreSetup($, q) {
 				}
 			}
 
+			delete this._isVisuals;
 			this._isGroup = true;
 
 			if ($.q5play.groupsCreated < 999) {
@@ -6443,14 +6470,7 @@ async function q5playPreSetup($, q) {
 			hh: {
 				1: "I can't change the halfHeight of a Sprite directly, change the sprite's height instead."
 			},
-			rotate: {
-				0: "Can't use this function on a sprite with a static collider, try changing the sprite's collider type to kinematic.",
-				1: 'Can\'t use "$0" for the angle of rotation, it must be a number.'
-			},
-			rotateTo: {},
-			rotateMinTo: {},
-			rotateTowards: {},
-			changeAnimation: `I can't find any animation named "$0".`,
+			changeAni: `I can't find any animation named "$0".`,
 			collide: {
 				0: "I can't make that sprite collide with $0. Sprites can only collide with another sprite or a group.",
 				1: 'The collision callback has to be a function.',
@@ -6478,10 +6498,6 @@ async function q5playPreSetup($, q) {
 	};
 	errMsgs.Group.collide = errMsgs.Sprite.collide;
 	errMsgs.Group.overlap = errMsgs.Sprite.overlap;
-	errMsgs.Sprite.rotateTo[0] =
-		errMsgs.Sprite.rotateMinTo[0] =
-		errMsgs.Sprite.rotateTowards[0] =
-			errMsgs.Sprite.rotate[0];
 
 	class FriendlyError extends Error {
 		constructor(func, errorNum, e) {
