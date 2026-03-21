@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta14
+ * @version 4.0-beta15
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta14';
+let q5play_version = 'beta15';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -319,12 +319,9 @@ async function q5playPreSetup($, q) {
 		get friendlyRounding() {
 			return friendlyRounding;
 		}
-
 		set friendlyRounding(val) {
 			friendlyRounding = val;
 		}
-
-		onImageLoad() {}
 	};
 
 	$.q5play = new $.Q5Play();
@@ -2663,7 +2660,7 @@ async function q5playPreSetup($, q) {
 			else b2Body_ApplyForce(this.bdID, forceVector, poa, true);
 		}
 
-		attractTo(x, y, force, radius, easing) {
+		attractTo(x, y, force) {
 			if (this._phys != 0) {
 				console.error('attractTo can only be used on sprites with dynamic physics bodies');
 				return;
@@ -2687,7 +2684,7 @@ async function q5playPreSetup($, q) {
 			b2Body_ApplyForceToCenter(this.bdID, forceVector, true);
 		}
 
-		repelFrom(x, y, force, radius, easing) {
+		repelFrom(x, y, force) {
 			if (this._phys != 0) {
 				console.error('repelFrom can only be used on sprites with dynamic colliders');
 				return;
@@ -2699,7 +2696,7 @@ async function q5playPreSetup($, q) {
 				y = pos.y;
 				x = pos.x;
 			}
-			this.attractTo(x, y, -force, radius, easing);
+			this.attractTo(x, y, -force);
 		}
 
 		applyTorque(val) {
@@ -3898,6 +3895,7 @@ async function q5playPreSetup($, q) {
 		addTiles(tiles, x, y, colWidth, rowHeight) {
 			if (typeof tiles == 'string') {
 				if (tiles[0] == '\n') tiles = tiles.slice(1);
+				if (tiles.at(-1) == '\n') tiles = tiles.slice(0, -1);
 				tiles = tiles.replaceAll('\t', '  ');
 				tiles = tiles.split('\n');
 			}
@@ -3909,8 +3907,19 @@ async function q5playPreSetup($, q) {
 
 					if (!tile) continue;
 
-					colWidth ??= tile.w || tile.ani.w;
-					rowHeight ??= tile.h || tile.ani.h;
+					if (colWidth == undefined) {
+						colWidth = tile.w || tile.ani.w;
+						rowHeight = tile.h || tile.ani.h;
+					}
+
+					if (x === undefined) {
+						let longestRow = 0;
+						for (let r of tiles) {
+							if (r.length > longestRow) longestRow = r.length;
+						}
+						x ??= longestRow * colWidth * -0.5;
+						y ??= (tiles.length - 1) * rowHeight * -0.5;
+					}
 
 					let tileX = x + col * colWidth;
 					let tileY = y + row * rowHeight;
@@ -6141,7 +6150,6 @@ async function q5playPreSetup($, q) {
 			}
 		}
 		img.updatePixels();
-		$.q5play.onImageLoad(img);
 		return img; // return the p5 graphics object
 	};
 

@@ -3,22 +3,23 @@ import 'q5';
 declare global {
 	class Q5Play {
 		/**
-		 * Contains all the sprites in the sketch,
+		 * Contains all the sprites in the sketch.
 		 *
-		 * Users should use the `allSprites` group instead.
+		 * Users should use the `allSprites` group instead
+		 * because this object includes deleted sprites.
 		 *
 		 * The keys are the sprite's unique ids.
 		 */
 		sprites: {
-			[x: number]: Sprite;
+			[key: number]: Sprite;
 		};
 		/**
-		 * Contains all the groups in the sketch,
+		 * Contains all the groups in the sketch.
 		 *
 		 * The keys are the group's unique ids.
 		 */
 		groups: {
-			[x: number]: Group;
+			[key: number]: Group;
 		};
 		groupsCreated: number;
 		spritesCreated: number;
@@ -29,18 +30,17 @@ declare global {
 		 */
 		palettes: any[];
 		/**
-		 * Friendly rounding eliminates some floating point errors.
+		 * Friendly rounding makes some Sprite getters return nice rounded numbers
+		 * if a decimal value is within linear slop range (+/-0.005) or
+		 * angular slop range (+/-0.000582 radians) of a whole number.
+		 * 
+		 * This is because Box2D physics calculations can result in
+		 * floating point drift, which beginners wouldn't expect.
+		 * 
+		 * Setting to false can slightly improve performance.
 		 * @default true
 		 */
 		friendlyRounding: boolean;
-		/**
-		 * Groups that are removed using `group.remove()` are not
-		 * fully deleted from `q5play.groups` by default, so their data
-		 * is still accessible. Set to false to permanently delete
-		 * removed groups, which reduces memory usage.
-		 * @default true
-		 */
-		storeRemovedGroupRefs: boolean;
 		/**
 		 * Snaps sprites to the nearest `q5play.gridSize`
 		 * increment when they are moved.
@@ -61,12 +61,12 @@ declare global {
 		hasMouse: boolean;
 		standardizeKeyboard: boolean;
 		/**
-		 * Displays the number of sprites drawn, the current FPS
-		 * as well as the average, minimum, and maximum FPS achieved
-		 * during the previous second.
+		 * Displays the version of q5play being used,
+		 * the number of sprites being drawn
+		 * and a realtime graphing of the current FPS.
 		 *
 		 * FPS in this context refers to how many frames per second your
-		 * computer can generate, based on the physics calculations and any
+		 * computer can generate, only based on the physics calculations and
 		 * other processes necessary to generate a frame, but not
 		 * including the delay between when frames are actually shown on
 		 * the screen. The higher the FPS, the better your game is
@@ -82,16 +82,11 @@ declare global {
 		 * @default false
 		 */
 		renderStats: boolean;
-		/**
-		 * This function is called when an image is loaded. By default it
-		 * does nothing, but it can be overridden.
-		 */
-		onImageLoad(): void;
 	}
 	const q5play: Q5Play;
 
 	/**
-	 * Users do not create Shapes directly; use `sprite.addCollider()`
+	 * Don't create Shapes directly; use `sprite.addCollider()`
 	 * or `sprite.addSensor()` instead.
 	 */
 	class Shape {
@@ -107,7 +102,7 @@ declare global {
 	 * Colliders are added to a sprite's physics body to cause
 	 * physical collisions with other sprites.
 	 *
-	 * Users do not create Colliders directly; use Sprite.addCollider() instead.
+	 * Don't create Colliders directly; use Sprite.addCollider() instead.
 	 */
 	class Collider extends Shape {
 		friction: number;
@@ -119,7 +114,7 @@ declare global {
 	 * Sensor are added to a sprite's physics body to detect overlaps 
 	 * without causing physical collisions.
 	 *
-	 * Users do not create Sensors directly; use Sprite.addSensor() instead.
+	 * Don't create Sensors directly; use Sprite.addSensor() instead.
 	 *
 	 * @extends Shape
 	 */
@@ -136,7 +131,7 @@ declare global {
 		x: number;
 		y: number;
 		/**
-		 * Draws the visual to the canvas at its [x, y] position
+		 * Draws the visual on the canvas at its [x, y] position
 		 * with respect to the camera.
 		 */
 		draw(): void;
@@ -215,7 +210,7 @@ declare global {
 	const KINEMATIC: 'kinematic';
 	const KIN: 'kinematic';
 
-	class Sprite {
+	class Sprite extends Visual {
 		/**
 		 * Creates a new sprite.
 		 *
@@ -561,7 +556,7 @@ declare global {
 		 * This function is called automatically at the end of each
 		 * sketch `draw` function call but it can also be run
 		 * by users to customize the order sprites are drawn in relation
-		 * to other stuff drawn to the canvas. Also see the sprite.layer
+		 * to other stuff drawn on the canvas. Also see the sprite.layer
 		 * property.
 		 *
 		 * A sprite's draw function can be overridden with a
@@ -671,7 +666,9 @@ declare global {
 		get rotationLock(): boolean;
 		set rotationLock(val: boolean);
 		/**
-		 * Scale of the sprite.
+		 * Horizontal and vertical scale of the sprite.
+		 * 
+		 * Components can be negative to flip/mirror the sprite on an axis.
 		 *
 		 * The `valueOf` function for `sprite.scale` returns the scale as a
 		 * number. This enables users to do things like `sprite.scale *= 2`
@@ -854,11 +851,8 @@ declare global {
 		 */
 		attractTo(x: number | any, y?: number, force?: number): void;
 		/**
-		 * Applies a force to the sprite's center of mass attracting it to
+		 * Applies a force to the sprite's center of mass repelling it to
 		 * the given position.
-		 *
-		 * Radius and easing not implemented yet!
-		 *
 		 * @param x x coordinate or coordinate array or object with x and y properties
 		 * @param y
 		 * @param force
@@ -1237,7 +1231,47 @@ declare global {
 		spriteSheet: Q5.Image;
 	}
 
-	class Group extends Array<Sprite> {
+	/**
+	 * Visual objects store images and animations that can be displayed
+	 * with respect to the camera.
+	 */
+	class Visuals extends Array<Visual> {
+		/**
+		 * Draws the visuals on the canvas with respect to the camera.
+		 */
+		draw(): void;
+		/**
+		 * Current image.
+		 */
+		img: Q5.Image;
+		/**
+		 * Current animation.
+		 */
+		ani: Ani;
+		/**
+		 * Stores animations.
+		 * Keys are the animation label, values are Ani objects
+		 */
+		get anis(): Anis;
+		/**
+		 * Adds an animation to the Group or Visuals array.
+		 *
+		 * @param spriteSheetURL the URL of the sprite sheet image
+		 * @param frameCount the number of frames in the sprite sheet
+		 * @returns A promise that fulfills when the animation is loaded
+		 */
+		addAni(spriteSheetURL: string, frameCount: number): Promise<void>;
+		/**
+		 * Add multiple animations to the Group or Visuals array.
+		 *
+		 * @param atlases an object with animation names as keys and
+		 * an animation or animation atlas as values
+		 * @returns A promise that fulfills when the animations are loaded
+		 */
+		addAnis(...args: any[]): void;
+	}
+
+	class Group extends Visuals {
 		/**
 		 * An array of sprites with similar traits and behaviors.
 		 *
@@ -1347,6 +1381,16 @@ declare global {
 		 */
 		visualOnly: boolean;
 		/**
+		 * Adds sprites to the group based on a tile map.
+		 *
+		 * @param tiles
+		 * @param x x coordinate of the top left corner of the tile map, default is -colWidth * longest row / 2
+		 * @param y y coordinate of the top left corner of the tile map, default is -rowHeight * number of rows / 2
+		 * @param colWidth column width including spacing, default is the width of the first tile
+		 * @param rowHeight row height including spacing, default is the height of the first tile
+		 */
+		addTiles(tiles: string | string[], x?: number, y?: number, colWidth?: number, rowHeight?: number): void;
+		/**
 		 * Alias for `group.push`.
 		 *
 		 * Adds a sprite to the end of the group.
@@ -1358,25 +1402,6 @@ declare global {
 		 * Check if a sprite is in the group.
 		 */
 		contains: (searchElement: Sprite, fromIndex?: number) => boolean;
-		/**
-		 * Reference to the group's current animation.
-		 */
-		get ani(): Ani;
-		set ani(val: Ani);
-		/**
-		 * The group's animations.
-		 */
-		get anis(): Anis;
-		/**
-		 * Alias for `group.image`.
-		 */
-		get img(): Q5.Image;
-		set img(val: Q5.Image);
-		/**
-		 * The group's image.
-		 */
-		get image(): Q5.Image;
-		set image(img: Q5.Image);
 		/**
 		 * Depending on the value that the amount property is set to, the group will
 		 * either add or delete sprites.
@@ -1455,11 +1480,11 @@ declare global {
 		passes(target: Group): void;
 		applyForce(amount: number, origin?: [] | { x: number; y: number } | Q5.Vector): void;
 		applyForceScaled(amount: number, origin?: [] | { x: number; y: number } | Q5.Vector): void;
-		attractTo(...args: any[]): void;
-		applyTorque(...args: any[]): void;
-		moveTowards(x: any, y: any, tracking: any): void;
-		moveAway(x: any, y: any, repel: any): void;
-		repelFrom(...args: any[]): void;
+		attractTo(x: number | any, y?: number, force?: number): void;
+		applyTorque(torque: any): void;
+		moveTowards(x: number | any, y?: number, tracking?: number): void;
+		moveAway(x: number | any, y?: number, repel?: number): void;
+		repelFrom(x: number | any, y?: number, force?: number): void;
 		/**
 		 * Detects when sprites go outside the given culling boundary
 		 * relative to the camera.
