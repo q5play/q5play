@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta15
+ * @version 4.0-beta16
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta15';
+let q5play_version = 'beta16';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -574,6 +574,10 @@ async function q5playPreSetup($, q) {
 			this._img = null;
 			this._hasImagery = false;
 			this._aniChangeCount = 0;
+
+			this.vx = 0;
+			this.vy = 0;
+			this.life = Infinity;
 		}
 
 		get anis() {
@@ -702,19 +706,8 @@ async function q5playPreSetup($, q) {
 			this.ani = ani;
 		}
 
-		playAni(ani) {
-			return this.playAnis(ani);
-		}
-
 		async playAnis(seq) {
 			if (arguments.length > 1) seq = [...arguments];
-			else if (seq instanceof $.Ani) {
-				if (seq == this.ani) return;
-				seq = [seq];
-			} else if (!Array.isArray(seq)) {
-				if (seq == this.ani?.name) return;
-				seq = [seq];
-			}
 
 			this._aniChangeCount++;
 			let loop, stopOnLastAni;
@@ -785,8 +778,15 @@ async function q5playPreSetup($, q) {
 		}
 
 		draw() {
-			if (this.ani) $.animation(this.ani, this.x, this.y);
-			else if (this._img) $.image(this._img, this.x, this.y);
+			this.x += this.vx * timeScale;
+			this.y += this.vy * timeScale;
+
+			if (this.ani) {
+				$.animation(this.ani, this.x, this.y);
+			} else if (this._img) {
+				$.image(this._img, this.x, this.y);
+			}
+			this.life -= timeScale;
 		}
 	};
 
@@ -874,7 +874,6 @@ async function q5playPreSetup($, q) {
 			this.mod = {};
 
 			this._deleted = false;
-			this._life = Infinity;
 			this._visible = true;
 			this._pixelPerfect = false;
 			this._aniChangeCount = 0;
@@ -1135,7 +1134,7 @@ async function q5playPreSetup($, q) {
 					args[1] = 0;
 					args[2] = w;
 					args[3] = h;
-					args[4] = rr;
+					args[4] ??= rr;
 				}
 				if (withSensor) this.addSensor(...args);
 				else this.addCollider(...args);
@@ -1156,7 +1155,7 @@ async function q5playPreSetup($, q) {
 			if (typeof gvy == 'function') gvy = gvy(group.length - 1);
 			if (gvx || gvy) this.vel = { x: gvx, y: gvy };
 
-			let gsc = group._scale;
+			let gsc = group.scale;
 			if (typeof gsc == 'function') gsc = gsc(group.length - 1);
 			this.scale = gsc;
 
@@ -2028,8 +2027,10 @@ async function q5playPreSetup($, q) {
 		scaleBy(x, y) {
 			if (y === undefined) y = x;
 
-			for (let shape of this._shapes) {
-				shape.scaleBy(x, y);
+			if (this._shapes) {
+				for (let shape of this._shapes) {
+					shape.scaleBy(x, y);
+				}
 			}
 
 			this._w *= x;
@@ -2371,6 +2372,7 @@ async function q5playPreSetup($, q) {
 		set gravityScale(val) {
 			if (this.watch) this.mod[42] = true;
 			b2Body_SetGravityScale(this.bdID, val);
+			this.sleeping = false;
 		}
 
 		_update() {
@@ -2796,7 +2798,7 @@ async function q5playPreSetup($, q) {
 
 			this.joints.deleteAll();
 
-			b2DestroyBody(this.bdID);
+			if (this.bdID != undefined) b2DestroyBody(this.bdID);
 
 			// when deleted from the world also remove all the sprite
 			// from all its groups
@@ -3150,21 +3152,7 @@ async function q5playPreSetup($, q) {
 			}
 			owner ??= $.allSprites;
 
-			let anis = owner._anis;
-
-			if (!anis) {
-				if (owner._isSprite) {
-					for (let i = owner.groups.length - 1; !anis && i >= 0; i--) {
-						anis = owner.groups[i]._anis;
-					}
-				} else {
-					let g = owner;
-					while (!anis && g.parent >= 0) {
-						g = $.q5play.groups[g.parent];
-						anis = g._anis;
-					}
-				}
-			}
+			let anis = owner.anis;
 
 			if (typeof args[0] == 'string' && (args[0].length == 1 || !args[0].includes('.'))) {
 				this.name = args[0];
@@ -3185,14 +3173,15 @@ async function q5playPreSetup($, q) {
 			this._cycles = 0;
 			this.targetFrame = -1;
 			this._scale = new Scale();
-			this._offset = { x: 0, y: 0 };
-			if (anis) this.offset = anis.offset;
-			this.frameDelay = anis?.frameDelay || 4;
-			this.looping = anis?.looping ?? true;
+			this._scale._x = anis.scale.x;
+			this._scale.y = anis.scale.y; // calculates average scale
+			this._offset = { x: anis.offset.x, y: anis.offset.y };
+			this.frameDelay = anis.frameDelay || 4;
+			this.looping = anis.looping ?? true;
 			this.frameChanged = false;
-			this.endOnFirstFrame = anis?.endOnFirstFrame ?? false;
+			this.endOnFirstFrame = anis.endOnFirstFrame ?? false;
 
-			this._spriteSheetDemo = anis?._spriteSheetDemo ?? false;
+			this._spriteSheetDemo = anis._spriteSheetDemo ?? false;
 			this._onComplete = this._onChange = null;
 
 			if (!args.length) return;
@@ -3231,7 +3220,7 @@ async function q5playPreSetup($, q) {
 			// sprite sheet format
 			else if (typeof args[1] != 'string') {
 				let atlas,
-					sheet = anis?.spriteSheet;
+					sheet = anis.spriteSheet;
 
 				if (typeof args[0] == 'string' || args[0] instanceof Q5.Image) {
 					sheet = args[0];
@@ -3245,7 +3234,7 @@ async function q5playPreSetup($, q) {
 					atlas = args[0];
 				}
 
-				this.cutFrames = anis?.cutFrames;
+				this.cutFrames = anis.cutFrames;
 
 				const findFrames = () => {
 					if (Array.isArray(atlas)) {
@@ -3262,7 +3251,7 @@ async function q5playPreSetup($, q) {
 
 					if (frameDelay) this.frameDelay = frameDelay;
 					let framesAmt = frames?.length || frames || 1;
-					frameSize ??= anis?.frameSize;
+					frameSize ??= anis.frameSize;
 
 					let w = atlas.w || atlas.width,
 						h = atlas.h || atlas.height;
@@ -3392,7 +3381,7 @@ async function q5playPreSetup($, q) {
 			}
 
 			// play by default but a single frame ani doesn't need to play
-			this.playing = this.length != 1 && anis?.playing != false;
+			this.playing = this.length != 1 && anis.playing != false;
 		}
 
 		// make loading Ani objects awaitable
@@ -3605,10 +3594,11 @@ async function q5playPreSetup($, q) {
 				vecProps = ['offset', 'scale'];
 
 			for (let prop of props) {
+				if (vecProps.includes(prop)) continue;
 				Object.defineProperty(this, prop, {
 					get() {
 						let val = _this.#_[prop];
-						if (val === undefined && !_this._isAllSpritesGroup) {
+						if (val === undefined) {
 							let parent = $.q5play.groups[_this.#owner.parent];
 							if (parent) {
 								val = parent.anis[prop];
@@ -3631,13 +3621,20 @@ async function q5playPreSetup($, q) {
 
 			for (let vecProp of vecProps) {
 				this.#_[vecProp] = {
-					_x: 0,
-					_y: 0
+					_x: undefined,
+					_y: undefined
 				};
 				for (let prop of ['x', 'y']) {
 					Object.defineProperty(this.#_[vecProp], prop, {
 						get() {
-							return _this.#_[vecProp]['_' + prop];
+							let val = _this.#_[vecProp]['_' + prop];
+							if (val === undefined) {
+								let parent = $.q5play.groups[_this.#owner.parent];
+								if (parent) {
+									val = parent.anis.#_[vecProp][prop];
+								}
+							}
+							return val;
 						},
 						set(val) {
 							_this.#_[vecProp]['_' + prop] = val;
@@ -3665,6 +3662,21 @@ async function q5playPreSetup($, q) {
 		set height(val) {
 			this.h = val;
 		}
+
+		get offset() {
+			return this.#_.offset;
+		}
+		set offset(val) {
+			this.#_.offset.x = val.x ?? val[0] ?? val;
+			this.#_.offset.y = val.y ?? val[1] ?? val;
+		}
+		get scale() {
+			return this.#_.scale;
+		}
+		set scale(val) {
+			this.#_.scale.x = val.x ?? val[0] ?? val;
+			this.#_.scale.y = val.y ?? val[1] ?? val;
+		}
 	};
 
 	$.Anis.props = [...$.Ani.props, 'frameSize', 'spriteSheet'];
@@ -3677,6 +3689,20 @@ async function q5playPreSetup($, q) {
 			this._anis = null;
 			this.ani = null;
 			this._img = null;
+
+			this.amount = 0;
+			this._idx = 0;
+
+			const _this = this;
+			this.Visual = class extends $.Visual {
+				constructor(x, y) {
+					super(x, y);
+					if (_this.ani) this.ani = _this.ani.clone();
+					else this.img = _this._img;
+					_this[_this._idx++] = this;
+					_this.amount++;
+				}
+			};
 		}
 
 		get anis() {
@@ -3713,9 +3739,62 @@ async function q5playPreSetup($, q) {
 		}
 
 		draw() {
-			for (let v of this) {
-				v.draw();
+			let len = this.length;
+			for (let i = 0; i < len; i++) {
+				let v = this[i];
+				if (v.life > 0) {
+					v.draw();
+				}
 			}
+		}
+
+		cull(top = 0, bottom, left, right, cb) {
+			if (left === undefined) {
+				let size = top;
+				cb = bottom;
+				top = bottom = left = right = size;
+			}
+
+			let cam = $.camera,
+				cnv = $.canvas,
+				cx = cam.x - cnv.hw / cam.zoom,
+				cy = cam.y - cnv.hh / cam.zoom,
+				minX = -left + cx,
+				minY = -top + cy,
+				maxX = $.canvas.w + right + cx,
+				maxY = $.canvas.h + bottom + cy,
+				skipped = 0,
+				culled = 0;
+
+			for (let i = 0; i < this.length; i++) {
+				let v = this[i];
+
+				if (v.life <= 0) {
+					skipped++;
+				} else if (v.x < minX || v.y < minY || v.x > maxX || v.y > maxY) {
+					culled++;
+					if (cb) cb(v, culled);
+					else v.life = 0;
+				}
+			}
+
+			if (skipped > 10000) {
+				// if there are a lot of dead visuals, do a pass to remove them and prevent memory bloat
+				let alive = [];
+				for (let i = 0; i < this.length; i++) {
+					if (this[i].life > 0) alive.push(this[i]);
+				}
+				this.length = 0;
+				for (let i = 0; i < alive.length; i++) {
+					this.push(alive[i]);
+				}
+				this._idx = alive.length;
+				this.amount = alive.length;
+			} else {
+				this.amount -= culled;
+			}
+
+			return culled;
 		}
 	};
 
@@ -3847,8 +3926,8 @@ async function q5playPreSetup($, q) {
 				vecProp = '_' + vecProp;
 				if (vecProp != 'vel') this[vecProp] = {};
 				else this[vecProp] = $.createVector.call($);
-				this[vecProp]._x = 0;
-				this[vecProp]._y = 0;
+				this[vecProp]._x = undefined;
+				this[vecProp]._y = undefined;
 				for (let prop of ['x', 'y']) {
 					Object.defineProperty(this[vecProp], prop, {
 						get() {
@@ -3878,13 +3957,21 @@ async function q5playPreSetup($, q) {
 				}
 			}
 
-			this._scale._x = 1;
-			this._scale._y = 1;
-
 			if (this._isAllSpritesGroup) {
 				this.autoCull = true;
 				this.autoDraw = true;
 				this.autoUpdate = true;
+
+				this._scale._x = 1;
+				this._scale._y = 1;
+
+				this._vel._x = 0;
+				this._vel._y = 0;
+
+				this.anis.scale._x = 1;
+				this.anis.scale._y = 1;
+				this.anis.offset._x = 0;
+				this.anis.offset._y = 0;
 			}
 
 			this.add = this.push;
@@ -3979,9 +4066,10 @@ async function q5playPreSetup($, q) {
 			let diff = val - this.length;
 			let shouldAdd = diff > 0;
 			diff = Math.abs(diff);
+
 			for (let i = 0; i < diff; i++) {
 				if (shouldAdd) new this.Sprite();
-				else this[this.length - 1].remove();
+				else this[0].delete();
 			}
 		}
 
@@ -4359,15 +4447,14 @@ async function q5playPreSetup($, q) {
 				throw new TypeError('The callback to group.cull must be a function');
 			}
 
-			let cx = $.camera.x - $.canvas.hw / $.camera.zoom;
-			let cy = $.camera.y - $.canvas.hh / $.camera.zoom;
+			let cx = $.camera.x - $.canvas.hw / $.camera.zoom,
+				cy = $.camera.y - $.canvas.hh / $.camera.zoom,
+				minX = -left + cx,
+				minY = -top + cy,
+				maxX = $.canvas.w + right + cx,
+				maxY = $.canvas.h + bottom + cy,
+				culled = 0;
 
-			let minX = -left + cx;
-			let minY = -top + cy;
-			let maxX = $.canvas.w + right + cx;
-			let maxY = $.canvas.h + bottom + cy;
-
-			let culled = 0;
 			for (let i = 0; i < this.length; i++) {
 				let s = this[i];
 				if (s._hasChain) continue;
@@ -6736,6 +6823,8 @@ async function q5playPreSetup($, q) {
 			super();
 			this.x = 0;
 			this.y = 0;
+			this.prev = { x: 0, y: 0 };
+			this.delta = { x: 0, y: 0 };
 			this.canvasPos = {};
 			this.id = e.pointerId;
 			this.type = e.pointerType;
@@ -6750,6 +6839,9 @@ async function q5playPreSetup($, q) {
 		}
 
 		_update(e) {
+			this.prev.x = this.x;
+			this.prev.y = this.y;
+
 			const c = $.canvas,
 				rect = c.getBoundingClientRect(),
 				sx = c.scrollWidth / c.w || 1,
@@ -6771,6 +6863,9 @@ async function q5playPreSetup($, q) {
 			this.y = y / cam.zoom + cam.y;
 			this.pressure = e.pressure ?? 0;
 			this.event = e;
+
+			this.delta.x = this.x - this.prev.x;
+			this.delta.y = this.y - this.prev.y;
 		}
 
 		_getSprites() {
@@ -7088,6 +7183,13 @@ async function q5playPreSetup($, q) {
 			// if user is pressing shift but released another key
 			let k = key.toLowerCase();
 			if (this.kb[k] > 0) this.kb._rel(k);
+		}
+		if (key == 'meta') {
+			for (let k in this.kb) {
+				if (k.length == 1 && this.kb[k] > 0) {
+					this.kb._rel(k);
+				}
+			}
 		}
 	};
 
@@ -7909,6 +8011,13 @@ function q5playPreDraw() {
 				if (s?._grabbable) m.cursor = 'grab';
 				else m.cursor = 'default';
 			}
+		}
+	}
+
+	if ($.kb.meta) {
+		if ($.kb.presses('b')) $.allSprites.debug = true;
+		else if ($.kb.released('b')) {
+			$.allSprites.debug = false;
 		}
 	}
 

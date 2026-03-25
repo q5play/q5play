@@ -128,11 +128,24 @@ declare global {
 	 * with respect to the camera.
 	 */
 	class Visual {
+		/**
+		 * Horizontal position of the visual.
+		 */
 		x: number;
+		/**
+		 * Vertical position of the visual.
+		 */
 		y: number;
 		/**
-		 * Draws the visual on the canvas at its [x, y] position
-		 * with respect to the camera.
+		 * Horizontal velocity of the visual.
+		 */
+		vx: number;
+		/**
+		 * Vertical velocity of the visual.
+		 */
+		vy: number;
+		/**
+		 * Draws the visual on the canvas.
 		 */
 		draw(): void;
 		/**
@@ -161,11 +174,13 @@ declare global {
 		/**
 		 * Add multiple animations to the Sprite or Visual.
 		 *
+		 * @param spriteSheetURL the URL of the sprite sheet image
+		 * @param frameSize the size of each frame in the sprite sheet in the format "WIDTHxHEIGHT" (example: "32x32")
 		 * @param atlases an object with animation names as keys and
 		 * an animation or animation atlas as values
 		 * @returns A promise that fulfills when the animations are loaded
 		 */
-		addAnis(...args: any[]): void;
+		addAnis(spriteSheetURL?: string, frameSize?: string, atlases: {}): Promise<void>;
 		/**
 		 * Changes the sprite's animation. Use `addAni` to define the
 		 * animation(s) first.
@@ -174,28 +189,16 @@ declare global {
 		 */
 		changeAni(name: string): void;
 		/**
-		 * Plays an animation.
-		 *
-		 * You can put special modifier characters before the name:
-		 * - "!" plays the animation backwards
-		 * - ">" or "<" horizontally flips the animation
-		 * - "^" vertically flips the animation
-		 *
-		 * @param name the name of an animation
-		 * @returns A promise that fulfills when the animation finishes playing
-		 */
-		playAni(name: string): Promise<void>;
-		/**
 		 * Plays a sequence of animations.
 		 *
 		 * You can put special modifier characters before each ani name:
-		 * - "!" plays the animation backwards
-		 * - ">" or "<" horizontally flips the animation
-		 * - "^" vertically flips the animation
-		 * 
+		 * - "!" plays it backwards
+		 * - ">" or "<" horizontally flips it
+		 * - "^" vertically flips it
+		 *
 		 * You can put sequence modifiers at the end of the sequence:
-		 * - "**" loops the sequence indefinitely
-		 * - ";;" stops the last ani in the sequence on its last frame
+		 * - "**" loops it indefinitely
+		 * - ";;" stops it on the last ani's last frame
 		 *
 		 * @param sequence the names of animations
 		 * @returns A promise that fulfills when the sequence completes
@@ -702,6 +705,12 @@ declare global {
 		 */
 		get speed(): number;
 		set speed(val: number);
+		/**
+		 * Efficiently sets the sprite's speed and direction at the same time.
+		 * @param speed
+		 * @param direction
+		 */
+		setSpeedAndDirection(speed: number, direction: number): void;
 		/**
 		 * The sprite's speed along the surface of its collider(s),
 		 * like a conveyor belt.
@@ -1237,9 +1246,21 @@ declare global {
 	 */
 	class Visuals extends Array<Visual> {
 		/**
-		 * Draws the visuals on the canvas with respect to the camera.
+		 * Draws the visuals on the canvas.
 		 */
 		draw(): void;
+		/**
+		 * Detects when visuals go outside the given culling boundary,
+		 * relative to the camera.
+		 * @param top top bound or boundary range
+		 * @param bottom bottom bound
+		 * @param left left bound
+		 * @param right right bound
+		 * @param cb the function to be run when a visual is culled,
+		 * it's given the visual being culled, if no callback is given then the visual's life is set to 0
+		 * @return {Number} the number of visuals culled
+		 */
+		cull(top?: number, bottom?: number, left?: number, right?: number, cb?: Function): number;
 		/**
 		 * Current image.
 		 */
@@ -1264,11 +1285,13 @@ declare global {
 		/**
 		 * Add multiple animations to the Group or Visuals array.
 		 *
+		 * @param spriteSheetURL the URL of the sprite sheet image
+		 * @param frameSize the size of each frame in the sprite sheet in the format "WIDTHxHEIGHT" (example: "32x32")
 		 * @param atlases an object with animation names as keys and
 		 * an animation or animation atlas as values
 		 * @returns A promise that fulfills when the animations are loaded
 		 */
-		addAnis(...args: any[]): void;
+		addAnis(spriteSheetURL: string, frameSize: string, atlases: {}): Promise<void>;
 	}
 
 	class Group extends Visuals {
@@ -1287,59 +1310,269 @@ declare global {
 		 */
 		constructor(...sprites: Sprite[]);
 
+		/**
+		 * Horizontal position of group sprites.
+		 */
 		x: number;
+		/**
+		 * Vertical position of group sprites.
+		 */
 		y: number;
+		/**
+		 * Velocity of group sprites.
+		 */
 		vel: number;
+		/**
+		 * Velocity of group sprites.
+		 */
 		velocity: number;
+		/**
+		 * The angle of the group sprites' rotation, not the direction it's moving.
+		 *
+		 * If angleMode is set to "degrees", the value will be returned in
+		 * a range of -180 to 180.
+		 */
 		rotation: number;
+		/**
+		 * The speed of the group sprites' rotation in angles per frame.
+		 */
 		rotationSpeed: number;
 
+		/**
+		 * If true, group sprites are drawn by q5play after each physics update.
+		 */
 		autoDraw: boolean;
+		/**
+		 * Controls the ability for group sprites to "sleep".
+		 *
+		 * "Sleeping" sprites are not included in the physics simulation, a
+		 * sprite starts "sleeping" when it stops moving and doesn't collide
+		 * with anything that it wasn't already colliding with.
+		 */
 		allowSleeping: boolean;
+		/**
+		 * If true, group sprites are updated by q5play before each physics update.
+		 */
 		autoUpdate: number;
+		/**
+		 * A bearing indicates the direction that needs to be followed to
+		 * reach a destination.
+		 *
+		 * Setting a group sprites' bearing doesn't do anything by itself.
+		 * You can apply a force to the group sprites at its bearing angle
+		 * using the `applyForce` function.
+		 */
 		bearing: number;
+		/**
+		 * The bounciness of the group sprites' physics body.
+		 */
 		bounciness: number;
+		/**
+		 * The group sprites' current fill color.
+		 *
+		 * By default sprites get a random color.
+		 */
 		color: Q5.Color;
+		/**
+		 * The diameter of a circular sprite.
+		 */
 		d: number;
+		/**
+		 * The diameter of a circular sprite.
+		 */
 		diameter: number;
+		/**
+		 * If true, outlines of the group sprites' colliders and sensors will be drawn.
+		 *
+		 * Use the keyboard shortcut Command+B to toggle `allSprites.debug`.
+		 */
 		debug: boolean;
-		deleted: boolean;
+		/**
+		 * The density of the group sprites' physics body.
+		 */
 		density: number;
+		/**
+		 * The angle of the group sprites' movement.
+		 */
 		direction: number;
+		/**
+		 * The amount of resistance group sprites has to being moved.
+		 */
 		drag: number;
-		// fill is an Array method
+		// fill is an Array method, don't redefine it
+		/**
+		 * The amount the group sprites' colliders resist moving
+		 * when rubbing against other colliders.
+		 */
 		friction: number;
+		/**
+		 * Whether the group sprites can be grabbed by a pointer.
+		 */
 		grabbable: boolean;
+		/**
+		 * A ratio that defines how much the group sprites are affected by gravity.
+		 */
 		gravityScale: number;
+		/**
+		 * The group sprites' heading. This is a string that can be set to
+		 * "up", "down", "left", "right", "upRight", "upLeft", "downRight"
+		 *
+		 * The setter's input parser ignores capitalization, spaces,
+		 * underscores, dashes, and cardinal direction word order.
+		 */
 		heading: string;
+		/**
+		 * The height of the group sprites.
+		 */
 		h: number;
+		/**
+		 * The height of the group sprites.
+		 */
 		height: number;
+		/**
+		 * Set this to true if the group sprites goes really fast to prevent
+		 * inaccurate physics simulation.
+		 */
 		isSuperFast: boolean;
+		/**
+		 * Sprites with the highest layer value get drawn first.
+		 *
+		 * By default sprites are drawn in the order they were created in.
+		 */
 		layer: number;
+		/**
+		 * When the physics simulation is progressed in `world.physicsUpdate`,
+		 * each sprite's life is decreased by `world.timeScale`.
+		 *
+		 * If life becomes less than or equal to 0, the group sprites will
+		 * be removed.
+		 */
 		life: number;
+		/**
+		 * The mass of the group sprites' physics body.
+		 */
 		mass: number;
+		/**
+		 * The physics type of the group sprites, which determines how it interacts with
+		 * other sprites in the physics simulation.
+		 *
+		 * It can be set to DYNAMIC/DYN, STATIC/STA, or KINEMATIC/KIN.
+		 */
 		physics: string;
+		/**
+		 * The physics type of the group sprites, which determines how it interacts with
+		 * other sprites in the physics simulation.
+		 *
+		 * It can be set to DYNAMIC/DYN, STATIC/STA, or KINEMATIC/KIN.
+		 */
 		physicsType: string;
+		/**
+		 * If true, the group sprites' physics body is included in the physics simulation.
+		 */
 		physicsEnabled: boolean;
+		/**
+		 * If true, q5play will draw sprites at integer pixel precision.
+		 *
+		 * This is useful for making retro games.
+		 *
+		 * By default q5play draws sprites with subpixel rendering.
+		 */
 		pixelPerfect: boolean;
+		/**
+		 * Simulates friction that slows down group sprites rolling on another sprite,
+		 * like a soccer ball rolling to a stop on high grass.
+		 */
 		rollingResistance: number;
+		/**
+		 * The amount the group sprites resists rotating.
+		 */
 		rotationDrag: number;
+		/**
+		 * Known issue, this doesn't work.
+		 *
+		 * If true, the group sprites can not rotate.
+		 * @deprecated
+		 */
 		rotationLock: boolean;
-		scale: Q5.Vector;
-		shape: number;
+		/**
+		 * Horizontal and vertical scale of the group sprites.
+		 *
+		 * Components can be negative to flip/mirror the group sprites on an axis.
+		 *
+		 * The `valueOf` function for `sprite.scale` returns the scale as a
+		 * number. This enables users to do things like `sprite.scale *= 2`
+		 * to double the group sprites' scale.
+		 */
+		scale: number | Q5.Vector;
+
+		/**
+		 * Wake group sprites up or put it to sleep.
+		 *
+		 * "Sleeping" sprites are not included in the physics simulation, a
+		 * sprite starts "sleeping" when it stops moving and doesn't collide
+		 * with anything that it wasn't already colliding with.
+		 */
 		sleeping: boolean;
+		/**
+		 * The group sprites' stroke color.
+		 */
 		stroke: Q5.Color;
+		/**
+		 * The group sprites' stroke weight, the thickness of its outline.
+		 */
 		strokeWeight: number;
+		/**
+		 * The group sprites' speed.
+		 *
+		 * Setting speed to a negative value will make the group sprites move
+		 * 180 degrees opposite of its current direction angle.
+		 */
 		speed: number;
+		/**
+		 * The group sprites' speed along the surface of its collider(s),
+		 * like a conveyor belt.
+		 */
 		surfaceSpeed: number;
+		/**
+		 * Text displayed at the center of the group sprites.
+		 */
 		text: number;
+		/**
+		 * The group sprites' text fill color. Black by default.
+		 */
 		textFill: Q5.Color;
+		/**
+		 * The group sprites' text stroke color.
+		 * No stroke by default, does not inherit from the sketch's stroke color.
+		 */
 		textStroke: Q5.Color;
+		/**
+		 * The group sprites' text stroke weight, the thickness of its outline.
+		 * No stroke by default, does not inherit from the sketch's stroke weight.
+		 */
 		textStrokeWeight: number;
+		/**
+		 * The group sprites' text size, the sketch's current textSize by default.
+		 */
 		textSize: number;
+		/**
+		 * The tile string represents the group sprites in a tile map.
+		 */
 		tile: string;
+		/**
+		 * If true the group sprites are shown, if set to false the group sprites are hidden.
+		 *
+		 * Becomes null when the group sprites are off screen but will be drawn and
+		 * set to true again if it goes back on screen.
+		 */
 		visible: boolean;
+		/**
+		 * The width of the group sprites.
+		 */
 		w: number;
+		/**
+		 * The width of the group sprites.
+		 */
 		width: number;
 
 		/**
@@ -1501,7 +1734,7 @@ declare global {
 		 * sprite is removed
 		 * @return {Number} the number of sprites culled
 		 */
-		cull(top: number, bottom: number, left: number, right: number, cb?: Function): number;
+		cull(top?: number, bottom?: number, left?: number, right?: number, cb?: Function): number;
 		/**
 		 * If removalCount is greater than 0, that amount of
 		 * sprites starting from the start index will be removed
