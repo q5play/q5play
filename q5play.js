@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta16
+ * @version 4.0-beta17
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta16';
+let q5play_version = 'beta17';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -706,9 +706,11 @@ async function q5playPreSetup($, q) {
 			this.ani = ani;
 		}
 
-		async playAnis(seq) {
-			if (arguments.length > 1) seq = [...arguments];
+		playAni(name) {
+			return this.playAnis(name);
+		}
 
+		async playAnis(...seq) {
 			this._aniChangeCount++;
 			let loop, stopOnLastAni;
 			for (let i = 0; i < seq.length; i++) {
@@ -3401,7 +3403,13 @@ async function q5playPreSetup($, q) {
 			this._cycles = 0;
 		}
 
-		// TODO implement a way to set the animation's frame delay in seconds
+		get offset() {
+			return this._offset;
+		}
+		set offset(val) {
+			this._offset.x = val[0] ?? val.x ?? val ?? 0;
+			this._offset.y = val[1] ?? val.y ?? val ?? 0;
+		}
 
 		get scale() {
 			return this._scale;
@@ -3412,14 +3420,6 @@ async function q5playPreSetup($, q) {
 			this._scale._x = x;
 			this._scale._y = y;
 			this._scale._avg = (x + y) * 0.5;
-		}
-
-		get offset() {
-			return this._offset;
-		}
-		set offset(val) {
-			this._offset.x = val[0] ?? val.x ?? val ?? 0;
-			this._offset.y = val[1] ?? val.y ?? val ?? 0;
 		}
 
 		clone() {
@@ -4069,7 +4069,7 @@ async function q5playPreSetup($, q) {
 
 			for (let i = 0; i < diff; i++) {
 				if (shouldAdd) new this.Sprite();
-				else this[0].delete();
+				else this[0]?.delete();
 			}
 		}
 
@@ -4501,7 +4501,7 @@ async function q5playPreSetup($, q) {
 				return true;
 			});
 
-			let removed = super.splice(start, removalCount, ...sprites);
+			let removed = this._splice(start, removalCount, ...sprites);
 
 			// removals
 			if (removalCount) {
@@ -4611,8 +4611,23 @@ async function q5playPreSetup($, q) {
 			return removed;
 		}
 
+		// avoid using super.splice, which creates a new group
+		// for the removed sprites
 		_splice(start, removalCount, ...sprites) {
-			return super.splice(start, removalCount, ...sprites);
+			let removed = [];
+			let len = this.length;
+			let s = start < 0 ? Math.max(len + start, 0) : Math.min(start, len);
+			let c = removalCount === undefined ? len - s : Math.min(Math.max(removalCount, 0), len - s);
+			for (let i = 0; i < c; i++) removed.push(this[s + i]);
+			let shift = sprites.length - c;
+			if (shift < 0) {
+				for (let i = s + c; i < len; i++) this[i + shift] = this[i];
+				this.length += shift;
+			} else if (shift > 0) {
+				for (let i = len - 1; i >= s + c; i--) this[i + shift] = this[i];
+			}
+			for (let i = 0; i < sprites.length; i++) this[s + i] = sprites[i];
+			return removed;
 		}
 
 		pop() {

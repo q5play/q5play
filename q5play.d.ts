@@ -189,6 +189,18 @@ declare global {
 		 */
 		changeAni(name: string): void;
 		/**
+		 * Plays an animation.
+		 *
+		 * You can put special modifier characters before the name:
+		 * - "!" plays it backwards
+		 * - ">" or "<" horizontally flips it
+		 * - "^" vertically flips it
+		 * 
+		 * @param name the name of the animation to play
+		 * @returns A promise that fulfills when the animation completes
+		 */
+		playAni(name: string): Promise<void>;
+		/**
 		 * Plays a sequence of animations.
 		 *
 		 * You can put special modifier characters before each ani name:
