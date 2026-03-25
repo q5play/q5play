@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta17
+ * @version 4.0-beta18
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta17';
+let q5play_version = 'beta18';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -8120,7 +8120,12 @@ function q5playPostDraw() {
 	$.q5play._inPostDraw = false;
 }
 
+function q5playRemove() {
+	this.world.delete();
+}
+
 Q5.addHook('presetup', q5playPreSetup);
 Q5.addHook('postsetup', q5playPostSetup);
 Q5.addHook('predraw', q5playPreDraw);
 Q5.addHook('postdraw', q5playPostDraw);
+Q5.addHook('remove', q5playRemove);
