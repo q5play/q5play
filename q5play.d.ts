@@ -527,7 +527,7 @@ declare global {
 		get textStrokeWeight(): number;
 		set textStrokeWeight(val: number);
 		/**
-		 * The tile string represents the sprite in a tile map.
+		 * The tile character that represents the sprite in a tile map.
 		 */
 		get tile(): string;
 		set tile(val: string);
@@ -672,7 +672,8 @@ declare global {
 		get rotationDrag(): number;
 		set rotationDrag(val: number);
 		/**
-		 * Known issue, this doesn't work.
+		 * Known issue, this doesn't work yet.
+		 * https://github.com/q5play/q5play/issues/36
 		 *
 		 * If true, the sprite can not rotate.
 		 * @deprecated
@@ -682,7 +683,7 @@ declare global {
 		set rotationLock(val: boolean);
 		/**
 		 * Horizontal and vertical scale of the sprite.
-		 * 
+		 *
 		 * Components can be negative to flip/mirror the sprite on an axis.
 		 *
 		 * The `valueOf` function for `sprite.scale` returns the scale as a
@@ -1262,18 +1263,6 @@ declare global {
 		 */
 		draw(): void;
 		/**
-		 * Detects when visuals go outside the given culling boundary,
-		 * relative to the camera.
-		 * @param top top bound or boundary range
-		 * @param bottom bottom bound
-		 * @param left left bound
-		 * @param right right bound
-		 * @param cb the function to be run when a visual is culled,
-		 * it's given the visual being culled, if no callback is given then the visual's life is set to 0
-		 * @return {Number} the number of visuals culled
-		 */
-		cull(top?: number, bottom?: number, left?: number, right?: number, cb?: Function): number;
-		/**
 		 * Current image.
 		 */
 		img: Q5.Image;
@@ -1304,6 +1293,32 @@ declare global {
 		 * @returns A promise that fulfills when the animations are loaded
 		 */
 		addAnis(spriteSheetURL: string, frameSize: string, atlases: {}): Promise<void>;
+		/**
+		 * Detects when visuals go outside the given culling boundary,
+		 * relative to the camera.
+		 * @param top top bound or boundary range
+		 * @param bottom bottom bound
+		 * @param left left bound
+		 * @param right right bound
+		 * @param cb the function to be run when a visual is culled,
+		 * it's given the visual being culled, if no callback is given then the visual's life is set to 0
+		 * @return {Number} the number of visuals culled
+		 */
+		cull(top?: number, bottom?: number, left?: number, right?: number, cb?: Function): number;
+		/**
+		 * The tile character that represents the Visuals or Group in a tile map.
+		 */
+		tile: string;
+		/**
+		 * Adds sprites to the group based on a tile map.
+		 *
+		 * @param tiles
+		 * @param x x coordinate of the top left corner of the tile map, default is -colWidth * longest row / 2
+		 * @param y y coordinate of the top left corner of the tile map, default is -rowHeight * number of rows / 2
+		 * @param colWidth column width including spacing, default is the width of the first tile
+		 * @param rowHeight row height including spacing, default is the height of the first tile
+		 */
+		addTiles(tiles: string | string[], x?: number, y?: number, colWidth?: number, rowHeight?: number): void;
 	}
 
 	class Group extends Visuals {
@@ -1568,10 +1583,6 @@ declare global {
 		 */
 		textSize: number;
 		/**
-		 * The tile string represents the group sprites in a tile map.
-		 */
-		tile: string;
-		/**
 		 * If true the group sprites are shown, if set to false the group sprites are hidden.
 		 *
 		 * Becomes null when the group sprites are off screen but will be drawn and
@@ -1625,16 +1636,6 @@ declare global {
 		 * New group sprites will not have physics bodies (can't have colliders).
 		 */
 		visualOnly: boolean;
-		/**
-		 * Adds sprites to the group based on a tile map.
-		 *
-		 * @param tiles
-		 * @param x x coordinate of the top left corner of the tile map, default is -colWidth * longest row / 2
-		 * @param y y coordinate of the top left corner of the tile map, default is -rowHeight * number of rows / 2
-		 * @param colWidth column width including spacing, default is the width of the first tile
-		 * @param rowHeight row height including spacing, default is the height of the first tile
-		 */
-		addTiles(tiles: string | string[], x?: number, y?: number, colWidth?: number, rowHeight?: number): void;
 		/**
 		 * Alias for `group.push`.
 		 *

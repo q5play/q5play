@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta18
+ * @version 4.0-beta19
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta18';
+let q5play_version = 'beta19';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -580,6 +580,18 @@ async function q5playPreSetup($, q) {
 			this.life = Infinity;
 		}
 
+		draw() {
+			this.x += this.vx * timeScale;
+			this.y += this.vy * timeScale;
+
+			if (this.ani) {
+				$.animation(this.ani, this.x, this.y);
+			} else if (this._img) {
+				$.image(this._img, this.x, this.y);
+			}
+			this.life -= timeScale;
+		}
+
 		get anis() {
 			if (!this._anis) {
 				this._anis = new $.Anis(this);
@@ -777,18 +789,6 @@ async function q5playPreSetup($, q) {
 					resolve();
 				};
 			});
-		}
-
-		draw() {
-			this.x += this.vx * timeScale;
-			this.y += this.vy * timeScale;
-
-			if (this.ani) {
-				$.animation(this.ani, this.x, this.y);
-			} else if (this._img) {
-				$.image(this._img, this.x, this.y);
-			}
-			this.life -= timeScale;
 		}
 	};
 
@@ -3691,7 +3691,6 @@ async function q5playPreSetup($, q) {
 			this._img = null;
 
 			this.amount = 0;
-			this._idx = 0;
 
 			const _this = this;
 			this.Visual = class extends $.Visual {
@@ -3699,10 +3698,20 @@ async function q5playPreSetup($, q) {
 					super(x, y);
 					if (_this.ani) this.ani = _this.ani.clone();
 					else this.img = _this._img;
-					_this[_this._idx++] = this;
+					_this.push(this);
 					_this.amount++;
 				}
 			};
+		}
+
+		draw() {
+			const len = this.length;
+			for (let i = 0; i < len; i++) {
+				const v = this[i];
+				if (v.life > 0) {
+					v.draw();
+				}
+			}
 		}
 
 		get anis() {
@@ -3736,16 +3745,6 @@ async function q5playPreSetup($, q) {
 		}
 		set image(val) {
 			this.img = val;
-		}
-
-		draw() {
-			let len = this.length;
-			for (let i = 0; i < len; i++) {
-				let v = this[i];
-				if (v.life > 0) {
-					v.draw();
-				}
-			}
 		}
 
 		cull(top = 0, bottom, left, right, cb) {
@@ -3788,13 +3787,90 @@ async function q5playPreSetup($, q) {
 				for (let i = 0; i < alive.length; i++) {
 					this.push(alive[i]);
 				}
-				this._idx = alive.length;
 				this.amount = alive.length;
 			} else {
 				this.amount -= culled;
 			}
 
 			return culled;
+		}
+
+		get tile() {
+			return this._tile;
+		}
+		set tile(val) {
+			this._tile = val;
+			tileDict[val] = this;
+		}
+
+		addTiles(tiles, x, y, colWidth, rowHeight) {
+			if (typeof tiles == 'string') {
+				if (tiles[0] == '\n') tiles = tiles.slice(1);
+				if (tiles.at(-1) == '\n') tiles = tiles.slice(0, -1);
+				tiles = tiles.replaceAll('\t', '  ');
+				tiles = tiles.split('\n');
+			}
+
+			for (let row = 0; row < tiles.length; row++) {
+				for (let col = 0; col < tiles[row].length; col++) {
+					let t = tiles[row][col],
+						tile = tileDict[t];
+
+					if (!tile) continue;
+
+					if (colWidth == undefined) {
+						colWidth = tile.w || tile.ani.w;
+						rowHeight = tile.h || tile.ani.h;
+					}
+
+					if (x === undefined) {
+						let longestRow = 0;
+						for (let r of tiles) {
+							if (r.length > longestRow) longestRow = r.length;
+						}
+						x ??= longestRow * colWidth * -0.5;
+						y ??= (tiles.length - 1) * rowHeight * -0.5;
+					}
+
+					let tileX = x + col * colWidth;
+					let tileY = y + row * rowHeight;
+
+					if (tile._isAni) {
+						let ani = tile;
+						if (ani.owner._isGroup) {
+							let g = ani.owner,
+								sprite = new g.Sprite(ani, tileX, tileY);
+							this.push(sprite);
+							continue;
+						} else if (ani.owner._isVisuals) {
+							let v = ani.owner,
+								vis = new v.Visual(ani, tileX, tileY);
+							this.push(vis);
+							continue;
+						}
+						tile = ani.owner;
+					}
+
+					if (tile._isGroup) {
+						let g = tile,
+							sprite = new g.Sprite(tileX, tileY);
+						if (this != g) this.push(sprite);
+					} else if (tile._isVisuals) {
+						let v = tile,
+							vis = new v.Visual(tileX, tileY);
+						if (this != v) this.push(vis);
+					} else if (tile._isSprite) {
+						let sprite = tile;
+						sprite.pos = [tileX, tileY];
+						this.push(sprite);
+					} else {
+						let vis = tile;
+						vis.x = tileX;
+						vis.y = tileY;
+						this.push(vis);
+					}
+				}
+			}
 		}
 	};
 
@@ -3979,64 +4055,6 @@ async function q5playPreSetup($, q) {
 			this.contains = this.includes;
 		}
 
-		addTiles(tiles, x, y, colWidth, rowHeight) {
-			if (typeof tiles == 'string') {
-				if (tiles[0] == '\n') tiles = tiles.slice(1);
-				if (tiles.at(-1) == '\n') tiles = tiles.slice(0, -1);
-				tiles = tiles.replaceAll('\t', '  ');
-				tiles = tiles.split('\n');
-			}
-
-			for (let row = 0; row < tiles.length; row++) {
-				for (let col = 0; col < tiles[row].length; col++) {
-					let t = tiles[row][col],
-						tile = tileDict[t];
-
-					if (!tile) continue;
-
-					if (colWidth == undefined) {
-						colWidth = tile.w || tile.ani.w;
-						rowHeight = tile.h || tile.ani.h;
-					}
-
-					if (x === undefined) {
-						let longestRow = 0;
-						for (let r of tiles) {
-							if (r.length > longestRow) longestRow = r.length;
-						}
-						x ??= longestRow * colWidth * -0.5;
-						y ??= (tiles.length - 1) * rowHeight * -0.5;
-					}
-
-					let tileX = x + col * colWidth;
-					let tileY = y + row * rowHeight;
-
-					if (tile._isAni) {
-						let ani = tile;
-						let sprite;
-						if (ani.owner._isGroup) {
-							let g = ani.owner;
-							sprite = new g.Sprite(ani, tileX, tileY);
-							this.push(sprite);
-							continue;
-						} else {
-							tile = ani.owner;
-						}
-					}
-
-					if (tile._isGroup) {
-						let g = tile;
-						let sprite = new g.Sprite(tileX, tileY);
-						if (this != g) this.push(sprite);
-					} else if (tile._isSprite) {
-						let sprite = tile;
-						sprite.pos = [tileX, tileY];
-						this.push(sprite);
-					}
-				}
-			}
-		}
-
 		get scale() {
 			return this._scale;
 		}
@@ -4092,14 +4110,6 @@ async function q5playPreSetup($, q) {
 		}
 		set height(val) {
 			this.h = val;
-		}
-
-		get tile() {
-			return this._tile;
-		}
-		set tile(val) {
-			this._tile = val;
-			tileDict[val] = this;
 		}
 
 		get velocity() {
