@@ -8,6 +8,8 @@ It uses [q5.js WebGPU][] for graphics and [Box2D v3 WASM][] for physics.
 
 [Join us on Discord][] to ask questions and meet other people making games with q5play. 👾
 
+## Licensing 📝
+
 The [q5play Creator License][] enables free personal and commercial use.
 
 Educational use requires the [q5play Educational License][].
@@ -24,7 +26,7 @@ Erin Catto, creator of the Box2D physics simulator.
 
 Paolo Pedercini, creator of p5.play (version 1), who trusted me to take over this project.
 
-Ali Shakiba, creator of planck.js, a JavaScript port of Box2D v2 used behind the scenes by p5play v3.
+Ali Shakiba, creator of planck.js, a JS port of Box2D v2 used by p5play v3.
 
 Contributors: @Tezumie, Oliver Zell, Caleb Foss, and Bobby S.
 
@@ -35,5 +37,5 @@ Testers and bug reporters: Lachlan Noble, Raj Raizada, Nathan Anil, Chayarat Wan
 [q5.js WebGPU]: https://q5js.org
 [Box2D v3 WASM]: https://github.com/Birch-san/box2d3-wasm
 [Join us on Discord]: https://discord.gg/EJwnJATmj7
-[q5play Creator License]: q5play_Creator_License.md
+[q5play Creator License]: LICENSE.md
 [q5play Educational License]: https://q5play.org/teach

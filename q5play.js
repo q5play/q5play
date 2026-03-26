@@ -12,13 +12,13 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0-beta19
+ * @version 4.0
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
 // will use semver minor after v4 is released
-let q5play_version = 'beta19';
+let q5play_version = '4.0';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -7649,7 +7649,7 @@ async function q5playPreSetup($, q) {
 
 		let x = rs.x + 6,
 			y = rs.y + 2;
-		$.text('q5play ' + $.q5play.version, x, y);
+		$.text('q5play v' + $.q5play.version, x, y);
 		$.text('sprites ' + $.q5play.spritesDrawn, x, y + rs.gap);
 
 		// Draw chart

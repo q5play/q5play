@@ -53,8 +53,7 @@ declare global {
 		 */
 		gridSize: number;
 		/**
-		 * Information about the operating system being used to run
-		 * q5play, retrieved from the `navigator` object.
+		 * Information about the operating system being used.
 		 */
 		os: {};
 		context: string;
