@@ -1,3 +1,5 @@
+SPDX-License-Identifier: LicenseRef-q5play-Creator-License
+
 # q5play Creator License
 
 This License Agreement ("Agreement") is made between Quinton Ashley, the sole copyright owner of q5play ("Licensor") and an individual, organization, or company ("Licensee") that is using q5play.

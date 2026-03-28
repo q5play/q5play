@@ -584,11 +584,18 @@ async function q5playPreSetup($, q) {
 			this.x += this.vx * timeScale;
 			this.y += this.vy * timeScale;
 
+			if (this.tint) $.tint(this.tint);
+			if (this.opacity) $.opacity(this.opacity);
+
 			if (this.ani) {
 				$.animation(this.ani, this.x, this.y);
 			} else if (this._img) {
 				$.image(this._img, this.x, this.y);
 			}
+
+			if (this.tint) $.noTint();
+			if (this.opacity) $.opacity(1);
+
 			this.life -= timeScale;
 		}
 
@@ -698,24 +705,26 @@ async function q5playPreSetup($, q) {
 		}
 
 		changeAni(name) {
-			let ani = this._anis?.[name];
+			let ani = this.anis[name];
 			if (!ani) {
-				for (let g of this.groups || []) {
-					ani = g._anis?.[name] || g._anis?.[name];
-					if (ani) {
-						ani = ani.clone();
-						break;
+				const groups = this.groups;
+				if (groups) {
+					for (let g of groups) {
+						ani = g._anis?.[name];
+						if (ani) break;
 					}
+				} else {
+					let v = this._visuals;
+					ani = v._anis?.[name];
 				}
-				if (!ani) {
-					console.error('Ani not found: ' + name);
-					return;
-				}
+				if (ani) ani = ani.clone();
+				else return console.error('Ani not found: ' + name);
 			}
 			// reset to frame 0 of that animation
 			if (this.resetAniOnChange) ani._frame = 0;
 			ani.name = name;
 			this.ani = ani;
+			this.anis[name] = ani;
 		}
 
 		playAni(name) {
@@ -3700,6 +3709,7 @@ async function q5playPreSetup($, q) {
 					else this.img = _this._img;
 					_this.push(this);
 					_this.amount++;
+					this._visuals = _this;
 				}
 			};
 		}
@@ -3952,6 +3962,10 @@ async function q5playPreSetup($, q) {
 			this.Sprite = class extends $.Sprite {
 				constructor() {
 					super(_this, ...arguments);
+				}
+
+				static withSensor() {
+					return new $.Sprite(null, _this, ...arguments);
 				}
 			};
 
@@ -5214,6 +5228,26 @@ async function q5playPreSetup($, q) {
 			this._calcBoundsY(val);
 		}
 
+		get zoom() {
+			return this._zoom;
+		}
+		set zoom(val) {
+			if (val === undefined || isNaN(val)) return;
+			this._zoom = val;
+			let x = -this._pos.x;
+			if ($._c2d) x += $.canvas.hw / val;
+			let y = -this._pos.y;
+			if ($._c2d) y += $.canvas.hh / val;
+			this.__pos.x = x;
+			this.__pos.y = y;
+			if ($.allSprites.pixelPerfect) {
+				this.__pos.rounded.x = Math.round(x);
+				this.__pos.rounded.y = Math.round(y);
+			}
+			this._calcBoundsX(this._pos.x);
+			this._calcBoundsY(this._pos.y);
+		}
+
 		moveTo(x, y, speed) {
 			if (x === undefined) return;
 			if (isNaN(x)) {
@@ -5243,33 +5277,13 @@ async function q5playPreSetup($, q) {
 					this.x += velX;
 					this.y += velY;
 
-					await $.delay(16);
+					await $.delay();
 					if (destIdx != this._destIdx) return false;
 				}
 				this.x = x;
 				this.y = y;
 				return true;
 			})();
-		}
-
-		get zoom() {
-			return this._zoom;
-		}
-		set zoom(val) {
-			if (val === undefined || isNaN(val)) return;
-			this._zoom = val;
-			let x = -this._pos.x;
-			if ($._c2d) x += $.canvas.hw / val;
-			let y = -this._pos.y;
-			if ($._c2d) y += $.canvas.hh / val;
-			this.__pos.x = x;
-			this.__pos.y = y;
-			if ($.allSprites.pixelPerfect) {
-				this.__pos.rounded.x = Math.round(x);
-				this.__pos.rounded.y = Math.round(y);
-			}
-			this._calcBoundsX(this._pos.x);
-			this._calcBoundsY(this._pos.y);
 		}
 
 		zoomTo(target, speed) {
@@ -5287,7 +5301,7 @@ async function q5playPreSetup($, q) {
 				for (let i = 0; i < frames; i++) {
 					if (zoomIdx != this._zoomIdx) return false;
 					this.zoom += speed;
-					await $.delay(16);
+					await $.delay();
 				}
 				this.zoom = target;
 				return true;
@@ -6505,6 +6519,9 @@ async function q5playPreSetup($, q) {
 				let sd = $.mouse.scrollDelta;
 				sd.x = e.deltaX;
 				sd.y = e.deltaY;
+				if (Math.abs(sd.x) > 1 || Math.abs(sd.y) > 1) {
+					$.mouse.scroll++;
+				}
 			});
 			c.addEventListener('touchstart', (e) => e.preventDefault());
 			// this stops the right click menu from appearing
@@ -6794,8 +6811,14 @@ async function q5playPreSetup($, q) {
 
 		_update() {
 			let cam = $.camera;
-			this.x = $.mouseX / cam.zoom + cam.x;
-			this.y = $.mouseY / cam.zoom + cam.y;
+			let m = this;
+			m.x = $.mouseX / cam.zoom + cam.x;
+			m.y = $.mouseY / cam.zoom + cam.y;
+
+			if (m.scroll < 0) m.scroll = 0;
+			if (m.scrollDelta.x == 0 && m.scrollDelta.y == 0) {
+				m.scroll = m.scroll == 1 ? -3 : m.scroll > 0 ? -1 : 0;
+			}
 		}
 
 		get pos() {
@@ -6836,6 +6859,16 @@ async function q5playPreSetup($, q) {
 		dragged(inp) {
 			inp ??= this._default;
 			return this.drag[inp] <= -1;
+		}
+
+		scrolls() {
+			return this.scroll == 1;
+		}
+		scrolling() {
+			return this.scroll > 0 ? this.scroll : 0;
+		}
+		scrolled() {
+			return this.scroll <= -1;
 		}
 	};
 
@@ -8131,7 +8164,7 @@ function q5playPostDraw() {
 }
 
 function q5playRemove() {
-	this.world.delete();
+	this.world?.delete();
 }
 
 Q5.addHook('presetup', q5playPreSetup);

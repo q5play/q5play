@@ -2600,6 +2600,18 @@ declare global {
 		 * @returns true on the first frame that the user releases the input after dragging the mouse
 		 */
 		dragged(inp?: string): boolean;
+		/**
+		 * @returns true on the first frame that the user scrolls the mouse wheel
+		 */
+		scrolls(): boolean;
+		/**
+		 * @returns the amount of frames the user has been scrolling the mouse wheel
+		 */
+		scrolling(): number;
+		/**
+		 * @returns true on the first frame that the user stops scrolling the mouse wheel
+		 */
+		scrolled(): boolean;
 	}
 
 	class _Pointer extends InputDevice {
