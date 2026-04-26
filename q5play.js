@@ -1022,17 +1022,16 @@ async function q5playPreSetup($, q) {
 				else y = 0;
 			}
 
-			let rr;
-
 			let forcedBoxShape = false;
 			if (w === undefined) {
 				w = group.w || group.width || group.d || group.diameter;
 				if (!h && !group.d && !group.diameter) {
 					h = group.h || group.height;
 					forcedBoxShape = true;
-					rr = group.roundedRadius;
 				}
 			}
+
+			let rr = group.roundedRadius;
 
 			if (typeof x == 'function') x = x(group.length);
 			if (typeof y == 'function') y = y(group.length);
@@ -2301,6 +2300,21 @@ async function q5playPreSetup($, q) {
 			this.d = val;
 		}
 
+		get roundedRadius() {
+			return this._roundedRadius;
+		}
+		set roundedRadius(val) {
+			if (val == this._roundedRadius) return;
+
+			this._roundedRadius = val;
+			if (this.watch) this.mod[37] = true;
+
+			while (this._shapes.length) {
+				this._shapes.at(-1).delete();
+			}
+			this._add(false, 0, 0, this._w, this._h, val);
+		}
+
 		/*
 		 * Validates convexity.
 		 */
@@ -3179,6 +3193,7 @@ async function q5playPreSetup($, q) {
 			this.promise = new Promise((resolve) => {
 				this._resolve = resolve;
 			});
+			$._loaders.push(this.promise);
 
 			this._frame = 0;
 			this._cycles = 0;
@@ -3393,12 +3408,16 @@ async function q5playPreSetup($, q) {
 
 			// play by default but a single frame ani doesn't need to play
 			this.playing = this.length != 1 && anis.playing != false;
+
+			if (this.length > 0 && !this.spriteSheet) {
+				Promise.all(this.map((img) => img.promise)).then(() => this._resolve(this));
+			}
 		}
 
-		// make loading Ani objects awaitable
-		// then(resolve, reject) {
-		// 	return this.promise.then(resolve, reject);
-		// }
+		// use a plain Array constructor for map/filter/etc.
+		static get [Symbol.species]() {
+			return Array;
+		}
 
 		get frame() {
 			return this._frame;
@@ -6238,6 +6257,8 @@ async function q5playPreSetup($, q) {
 
 		let img = g.get(left, top, right - left + 1, bottom - top + 1);
 		img.src = emoji;
+		img.defaultWidth = img.width;
+		img.defaultHeight = img.height;
 
 		g.remove();
 
@@ -6482,6 +6503,7 @@ async function q5playPreSetup($, q) {
 			args[0] = window.innerWidth;
 			args[1] = window.innerHeight;
 		}
+		args[1] ??= args[0];
 		args[0] = Math.floor(args[0] / 2) * 2;
 		args[1] = Math.floor(args[1] / 2) * 2;
 		let rend = _createCanvas.call($, ...args);
