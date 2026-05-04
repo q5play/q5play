@@ -7998,7 +7998,7 @@ async function q5playPreSetup(q) {
 	};
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','camera','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas'];
+	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','camera','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {

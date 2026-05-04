@@ -2902,7 +2902,11 @@ declare global {
 	function EmojiImage(emoji: string, textSize: number): Q5.Image;
 	function spriteArt(txt: string, scale: number, palette: number | any): Q5.Image;
 	function animation(ani: Ani, x: number, y: number, r: number, sX: number, sY: number): void;
-	function delay(milliseconds: number): Promise<any>;
+	/**
+	 * @param milliseconds if not specified, delays until the next frame draw
+	 * @returns resolves after the delay
+	 */
+	function delay(milliseconds?: number): Promise<void>;
 
 	let allSprites: Group;
 	let world: World;
