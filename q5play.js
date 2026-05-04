@@ -30,8 +30,9 @@ if (typeof globalThis.Q5 == 'undefined') {
 let box2dPromise;
 
 // called when a new instance of Q5 is created
-async function q5playPreSetup($, q) {
-	const log = console.log;
+async function q5playPreSetup(q) {
+	const $ = this,
+		log = console.log;
 
 	if (!box2dPromise) {
 		box2dPromise = (async () => {
@@ -243,8 +244,6 @@ async function q5playPreSetup($, q) {
 			this.spritesDrawn = 0;
 			this.images = {};
 			this.palettes = [];
-			this.snapToGrid = false;
-			this.gridSize = 0.5;
 			this.emojiScale = 1;
 			this.os = {};
 			this.context = 'web';
@@ -1874,10 +1873,6 @@ async function q5playPreSetup($, q) {
 			this.direction = val;
 		}
 
-		get isMoving() {
-			return this.vel.x != 0 || this.vel.y != 0;
-		}
-
 		get isSuperFast() {
 			return b2Body_IsBullet(this.bdID);
 		}
@@ -2352,13 +2347,6 @@ async function q5playPreSetup($, q) {
 			this._customUpdate = val;
 		}
 
-		get postDraw() {
-			return this._postDraw;
-		}
-		set postDraw(val) {
-			this._customPostDraw = val;
-		}
-
 		get vel() {
 			return this._vel;
 		}
@@ -2631,13 +2619,6 @@ async function q5playPreSetup($, q) {
 
 				$.image(g, g.offset.x, g.offset.y);
 			}
-		}
-
-		_postDraw() {
-			if (this._customPostDraw) this._customPostDraw();
-
-			this.autoDraw ??= true;
-			this.autoUpdate ??= true;
 		}
 
 		_args2Vec(x, y) {
@@ -3190,10 +3171,12 @@ async function q5playPreSetup($, q) {
 			}
 
 			// loading promise
-			this.promise = new Promise((resolve) => {
-				this._resolve = resolve;
-			});
-			$._loaders.push(this.promise);
+			if (args.length) {
+				this.promise = new Promise((resolve) => {
+					this._resolve = resolve;
+				});
+				$._loaders.push(this.promise);
+			}
 
 			this._frame = 0;
 			this._cycles = 0;
@@ -4743,12 +4726,6 @@ async function q5playPreSetup($, q) {
 
 			$.imageMode(ogImgMode);
 		}
-
-		postDraw() {
-			for (let s of this) {
-				s.postDraw();
-			}
-		}
 	};
 
 	$.Group.prototype.__step = $.Sprite.prototype.__step;
@@ -6139,8 +6116,11 @@ async function q5playPreSetup($, q) {
 	}
 
 	function isArrowFunction(fn) {
-		return !/^(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*\s*(?:(?:(?:async\s(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*\s*)?function|class)(?:\s|(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*)|(?:[_$\w][\w0-9_$]*\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*\()|(?:\[\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*(?:(?:['][^']+['])|(?:["][^"]+["]))\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*\]\())/.test(
-			fn.toString()
+		return (
+			fn.name == 'jsobj' || // brython lambda function check
+			!/^(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*\s*(?:(?:(?:async\s(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*\s*)?function|class)(?:\s|(?:(?:\/\*[^(?:\*\/)]*\*\/\s*)|(?:\/\/[^\r\n]*))*)|(?:[_$\w][\w0-9_$]*\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*\()|(?:\[\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*(?:(?:['][^']+['])|(?:["][^"]+["]))\s*(?:\/\*[^(?:\*\/)]*\*\/\s*)*\s*\]\())/.test(
+				fn.toString()
+			)
 		);
 	}
 
@@ -7079,18 +7059,26 @@ async function q5playPreSetup($, q) {
 			super();
 			this._default = ' ';
 
-			this.alt = 0;
-			this.arrowUp = 0;
-			this.arrowDown = 0;
-			this.arrowLeft = 0;
-			this.arrowRight = 0;
-			this.backspace = 0;
-			this.capsLock = 0;
-			this.control = 0;
-			this.enter = 0;
-			this.meta = 0;
-			this.shift = 0;
-			this.tab = 0;
+			let keys = [
+				' ',
+				'alt',
+				'arrowUp',
+				'arrowDown',
+				'arrowLeft',
+				'arrowRight',
+				'backspace',
+				'capsLock',
+				'control',
+				'enter',
+				'meta',
+				'shift',
+				'tab'
+			];
+			keys = keys.concat("abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-=[];,./'".split(''));
+			// initializing these props to 0 makes brython happy
+			for (let key of keys) {
+				this[key] = 0;
+			}
 
 			let k = (this._simpleKeyControls = {
 				arrowUp: 'up',
@@ -8014,6 +8002,8 @@ async function q5playPreSetup($, q) {
 			window[p] = $[p];
 		}
 	}
+
+	if (Q5.applyLang) Q5.applyLang(q, q5playLibLangs, q5playClassLangs);
 }
 
 // called once after setup
@@ -8142,7 +8132,10 @@ function q5playPostDraw() {
 
 	if (cam.isActive) cam.off();
 
-	$.allSprites.postDraw();
+	for (let s of $.allSprites) {
+		s.autoDraw ??= true;
+		s.autoUpdate ??= true;
+	}
 
 	if ($.q5play.renderStats) $.renderStats();
 
@@ -8188,6 +8181,200 @@ function q5playPostDraw() {
 function q5playRemove() {
 	this.world?.delete();
 }
+
+const q5playLibLangs = `
+allSprites -> es:todosLosSprites
+world -> es:mundo
+camera -> es:cámara
+mouse -> es:ratón
+kb -> es:tec
+keyboard -> es:teclado
+contro -> es:mando
+controllers -> es:mandos
+pointer -> es:puntero
+pointers -> es:punteros
+spriteArt -> es:arteSprite
+delay -> es:esperar
+animation -> es:animación
+renderStats -> es:estadísticasRenderizado
+EmojiImage -> es:ImagenEmoji
+parseTextureAtlas -> es:parsearAtlasTextura
+DYNAMIC -> es:DINÁMICO
+STATIC -> es:ESTÁTICO
+KINEMATIC -> es:CINEMÁTICO
+Group -> es:Grupo
+Joint -> es:Articulación
+`;
+
+const q5playClassLangs = {
+	Sprite: `
+rotation -> es:rotación
+rotationSpeed -> es:velocidadRotación
+rotationDrag -> es:resistenciaRotación
+rotationLock -> es:bloqueoRotación
+speed -> es:velocidad
+direction -> es:dirección
+drag -> es:amortiguación
+mass -> es:masa
+density -> es:densidad
+bounciness -> es:elasticidad
+friction -> es:fricción
+physicsEnabled -> es:físicaActivada
+physicsType -> es:tipoFísica
+physics -> es:física
+sleeping -> es:durmiendo
+allowSleeping -> es:permitirDormir
+layer -> es:capa
+life -> es:vida
+scale -> es:escala
+tint -> es:tinte
+opacity -> es:opacidad
+visible -> es:visible
+debug -> es:depurar
+deleted -> es:eliminado
+bearing -> es:rumbo
+heading -> es:orientación
+isSuperFast -> es:esUltraRápido
+pixelPerfect -> es:perfectoEnPíxeles
+gravityScale -> es:escalaGravedad
+diameter -> es:diámetro
+roundedRadius -> es:radioRedondeado
+centerOfMass -> es:centroMasa
+previousPosition -> es:posiciónAnterior
+previousRotation -> es:rotaciónAnterior
+velocity -> es:vectorVelocidad
+position -> es:posición
+canvasPos -> es:posiciónLienzo
+addCollider -> es:añadirColisionador
+addSensor -> es:añadirSensor
+deleteColliders -> es:eliminarColisionadores
+deleteSensors -> es:eliminarSensores
+collide -> es:colisionar
+collides -> es:colisiona
+colliding -> es:colisionando
+collided -> es:colisionó
+overlap -> es:solapar
+overlaps -> es:solapa
+overlapping -> es:solapando
+overlapped -> es:solapó
+passes -> es:pasa
+addAni -> es:añadirAni
+addAnis -> es:añadirAnis
+changeAni -> es:cambiarAni
+playAni -> es:reproducirAni
+playAnis -> es:reproducirAnis
+moveTowards -> es:moverHacia
+rotateTowards -> es:rotarHacia
+applyForce -> es:aplicarFuerza
+applyForceScaled -> es:aplicarFuerzaEscalada
+attractTo -> es:atraerA
+repelFrom -> es:repelerDe
+applyTorque -> es:aplicarTorque
+angleTo -> es:ánguloHacia
+rotationToFace -> es:rotaciónParaMirar
+angleToFace -> es:ánguloParaMirar
+setSpeedAndDirection -> es:establecerVelocidadYDirección
+scaleBy -> es:escalarPor
+resetMass -> es:reiniciarMasa
+distanceTo -> es:distanciaA
+delete -> es:eliminar
+addDefaultSensors -> es:añadirSensoresDefecto
+autoDraw -> es:autoDibujar
+draw -> es:dibujar
+autoUpdate -> es:autoActualizar
+update -> es:actualizar
+`,
+	Group: `
+Group -> es:Grupo
+amount -> es:cantidad
+autoCull -> es:descartarFueraCampo
+cull -> es:descartar
+contains -> es:contiene
+remove -> es:quitar
+removeAll -> es:quitarTodo
+delete -> es:eliminar
+deleteAll -> es:eliminarTodo
+`,
+	World: `
+gravity -> es:gravedad
+timeScale -> es:escalaVelocidad
+meterSize -> es:tamañoMetro
+allowSleeping -> es:permitirDormir
+awakeBodies -> es:cuerposDespiertos
+bounceThreshold -> es:umbralRebote
+hitThreshold -> es:umbralGolpe
+autoStep -> es:pasoAutomático
+subSteps -> es:subPasos
+explodeAt -> es:explosionEn
+delete -> es:eliminar
+`,
+	Camera: `
+position -> es:posición
+zoom ->
+moveTo -> es:moverA
+zoomTo -> es:acercarA
+on -> es:activar
+off -> es:desactivar
+`,
+	Ani: `
+play -> es:reproducir
+pause -> es:pausar
+stop -> es:parar
+loop -> es:bucle
+noLoop -> es:sinBucle
+rewind -> es:rebobinar
+nextFrame -> es:siguienteFotograma
+previousFrame -> es:fotogramaAnterior
+goToFrame -> es:irAlFotograma
+clone -> es:clonar
+frame -> es:fotograma
+lastFrame -> es:últimoFotograma
+frameImage -> es:imagenFotograma
+playing -> es:reproduciendo
+looping -> es:enBucle
+frameDelay -> es:retardoFotograma
+`,
+	InputDevice: `
+presses -> es:presiona
+pressing -> es:presionando
+holds -> es:mantiene
+holding -> es:manteniendo
+held -> es:mantuvo
+released -> es:soltó
+releases -> es:suelta
+holdThreshold -> es:umbralMantener
+`,
+	_Mouse: `
+position -> es:posición
+visible -> es:visible
+isOnCanvas -> es:estaEnLienzo
+scroll -> es:desplazamiento
+drags -> es:arrastra
+dragging -> es:arrastrando
+dragged -> es:arrastró
+scrolls -> es:desplaza
+scrolling -> es:desplazando
+scrolled -> es:desplazó
+`,
+	_Pointer: `
+prev -> es:previo
+canvasPos -> es:posEnLienzo
+type -> es:tipo
+duration -> es:duración
+holdThreshold -> es:umbralDeSostenido
+drags -> es:arrastra
+dragging -> es:arrastrando
+dragged -> es:arrastró
+grabs -> es:agarra
+grabbing -> es:agarrando
+grabbed -> es:agarró
+overlaps -> es:superpone
+overlapping -> es:superponiendo
+overlapped -> es:superpuso
+pressure -> es:presión
+`
+};
+q5playClassLangs.Group += q5playClassLangs.Sprite;
 
 Q5.addHook('presetup', q5playPreSetup);
 Q5.addHook('postsetup', q5playPostSetup);

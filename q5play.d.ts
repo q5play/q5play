@@ -42,17 +42,6 @@ declare global {
 		 */
 		friendlyRounding: boolean;
 		/**
-		 * Snaps sprites to the nearest `q5play.gridSize`
-		 * increment when they are moved.
-		 * @default false
-		 */
-		snapToGrid: boolean;
-		/**
-		 * The size of the grid cells that sprites are snapped to.
-		 * @default 0.5
-		 */
-		gridSize: number;
-		/**
 		 * Information about the operating system being used.
 		 */
 		os: {};
@@ -596,11 +585,6 @@ declare global {
 		 */
 		get heading(): string;
 		set heading(val: string);
-		/**
-		 * True if the sprite is moving.
-		 * @readonly
-		 */
-		get isMoving(): boolean;
 		/**
 		 * Set this to true if the sprite goes really fast to prevent
 		 * inaccurate physics simulation.
