@@ -1504,11 +1504,11 @@ async function q5playPreSetup(q) {
 				} else {
 					let hw = (w * 0.5) / meterSize;
 					let hh = (h * 0.5) / meterSize;
-					rr /= meterSize;
+					let _rr = rr / meterSize;
 
 					if (rr) {
-						hw = Math.max(hw - rr, 0.001);
-						hh = Math.max(hh - rr, 0.001);
+						hw = Math.max(hw - _rr, 0.001);
+						hh = Math.max(hh - _rr, 0.001);
 					}
 
 					if (offsetX || offsetY) {
@@ -1516,26 +1516,29 @@ async function q5playPreSetup(q) {
 
 						if (!rr) geom = b2MakeOffsetBox(hw, hh, offset, ZERO_ROT);
 						else {
-							geom = b2MakeOffsetRoundedBox(hw, hh, offset, ZERO_ROT, rr);
+							geom = b2MakeOffsetRoundedBox(hw, hh, offset, ZERO_ROT, _rr);
 						}
 					} else {
 						if (!rr) geom = b2MakeBox(hw, hh);
-						else geom = b2MakeRoundedBox(hw, hh, rr);
+						else geom = b2MakeRoundedBox(hw, hh, _rr);
 					}
 
 					geom._hw = hw;
 					geom._hh = hh;
-					geom._rr = rr;
+					geom._rr = _rr;
 
 					id = b2CreatePolygonShape(bdID, shape.def, geom);
 					shape._init(id, 0, geom);
 				}
 
 				// TODO: use AABB to get extents
-				this._w = w;
-				this._hw = w * 0.5;
-				this._h = h;
-				this._hh = h * 0.5;
+				if (!shapes.length) {
+					this._w = w;
+					this._hw = w * 0.5;
+					this._h = h;
+					this._hh = h * 0.5;
+					this._roundedRadius = rr;
+				}
 			}
 
 			if (shape) {
@@ -3109,8 +3112,9 @@ async function q5playPreSetup(q) {
 
 	// exclude props that are inherited in a special way or not traits
 	const spriteStdInheritedProps = $.Sprite.propsAll.filter(
+		// prettier-ignore
 		(p) =>
-			!['ani', 'd', 'diameter', 'h', 'height', 'physics', 'scale', 'tile', 'w', 'width', 'vel', 'x', 'y'].includes(p)
+			!['ani', 'd', 'diameter', 'h', 'height', 'physics', 'scale', 'tile', 'w', 'width', 'vel', 'x', 'y', 'roundedRadius'].includes(p)
 	);
 
 	let groupKeys = {};
