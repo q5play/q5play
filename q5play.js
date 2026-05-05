@@ -248,6 +248,9 @@ async function q5playPreSetup(q) {
 			this.os = {};
 			this.context = 'web';
 
+			this.update = () => q5playUpdate.call($, q);
+			this.postdraw = () => q5playPostDraw.call($, q);
+
 			if (window.matchMedia) {
 				this.hasMouse = window.matchMedia('(any-hover: none)').matches ? false : true;
 			} else this.hasMouse = true;
@@ -7812,7 +7815,7 @@ async function q5playPreSetup(q) {
 		debugYellow = $.color(colorMax, colorMax, 0, colorMax * 0.9),
 		debugYellowFill = $.color(colorMax, colorMax, 0, colorMax * 0.1);
 
-	if ($._c2d) {
+	if ($.canvas.c2d) {
 		// polyfill for q5 WebGPU high efficiency functions
 		$._getFillIdx = () => $._fill;
 		$._setFillIdx = (v) => ($._fill = v);
@@ -8026,7 +8029,7 @@ function q5playPostSetup() {
 }
 
 // called before each draw function call
-function q5playPreDraw() {
+function q5playUpdate() {
 	const $ = this;
 
 	if (!$._q5) {
@@ -8382,6 +8385,6 @@ q5playClassLangs.Group += q5playClassLangs.Sprite;
 
 Q5.addHook('presetup', q5playPreSetup);
 Q5.addHook('postsetup', q5playPostSetup);
-Q5.addHook('predraw', q5playPreDraw);
+Q5.addHook('predraw', q5playUpdate);
 Q5.addHook('postdraw', q5playPostDraw);
 Q5.addHook('remove', q5playRemove);

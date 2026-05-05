@@ -70,6 +70,14 @@ declare global {
 		 * @default false
 		 */
 		renderStats: boolean;
+		/**
+		 * Runs automatically before each draw function call.
+		 */
+		update(): void;
+		/**
+		 * Runs automatically after each draw function call.
+		 */
+		postDraw(): void;
 	}
 	const q5play: Q5Play;
 
