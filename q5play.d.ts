@@ -1932,8 +1932,8 @@ declare global {
 		 * @param startPos starting position of the ray cast
 		 * @param direction direction of the ray
 		 * @param maxDistance max distance the ray should check
-		 * @param limiter limiter function that's run each time the ray intersects a sprite, return true to stop the ray
-		 * @returns An array of sprites that the ray cast hit, sorted by distance. The sprite closest to the starting point will be at index 0.
+		 * @param limiter callback that's run each time the ray intersects a sprite, receives an intersected sprite as an input parameter, return true to stop the ray
+		 * @returns An array of sprites that the ray cast hit, sorted by distance. The sprite closest to the starting point will be at index 0. If a limiter is provided, this array includes the sprite that caused the ray to stop.
 		 */
 		rayCastAll(startPos: any, direction: number, maxDistance: number, limiter?: Function): Sprite[];
 		/**

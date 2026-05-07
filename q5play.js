@@ -381,7 +381,10 @@ async function q5playPreSetup(q) {
 	$.imageMode($.CENTER);
 
 	const ZERO_VEC = new b2Vec2(0, 0),
-		ZERO_ROT = b2MakeRot(0);
+		ZERO_ROT = b2MakeRot(0),
+		NULL_FILTER = new b2QueryFilter();
+	NULL_FILTER.categoryBits = 0xffffffff;
+	NULL_FILTER.maskBits = 0xffffffff;
 
 	let meterSize = 60;
 
@@ -5075,14 +5078,9 @@ async function q5playPreSetup(q) {
 
 			const point = scaleTo(x, y),
 				proxy = b2MakeProxy(point, 1, radius / meterSize),
-				filter = new b2QueryFilter(),
 				shapes = [];
 
-			// no filter
-			filter.categoryBits = 0xffffffff;
-			filter.maskBits = 0xffffffff;
-
-			b2World_OverlapShape(wID, proxy, filter, (overlapResult) => {
+			b2World_OverlapShape(wID, proxy, NULL_FILTER, (overlapResult) => {
 				const { shapeId } = overlapResult;
 				if (shapeId) {
 					shapes.push(shapeDict[shapeId.index1]);
@@ -5091,7 +5089,6 @@ async function q5playPreSetup(q) {
 			});
 
 			proxy.delete();
-			filter.delete();
 
 			if (!shapes.length) return [];
 
@@ -5179,16 +5176,13 @@ async function q5playPreSetup(q) {
 			const origin = scaleTo(startX, startY);
 			const translation = scaleTo(endX - startX, endY - startY);
 
-			const filter = new b2QueryFilter();
-			filter.categoryBits = 0xffffffff;
-			filter.maskBits = 0xffffffff;
-
 			const results = [];
 
-			b2World_CastRay(wID, origin, translation, filter, (castResult) => {
+			b2World_CastRay(wID, origin, translation, NULL_FILTER, (castResult) => {
 				const shape = shapeDict[castResult.shapeId.index1];
 				if (shape?.sprite) {
 					const s = shape.sprite;
+
 					s.ray = new RayInfo(
 						s,
 						castResult.point.x,
@@ -5199,18 +5193,15 @@ async function q5playPreSetup(q) {
 						maxDistance
 					);
 					results.push(s);
+
+					if (limiter && limiter(s)) return 0; // stop raycast
 				}
 				return 1; // continue to collect all hits
 			});
 
-			filter.delete();
-
 			// sort results by distance from start
 			results.sort((a, b) => a.ray.distance - b.ray.distance);
-
-			if (!limiter) return results;
-
-			return results.filter(limiter);
+			return results;
 		}
 	};
 
