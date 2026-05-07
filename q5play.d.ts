@@ -33,10 +33,10 @@ declare global {
 		 * Friendly rounding makes some Sprite getters return nice rounded numbers
 		 * if a decimal value is within linear slop range (+/-0.005) or
 		 * angular slop range (+/-0.000582 radians) of a whole number.
-		 * 
+		 *
 		 * This is because Box2D physics calculations can result in
 		 * floating point drift, which beginners wouldn't expect.
-		 * 
+		 *
 		 * Setting to false can slightly improve performance.
 		 * @default true
 		 */
@@ -71,6 +71,11 @@ declare global {
 		 */
 		renderStats: boolean;
 		/**
+		 * "Made with q5play" [splash screen](https://en.wikipedia.org/wiki/Splash_screen) displayed during
+		 * initial page load by default.
+		 */
+		splashScreen(): Promise<void>;
+		/**
 		 * Runs automatically before each draw function call.
 		 */
 		update(): void;
@@ -80,6 +85,16 @@ declare global {
 		postDraw(): void;
 	}
 	const q5play: Q5Play;
+
+	/**
+	 * Box2D v3 ported to WASM is the physics engine that
+	 * q5play uses for its physics simulation.
+	 *
+	 * This variable enables direct access to the Box2D API for
+	 * advanced users who want to do things that aren't wrapped
+	 * by q5play.
+	 */
+	const Box2D: any;
 
 	/**
 	 * Don't create Shapes directly; use `sprite.addCollider()`
@@ -107,7 +122,7 @@ declare global {
 	}
 
 	/**
-	 * Sensor are added to a sprite's physics body to detect overlaps 
+	 * Sensor are added to a sprite's physics body to detect overlaps
 	 * without causing physical collisions.
 	 *
 	 * Don't create Sensors directly; use Sprite.addSensor() instead.
@@ -191,7 +206,7 @@ declare global {
 		 * - "!" plays it backwards
 		 * - ">" or "<" horizontally flips it
 		 * - "^" vertically flips it
-		 * 
+		 *
 		 * @param name the name of the animation to play
 		 * @returns A promise that fulfills when the animation completes
 		 */
@@ -1209,7 +1224,7 @@ declare global {
 	}
 	/**
 	 * Stores animations.
-	 * 
+	 *
 	 * Used internally to create `sprite.anis` and `group.anis`.
 	 *
 	 * In instances of this class, the keys are animation names,
@@ -1224,7 +1239,7 @@ declare global {
 		/**
 		 * Cuts sprite sheet frames into separate images, instead of rendering
 		 * sections of the sprite sheet.
-		 * 
+		 *
 		 * Avoids edge bleeding artifacts caused by rotation and scaling,
 		 * but uses more memory and may cause longer load times.
 		 */
@@ -2081,7 +2096,7 @@ declare global {
 		get reactionTorque(): any;
 		/**
 		 * The amount of force that must be applied to the joint before it breaks.
-		 * 
+		 *
 		 * Setting the threshold too high leads to instability. Use
 		 * `sprite.addCollider` to simulate unbreakable bonds between shapes.
 		 * @default 500
@@ -2100,7 +2115,7 @@ declare global {
 		/**
 		 * This function is run when the joint's reaction force exceeds the
 		 * force threshold or its reaction torque exceeds the torque threshold.
-		 * 
+		 *
 		 * By default, the sprites' speed and rotation speed are set to 0
 		 * and the joint is deleted, simulating a break.
 		 */
@@ -2142,7 +2157,7 @@ declare global {
 		get currentLength(): number;
 		/**
 		 * The target length of the joint between the two joint anchors.
-		 * 
+		 *
 		 * It's set to the current distance between the two sprites
 		 * when the joint is created.
 		 */
@@ -2164,9 +2179,10 @@ declare global {
 		 */
 		get maxLength(): number;
 		/**
-		 * Accepts an array that contains the minimum and maximum length limits.
+		 * Accepts a number to set a symmetric range
+		 * or an array with the minimum and maximum length limits.
 		 */
-		set range(val: [number, number]);
+		set range(val: [number, number] | number);
 		/**
 		 * Whether spring behavior is enabled for the joint.
 		 * @default true
@@ -2184,7 +2200,7 @@ declare global {
 		/**
 		 * Damping is a 0-1 ratio describing how quickly the joint loses
 		 * vibrational energy.
-		 * 
+		 *
 		 * 0.0 means no damping, 1.0 means critical damping, which will stop
 		 * the joint from vibrating at all.
 		 *
@@ -2238,39 +2254,37 @@ declare global {
 		get angle(): number;
 		set angle(val: number);
 		/**
-		 * The current distance between the two joint anchors.
-		 * @readonly
-		 */
-		get currentLength(): number;
-		/**
-		 * The target length of the joint between the two joint anchors.
-		 *
-		 * It's set to the current distance between the two sprites
-		 * when the joint is created.
-		 */
-		get length(): number;
-		set length(val: number);
-		/**
-		 * Whether the joint's length limits are enabled.
-		 * When enabled a min/max length range constrains the joint.
+		 * Whether the joint's suspension limits are enabled.
+		 * When enabled a min/max distance from resting constrains the joint.
 		 * @default false
 		 */
 		get limitsEnabled(): boolean;
 		set limitsEnabled(val: boolean);
 		/**
-		 * The minimum length allowed when limits are enabled.
+		 * The minimum distance the wheel's suspension can contract
+		 * from 0, which represents the resting position,
+		 * when limits are enabled.
+		 * @readonly
 		 */
-		get minLength(): number;
+		get lowerLimit(): number;
 		/**
-		 * The maximum length allowed when limits are enabled.
+		 * The maximum distance the wheel's suspension can extend
+		 * from 0, which represents the resting position,
+		 * when limits are enabled.
+		 * @readonly
 		 */
-		get maxLength(): number;
+		get upperLimit(): number;
 		/**
-		 * Accepts an array that contains the minimum and maximum length limits.
+		 * The distance the wheel's suspension can contract or extend
+		 * from 0, which represents the resting position.
+		 *
+		 * Accepts a number to set a symmetric range
+		 * or an array with the minimum and maximum length limits.
 		 */
-		set range(val: [number, number]);
+		set range(val: [number, number] | number);
 		/**
-		 * Whether spring behavior is enabled for the joint.
+		 * Whether the wheel joint has suspension,
+		 * which can make it ride smoother over bumps.
 		 * @default true
 		 */
 		get springEnabled(): boolean;
@@ -2325,7 +2339,7 @@ declare global {
 		 * Hinge joints attach two sprites together at a pivot point,
 		 * constraining them to rotate around this point, like a hinge.
 		 *
-		 * A known as a revolute joint.
+		 * Also known as a revolute joint.
 		 *
 		 * @param spriteA
 		 * @param spriteB
@@ -2349,13 +2363,57 @@ declare global {
 		 */
 		get maxAngle(): number;
 		/**
-		 * Accepts an array that contains the lower and upper limits of rotation.
+		 * Accepts a number to set a symmetric range
+		 * or an array with the lower and upper limits of rotation.
 		 */
-		set range(val: [number, number]);
+		set range(val: [number, number] | number);
 		/**
-		 * Read only. The joint's current angle of rotation.
+		 * The joint's current angle of rotation.
+		 * @readonly
 		 */
 		get angle(): number;
+		/**
+		 * Whether spring behavior is enabled.
+		 * @default false
+		 */
+		get springEnabled(): boolean;
+		set springEnabled(val: boolean);
+		/**
+		 * The springiness of the joint, a 0-1 ratio.
+		 *
+		 * 0 is rigid, 0.5 is bouncy, 1 is loose.
+		 * @default 0
+		 */
+		get springiness(): number;
+		set springiness(val: number);
+		/**
+		 * Damping ratio, 0-1. Higher values reduce oscillation faster.
+		 * @default 0
+		 */
+		get damping(): number;
+		set damping(val: number);
+		/**
+		 * Whether the joint's motor is enabled.
+		 * @default false
+		 */
+		get motorEnabled(): boolean;
+		set motorEnabled(val: boolean);
+		/**
+		 * Motor speed.
+		 * @default 0
+		 */
+		get speed(): number;
+		set speed(val: number);
+		/**
+		 * Maximum torque the motor can apply.
+		 */
+		get maxPower(): number;
+		set maxPower(val: number);
+		/**
+		 * The current torque being applied by the motor.
+		 * @readonly
+		 */
+		get power(): number;
 	}
 
 	class SliderJoint extends Joint {
@@ -2370,44 +2428,83 @@ declare global {
 		 */
 		constructor(spriteA: Sprite, spriteB: Sprite);
 		/**
-		 * The joint's range of translation. Setting the range
-		 * changes the joint's upper and lower limits.
-		 * @default undefined
+		 * The current displacement of spriteB along the slide axis.
+		 * @readonly
 		 */
-		get range(): number;
-		set range(val: number);
+		get translation(): number;
 		/**
-		 * The mathematical upper (not positionally higher)
-		 * limit of translation.
-		 * @default undefined
+		 * Whether the joint's translation limits are enabled.
+		 * @default false
 		 */
-		get upperLimit(): number;
-		set upperLimit(val: number);
+		get limitsEnabled(): boolean;
+		set limitsEnabled(val: boolean);
 		/**
-		 * The mathematical lower (not positionally lower)
-		 * limit of translation.
-		 * @default undefined
+		 * The mathematical lower limit of translation.
+		 * @readonly
 		 */
 		get lowerLimit(): number;
-		set lowerLimit(val: number);
-	}
-
-	class RopeJoint extends Joint {
 		/**
-		 * A Rope joint prevents two sprites from going further
-		 * than a certain distance from each other, which is
-		 * defined by the max length of the rope, but they do allow
-		 * the sprites to get closer together.
+		 * The mathematical upper limit of translation.
+		 * @readonly
+		 */
+		get upperLimit(): number;
+		/**
+		 * Accepts a number to set a symmetric range
+		 * or an array with the lower and upper translation limits.
+		 */
+		set range(val: [number, number] | number);
+		/**
+		 * Alias for range.
+		 */
+		set limits(val: [number, number] | number);
+		/**
+		 * Whether spring behavior is enabled.
+		 * @default false
+		 */
+		get springEnabled(): boolean;
+		set springEnabled(val: boolean);
+		/**
+		 * The springiness of the joint, a 0-1 ratio.
 		 *
-		 * @param spriteA
-		 * @param spriteB
+		 * 0 is rigid, 0.5 is bouncy, 1 is loose.
+		 * @default 0
 		 */
-		constructor(spriteA: Sprite, spriteB: Sprite);
+		get springiness(): number;
+		set springiness(val: number);
 		/**
-		 * The maximum length of the rope.
+		 * Damping ratio, 0-1. Higher values reduce oscillation faster.
+		 * @default 0
 		 */
-		get maxLength(): number;
-		set maxLength(val: number);
+		get damping(): number;
+		set damping(val: number);
+		/**
+		 * Whether the joint's motor is enabled.
+		 * @default true
+		 */
+		get motorEnabled(): boolean;
+		set motorEnabled(val: boolean);
+		/**
+		 * Motor speed.
+		 * @default 0
+		 */
+		get speed(): number;
+		set speed(val: number);
+		/**
+		 * Maximum force the motor can apply.
+		 * @default 10
+		 */
+		get maxPower(): number;
+		set maxPower(val: number);
+		/**
+		 * The current motor force being applied.
+		 * @readonly
+		 */
+		get power(): number;
+		/**
+		 * The current sliding speed of the joint.
+		 * @readonly
+		 */
+		get energy(): number;
 	}
 
 	class GrabberJoint extends Joint {
@@ -2431,7 +2528,7 @@ declare global {
 		set target(pos: any);
 		/**
 		 * The maximum spring force that the joint can exert on the sprite.
-		 * 
+		 *
 		 * By default it's 500 * the sprite's mass.
 		 */
 		get maxForce(): number;

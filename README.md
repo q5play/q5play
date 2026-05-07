@@ -2,7 +2,7 @@
 
 ## Visit [q5play.org][]! 🎮🧑‍💻
 
-[q5play][] is a beginner friendly, powerful, and cutting edge game engine for the web.
+[q5play][] is a beginner friendly and powerful game engine for the web.
 
 It uses [q5.js WebGPU][] for graphics and [Box2D v3 WASM][] for physics.
 

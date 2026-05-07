@@ -1,9 +1,9 @@
 {
 	"name": "q5play",
-	"version": "4.0.8",
+	"version": "4.1.0",
 	"author": "quinton-ashley",
 	"license": "SEE LICENSE IN LICENSE.md",
-	"description": "A web-based game engine that uses q5.js WebGPU for graphics and Box2D v3 WASM for physics.",
+	"description": "A beginner friendly, web-based game engine that uses q5.js WebGPU for graphics and Box2D v3 WASM for physics.",
 	"main": "q5play.js",
 	"types": "q5play.d.ts",
 	"homepage": "https://q5play.org",
@@ -25,6 +25,6 @@
 	},
 	"dependencies": {
 		"box2d3-wasm": "^5.2.0",
-		"q5": "^4.4.4"
+		"q5": "^4.6.3"
 	}
 }

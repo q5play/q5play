@@ -12,13 +12,12 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.0
+ * @version 4.1
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
-// will use semver minor after v4 is released
-let q5play_version = '4.0';
+let q5play_version = '4.1';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -323,6 +322,43 @@ async function q5playPreSetup(q) {
 		}
 		set friendlyRounding(val) {
 			friendlyRounding = val;
+		}
+
+		async splashScreen() {
+			if (document.getElementById('made-with-q5play')) return;
+			if (!using_p5v2) $._incrementPreload();
+			let d = document.createElement('div');
+			d.id = 'made-with-q5play';
+			d.style =
+				'position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 1000; background-color: black;';
+			let logo = document.createElement('img');
+			logo.style = `position: absolute; top: 50%; left: 50%; width: 80vmin; height: 40vmin; margin-left: -40vmin; margin-top: -20vmin; z-index: 1001; opacity: 1; scale: 1; transition: scale 1.5s, opacity 0.4s ease-in-out;`;
+			logo.onerror = () => {
+				logo.style.imageRendering = 'pixelated';
+				logo.src = `data:image/png;base64,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`;
+			};
+			let src = window._q5play_intro_image;
+			if (src == '' || src?.includes('made_with_q5play')) {
+				if (src.includes('bit.') || src.includes('pixel')) {
+					logo.style.imageRendering = 'pixelated';
+				}
+				logo.src = src;
+			} else {
+				logo.src = 'https://q5play.org/assets/made_with_q5play.webp';
+			}
+			await new Promise((r) => (logo.onload = r));
+			d.append(logo);
+			document.body.append(d);
+			await $.delay();
+			logo.offsetHeight; // trigger css reflow
+			logo.style.scale = 1.2;
+			await $.delay(1100);
+			logo.style.opacity = 0;
+			await $.delay(400);
+			d.style.display = 'none';
+			d.remove();
+			document.getElementById('made-with-q5play')?.remove();
+			if (!using_p5v2) $._decrementPreload();
 		}
 	};
 
@@ -1005,7 +1041,6 @@ async function q5playPreSetup(q) {
 			if (!group.visualOnly) {
 				const def = new b2DefaultBodyDef();
 				def.type = bodyTypes[this._phys];
-				def.allowFastRotation = true;
 				this.bdID = b2CreateBody(wID, def);
 				this._physicsEnabled = true;
 
@@ -1325,7 +1360,7 @@ async function q5playPreSetup(q) {
 			if (typeof a3 == 'string') {
 				rr = a4 || 0;
 				path = getRegularPolygon(a2 - rr, a3);
-			} else if (Array.isArray(a2)) {
+			} else if (typeof a2 == 'object') {
 				path = a2;
 				rr = a3;
 			} else {
@@ -1336,6 +1371,12 @@ async function q5playPreSetup(q) {
 			rr ??= 0;
 
 			if (path) {
+				if (!Array.isArray(path)) {
+					let tmp = path.absoluteAngles;
+					path = path.array;
+					path.absoluteAngles = tmp;
+				}
+
 				let start,
 					vecs = [{ x: 0, y: 0 }],
 					isLoop = (vecs.isLoop = false);
@@ -4743,6 +4784,27 @@ async function q5playPreSetup(q) {
 	$.Visuals.prototype.addAni = $.Group.prototype.addAni = $.Sprite.prototype.addAni;
 	$.Visuals.prototype.addAnis = $.Group.prototype.addAnis = $.Sprite.prototype.addAnis;
 
+	class RayInfo {
+		constructor(sprite, px, py, nx, ny, fraction, maxDistance) {
+			this.sprite = sprite;
+			this._px = px;
+			this._py = py;
+			this._nx = nx;
+			this._ny = ny;
+			this.distance = fraction * maxDistance;
+		}
+
+		get intersect() {
+			if (!this._intersect) this._intersect = scaleFrom(this._px, this._py);
+			return this._intersect;
+		}
+
+		get incidence() {
+			if (this._incidence === undefined) this._incidence = $.atan2(this._ny, this._nx);
+			return this._incidence;
+		}
+	}
+
 	$.World = class {
 		constructor() {
 			this.mod = {};
@@ -5099,57 +5161,56 @@ async function q5playPreSetup(q) {
 		}
 
 		rayCastAll(startPos, direction, maxDistance, limiter) {
-			// TODO
-			return [];
-			let start = scaleTo(startPos.x, startPos.y);
+			const startX = startPos.x ?? startPos[0];
+			const startY = startPos.y ?? startPos[1];
 
-			let end;
-			if (typeof arguments[1] == 'number') {
-				end = scaleTo(startPos.x + maxDistance * $.cos(direction), startPos.y + maxDistance * $.sin(direction));
+			let endX, endY;
+			if (typeof direction == 'number') {
+				maxDistance ??= 10000;
+				endX = startX + maxDistance * $.cos(direction);
+				endY = startY + maxDistance * $.sin(direction);
 			} else {
-				let endPos = arguments[1];
-				limiter ??= arguments[2];
-				end = scaleTo(endPos.x, endPos.y);
+				const endPos = direction;
+				limiter = maxDistance;
+				endX = endPos.x ?? endPos[0];
+				endY = endPos.y ?? endPos[1];
 			}
 
-			let results = [];
-			let maxFraction = 1;
+			const origin = scaleTo(startX, startY);
+			const translation = scaleTo(endX - startX, endY - startY);
 
-			super.rayCast(start, end, function (fixture, point, normal, fraction) {
-				let sprite = fixture.getBody().sprite;
+			const filter = new b2QueryFilter();
+			filter.categoryBits = 0xffffffff;
+			filter.maskBits = 0xffffffff;
 
-				let shouldLimit = limiter && limiter(sprite);
+			const results = [];
 
-				// TODO provide advanced info: point and angle of intersection
-				results.push({
-					sprite,
-					// point,
-					// normal,
-					fraction
-				});
-
-				// limit the ray cast so it can't go beyond this sprite
-				if (shouldLimit) {
-					if (fraction < maxFraction) {
-						maxFraction = fraction;
-					}
-					return fraction;
+			b2World_CastRay(wID, origin, translation, filter, (castResult) => {
+				const shape = shapeDict[castResult.shapeId.index1];
+				if (shape?.sprite) {
+					const s = shape.sprite;
+					s.ray = new RayInfo(
+						s,
+						castResult.point.x,
+						castResult.point.y,
+						castResult.normal.x,
+						castResult.normal.y,
+						castResult.fraction,
+						maxDistance
+					);
+					results.push(s);
 				}
-				return 1; // keep casting the full length of the ray
+				return 1; // continue to collect all hits
 			});
 
-			// sort results by the distance from the starting position
-			results.sort((a, b) => a.fraction - b.fraction);
+			filter.delete();
 
-			let sprites = [];
+			// sort results by distance from start
+			results.sort((a, b) => a.ray.distance - b.ray.distance);
 
-			for (let res of results) {
-				if (res.fraction <= maxFraction) {
-					sprites.push(res.sprite);
-				}
-			}
+			if (!limiter) return results;
 
-			return sprites;
+			return results.filter(limiter);
 		}
 	};
 
@@ -5334,7 +5395,7 @@ async function q5playPreSetup(q) {
 				this.isActive = cameraOn = false;
 			}
 		}
-	}; //end camera class
+	}; // end camera class
 
 	$.Joint = class {
 		constructor(spriteA, spriteB, type) {
@@ -5358,8 +5419,6 @@ async function q5playPreSetup(q) {
 			this._oAx = this._oAy = this._oBx = this._oBy = 0;
 
 			let _this = this;
-
-			// if (type != 'slider' && type != 'rope') {
 
 			if (type != 'wheel') {
 				this._offsetA = {};
@@ -5775,15 +5834,24 @@ async function q5playPreSetup(q) {
 		}
 
 		get lowerLimit() {
-			return Box2D.b2WheelJoint_GetLowerLimit(this.jID);
+			return Box2D.b2WheelJoint_GetLowerLimit(this.jID) * meterSize;
 		}
 
 		get upperLimit() {
-			return Box2D.b2WheelJoint_GetUpperLimit(this.jID);
+			return Box2D.b2WheelJoint_GetUpperLimit(this.jID) * meterSize;
 		}
 
-		set limits(val) {
-			Box2D.b2WheelJoint_SetLimits(this.jID, val[0], val[1]);
+		set range(val) {
+			let min, max;
+			if (typeof val == 'number') {
+				val /= 2;
+				min = -val;
+				max = val;
+			} else {
+				min = val[0];
+				max = val[1];
+			}
+			Box2D.b2WheelJoint_SetLimits(this.jID, min / meterSize, max / meterSize);
 		}
 
 		get motorEnabled() {
@@ -6408,23 +6476,23 @@ async function q5playPreSetup(q) {
 				if (!ani.looping) return;
 			}
 
-			//going to target frame up
+			// going to target frame up
 			if (ani.targetFrame > ani._frame && ani.targetFrame !== -1) {
 				ani._frame++;
 			}
-			//going to target frame down
+			// going to target frame down
 			else if (ani.targetFrame < ani._frame && ani.targetFrame !== -1) {
 				ani._frame--;
 			} else if (ani.targetFrame === ani._frame && ani.targetFrame !== -1) {
 				ani.playing = false;
 			} else if (ani.looping) {
-				//advance frame
-				//if next frame is too high
+				// advance frame
+				// if next frame is too high
 				if (ani._frame >= ani.lastFrame) {
 					ani._frame = 0;
 				} else ani._frame++;
 			} else {
-				//if next frame is too high
+				// if next frame is too high
 				if (ani._frame < ani.lastFrame) ani._frame++;
 			}
 		} else {
@@ -6439,42 +6507,6 @@ async function q5playPreSetup(q) {
 			setTimeout(resolve, milliseconds);
 		});
 	};
-
-	async function playIntro() {
-		if (document.getElementById('made-with-q5play')) return;
-		if (!using_p5v2) $._incrementPreload();
-		let d = document.createElement('div');
-		d.id = 'made-with-q5play';
-		d.style = 'position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 1000; background-color: black;';
-		let logo = document.createElement('img');
-		logo.style = `position: absolute; top: 50%; left: 50%; width: 80vmin; height: 40vmin; margin-left: -40vmin; margin-top: -20vmin; z-index: 1001; opacity: 1; scale: 1; transition: scale 1.5s, opacity 0.4s ease-in-out;`;
-		logo.onerror = () => {
-			logo.style.imageRendering = 'pixelated';
-			logo.src = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAACACAYAAADktbcKAAABc2lDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAACiRfZC9S8NQFMWPVSloHUSHDg6ZxCFqaQW7OLQViiIYqoLVKU2/hCQ+kohU3MRVCv4HVnAWHCwiFVwcHATRQUQ3p04KXbQ870uUdNH7uLwfh3MP710gEFYZ03sAGKZjZdJJaTW7JgXf0EXHLVWzWUJRFgT/3h1Frtaj570fF1nNdu0gvp++Ns4uF3eewpP4v/ryBVuj+4s6ojHLoUiZWNl2mOBd4mGLHkVcFVzy+FhwzuNz17OcSRHfEktaWc0TN4nlXIde6mBD39L8PyBUMFeWRA71CGaxARsMOlRUIEFB7A//lOtPYZPcFVg0V0IZDs0kSBEJBeI5mNAwAZk4igh1VOzZi2s9/OxP9rW9V2CmwTm/8LX5BnA6TSur+9pYHBjsB27qTLVUV+qmDhSLwPsJMJAFhu5oZt0uxqLe60NJoPeF849RIHgItKucfx5x3q7R8DNwZX4DGP5qvdREziwAAAn3SURBVHic7Z29cqQ6EIXF1s1uuvm+jvN9zsnndZw7dcwNbHwxBqm71X9C56ty1dbODGqEzlFLCFEKAAAAAOZjiQ4AAAnruq7RMWwsyzKsjoYNHMxJJuEfGdEIhgsYzEtm8W+MZgJDBQvmZQTxb4xkAsMECuZlJPFvjGICQwQJ5mVE8W+MYAL/RAcAwBUs8f/71zCSHe8Pn3KcSO9QYF6aBuAl+isIZpA9C/gVHQAAZ6QXf5YYOoEBgPHIJLxGLNnnMGAAAEwMDACkI3uveSdgAGAsMqX/GwMPA2AAAEwMDACkInNveUdgAGAcMqb/G4MOA2AAAEwMDACkIWsveWdgAGAMMqf/GwMOA/AwELgNz1fbB3Ve/gxgQkyQAYAU9PaO1uL3KsMbGADITyO19hRms6zBhgEwABBONlFYk+l8SXMAmQIGIJrn66N7PkBLU737DVQzgPWTngIA6CJR+k/G8Y5Fr0ZPMwCIHoCx2DTLzQh+ZAAQPwBtUmYeha/fbwYA8YNUjJj+bwQuXOLo+GsIAPGDu/Lym/f955tNHBn5VQrED8AeqmFkzkComr7NUuD93Med/SzdeQalulTxcXt/VSzrhrAl+bqua2tS8DYGMBrH65JCzBxGeDjnzmz13/mikl9I/wH4yTDDgM6lx8gAEpIuzT8S3PsPkf4PAgwgiJTCBtOBh4EAj4nG/jMMA8gZwDEtrU1icSa4zr7bSoGlE2g9E2/UmKjxUv6vddyrY98ZpP+6iIYAVw211oiPDfPq7kTtroXkN5TfcUVzdj6UzyRlteLglh9FeC9pjNb5ee86pDoEkIjXmrMekmpGx99Ry+AeWxuzMoXp/8ji984kxHUlHAaIDeBMSJTPSjlvoBa/Ofv+2b8lSETfKvPsfCj1nLHH34gQ/+jpv2ediQygJiSJyLx+syzLtz8ulPE99TNtMpsAyAvuAnSgNRE6BIL0f+TUPxpR3QmGAVMZwD5lPv5xjsH5f+CLRfo/+pCiRgoD2PeW1LRZ8puzY0iHAxxgDiArIQZwNZauCVHym+PveucAarFQPhuWQdJ/y546IgvwGAaEZQCSVFqafvd+3mI6Q5iUOw4FyAuBpI1cW9BWJsClV/Se9XlnvEW5lXeXXYMWPA4Mqhim/3fsUTlQTUS0OrCyT8B+k5AUk4AAAD/2nT4MAICJgQGAa5D+m2L6uDHx2sEAAJiQbRgAAwBgYmAA4JxBFv+MTvQwAAYA3MH4Pwfruq4wAAAmBgYAfjLRxp8ZiBwGwACACrj9NyYwAAAmBi8G4XCVTnW+n20mtvXvyAQ+4D5U9Hx9qO4cjAwAhHCXp+l6yFAHeTIAycRTkp4XvZqM59u8dSYVv/Z7A5ABgJ84GuvzLUdP6IX7+Tau5dAGMFvjcYVpAr090wzXsfcc2XVMuIZDGwAwJsAE7moEGcW/LMvSPwdQG7vvgzh+zyrNrJVDjdUCStln36l9dvwOp1zq+b4/WPMzW0PteS7gTnMD7sIvhdWW5QZAaRSdK8pUHi6hxrB9T9sIqPVkYUBaK/qYJlDKR8Od3QQyi3/bFkxmAAoNK+3MuaYYOfV08d2veqqIkFuXz9dHKdz6p2QiB3qzgbRtpIHGMMYi5T+DbwAB68TdG4CGCTjWU29vywLZQJXMvf7GflNQngE4i/+yMjxuU/WYgFU9ccRnea2E2QD2C6jj0esvhzfiqC4E2l9g1slwG2uHODkxWvQ8RxFoLezYBNaK99v5956b4wThSFmABGvxH4W/Qb8N2LjQx4tq7vYKO9a0Ynz585ef0lXiOiuPXU9JVj9+IYhHezVbFiTp/8ufv2HiL0VpHcCPXu33p1tH3lo7EBbjRflWMTzfyvVkoWbvv+f94b5mICPcOhUJX1H8pRg8CyBqWJ8ndeWg1YoSDAe4MWqnn1apd/g4WzAkmHUfgYjx/hmqKwGtLtLz9VFtKJzU624NiYpZ738k2xDlDgh6fYr4S8n0NGDpa5ijTBKpxVjJAsIR3CW4Cy+/aR0S6bl+o15/j0oGcHkinFtWxz9lumO0Kt8xhlKcTbLRgGdN/y3g9Pp76AbQuJg/Gnhvo/YwAeadDRKVejo1AQfxh80LTJgBRCAR/obuEED7gu8n+LSOHd0oNcsXrMoD9qgOA4zhDQGsJnhaT7Mx761r4DZpZkzW80D6T4Bg7j29fynYD8AGz5nwrLPuyEyGgG8AEVnABVa9m8pxEwgza+8/A6Yv+1BElgEIViRRj0upkNa6ACnqxyWez1b2LCD9Z2CcSfVNAr4//n9mezeZIX4oqHxOoHz+/uqYZ79pcRUT67iNFYtXx6jVx/4zzVc/hfb+SP/dWNd1Db0LsM14avZg1GNKG7bVcVvHo55T1WAgrtsReTdA5TbgXjD7xtsjJItj1o7LObY0hr0R1I7Xe46Zx/4Z0n/pdedCvR3YxGrLuJLlYaCAY1oeN2u5LiTOUK7EOOrWYxs9wwDcBrwZmXv/SEgLc266JXkNGMBNsLozoklUfBxhR72bIKpu7J8GFMycD1VeMFcNJ6T3V0z/NdLynjbQ+3SpevtrzANIhwGpHgcGBAgGd6fUXypEDQFGlu3FUsqHe0QHAnh4zWSzIGQAPakuab2HkfjIK/s6yu/dH0CSAcAAgA7E9L93rFsTonXPa1k2eR1AxQTE+wH0PlEEABWrtwh7pN1WZWstApJ05F/CRxYAumBOAGrMeqsttAksW3tzUG5n/u3LMAEgomP2P/utSyu6en3FYcC3dQAYCgBvotbAi17IoVh2Fk4Fj0wAsNB4W7RTJnAlvujyWShmANUvwwgACc0FQIZCbL4LMrBsFl4GcASGAC5JbgIcAWqX7yX+UowNAMxNtQMweApQ5U6BUHxaJqA+3ocBgCiaGWAyE+hecxBY9ilWKwEBoDKCCWiLL7r8UgppQxAYADCHPA8UZARWt9jCyibuBIQNQYAL5IZmsIVVS2CW99dDynbYWh4ZABARmQmU0rfzdCml65Vz3WVTYIi/ZwEfDACIYd0WzrRX4FFcmWNr0Lt6FwYAuhjKBFriyh7fAY2l+zAA0A17gViE0KjiijKBAPGXAgMASqQ2Aclkmld8QcL/Op7mwQBINSTonUVPFp/F07owAKBOimxA6xZaktisHtWHAQATwkzA6t55UHzWe3TAAIAprkMC64UzzvF5bNADAwDmuGQDDqvmSilusXntzgUDAC6YmYCSuLLE570tHwwAuKIqNGVxqZtAcvGXAgMAAYh2ltqLzTil7jIC4VAkakNeGAAIw2uLOYm4MsemWn5k4QBYCq1XXNYmEC3+UmAAIAEWQtMUl3Z8GYS/kSYQALSEZiGwzLH1kCoYAHqE5iEuaXzZhL+RMigAOEKLEFf2+KikDQyAUupCyyCsq/gyxAYAAFX+AyqVmTiXMeeKAAAAAElFTkSuQmCC`;
-		};
-		let src = window._q5play_intro_image;
-		if (src == '' || src?.includes('made_with_q5play')) {
-			if (src.includes('bit.') || src.includes('pixel')) {
-				logo.style.imageRendering = 'pixelated';
-			}
-			logo.src = src;
-		} else {
-			logo.src = 'https://q5play.org/assets/made_with_q5play.webp';
-		}
-		await new Promise((r) => (logo.onload = r));
-		d.append(logo);
-		document.body.append(d);
-		await $.delay();
-		logo.offsetHeight; // trigger css reflow
-		logo.style.scale = 1.2;
-		await $.delay(1100);
-		logo.style.opacity = 0;
-		await $.delay(400);
-		d.style.display = 'none';
-		d.remove();
-		document.getElementById('made-with-q5play')?.remove();
-		if (!using_p5v2) $._decrementPreload();
-	}
 
 	if (window.location) {
 		let lh = location.hostname;
@@ -6508,7 +6540,7 @@ async function q5playPreSetup(q) {
 				) {
 					break;
 				}
-				playIntro();
+				$.q5play.splashScreen();
 		}
 	}
 
@@ -7823,10 +7855,6 @@ async function q5playPreSetup(q) {
 
 			s = $.q5play.sprites[uid];
 
-			if (s && !s.visible) {
-				continue;
-			}
-
 			let type = Box2D.HEAPU8[offset];
 
 			if (type == 7) {
@@ -7854,6 +7882,10 @@ async function q5playPreSetup(q) {
 
 			s._velSynced = false;
 			s._vel._magCached = false;
+
+			if (!s.visible) {
+				continue;
+			}
 
 			if (s._hasImagery || s._userDefinedDraw) {
 				s._rotation = Math.atan2(data[2], data[3]) * RADTODEG;
