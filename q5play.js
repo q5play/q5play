@@ -334,7 +334,8 @@ async function q5playPreSetup(q) {
 
 	// in q5play the default angle mode is degrees
 	const DEGREES = $.DEGREES,
-		DEGTORAD = Math.PI / 180;
+		DEGTORAD = Math.PI / 180,
+		RADTODEG = 180 / Math.PI;
 	$.angleMode(DEGREES);
 
 	// in q5play the default color mode is float RGB
@@ -1004,6 +1005,7 @@ async function q5playPreSetup(q) {
 			if (!group.visualOnly) {
 				const def = new b2DefaultBodyDef();
 				def.type = bodyTypes[this._phys];
+				def.allowFastRotation = true;
 				this.bdID = b2CreateBody(wID, def);
 				this._physicsEnabled = true;
 
@@ -5348,6 +5350,7 @@ async function q5playPreSetup(q) {
 			this.type = type ??= 'glue';
 			this.visible = true;
 			this.deleted = false;
+			this._springiness = 0;
 
 			if (!a._shapes.length) a.addDefaultSensors();
 			if (!b._shapes.length) b.addDefaultSensors();
@@ -5536,6 +5539,7 @@ async function q5playPreSetup(q) {
 
 		_springMap(val) {
 			if (val > 0) {
+				this._springiness = val;
 				if (val < 0.1) {
 					val = $.map(val, 0, 0.1, 30, 4);
 				} else if (val < 0.5) {
@@ -5572,7 +5576,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get springiness() {
-			return Box2D.b2WeldJoint_GetLinearHertz(this.jID);
+			return this._springiness;
 		}
 		set springiness(val) {
 			val = this._springMap(val);
@@ -5648,7 +5652,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get springiness() {
-			return Box2D.b2DistanceJoint_GetSpringHertz(this.jID);
+			return this._springiness;
 		}
 		set springiness(val) {
 			val = this._springMap(val);
@@ -5692,15 +5696,20 @@ async function q5playPreSetup(q) {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'wheel');
 
+			this._angle = $._angleMode == DEGREES ? 90 : Math.PI / 2;
+			this._motorEnabled = false;
+
 			let j = this._init(b2DefaultWheelJointDef(wID));
 			j.enableSpring = true;
 			j.hertz = 4;
 			j.dampingRatio = 0.7;
-			j.enableMotor = true;
+			j.enableMotor = false; // neutral by default
 			j.maxMotorTorque = 1000;
 
 			this.jID = b2CreateWheelJoint(wID, j);
 			jointDict[this.jID.index1] = this;
+
+			this._springiness = 0.1;
 		}
 
 		_init(j) {
@@ -5710,11 +5719,12 @@ async function q5playPreSetup(q) {
 			j.base.bodyIdA = a.bdID;
 			j.base.bodyIdB = b.bdID;
 
-			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+			let rad = this._angle;
+			if ($._angleMode == DEGREES) rad *= DEGTORAD;
+			j.base.localFrameA.q.SetAngle(rad);
 
-			// let qA = b2Body_GetRotation(a.bdID);
-			// let qB = b2Body_GetRotation(b.bdID);
-			// j.base.localFrameA.q = b2InvMulRot(qA, qB);
+			let pivot = scaleTo(b.x, b.y);
+			j.base.localFrameA.p = b2Body_GetLocalPoint(a.bdID, pivot);
 
 			return j;
 		}
@@ -5727,9 +5737,12 @@ async function q5playPreSetup(q) {
 		set angle(val) {
 			if (val == this._angle) return;
 			this._angle = val;
-			this._j.m_localXAxisA = new b2Vec2($.cos(val), $.sin(val));
-			this._j.m_localXAxisA.normalize();
-			this._j.m_localYAxisA = b2Vec2.crossNumVec2(1.0, this._j.m_localXAxisA);
+			let rad = $._angleMode == DEGREES ? val * DEGTORAD : val;
+
+			let t = b2Joint_GetLocalFrameA(this.jID);
+			t.q.SetAngle(rad);
+			b2Joint_SetLocalFrameA(this.jID, t);
+			b2Joint_WakeBodies(this.jID);
 		}
 
 		get springEnabled() {
@@ -5740,7 +5753,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get springiness() {
-			return Box2D.b2WheelJoint_GetSpringHertz(this.jID);
+			return this._springiness;
 		}
 		set springiness(val) {
 			val = this._springMap(val);
@@ -5778,13 +5791,16 @@ async function q5playPreSetup(q) {
 		}
 		set motorEnabled(val) {
 			Box2D.b2WheelJoint_EnableMotor(this.jID, val);
+			this._motorEnabled = val;
 		}
 
 		get maxPower() {
 			return Box2D.b2WheelJoint_GetMaxMotorTorque(this.jID);
 		}
 		set maxPower(val) {
+			if (val > 0 && !this._motorEnabled) this.motorEnabled = true;
 			Box2D.b2WheelJoint_SetMaxMotorTorque(this.jID, val);
+			b2Joint_WakeBodies(this.jID);
 		}
 
 		get power() {
@@ -5792,10 +5808,14 @@ async function q5playPreSetup(q) {
 		}
 
 		get speed() {
+			// if in neutral, return the wheel's angular velocity
+			if (!this._motorEnabled) return this.spriteB.rotationSpeed;
 			return Box2D.b2WheelJoint_GetMotorSpeed(this.jID);
 		}
 		set speed(val) {
+			if (!this._motorEnabled) this.motorEnabled = true;
 			Box2D.b2WheelJoint_SetMotorSpeed(this.jID, val);
+			b2Joint_WakeBodies(this.jID);
 		}
 	};
 
@@ -5823,7 +5843,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get springiness() {
-			return Box2D.b2RevoluteJoint_GetSpringHertz(this.jID);
+			return this._springiness;
 		}
 		set springiness(val) {
 			val = this._springMap(val);
@@ -5863,8 +5883,8 @@ async function q5playPreSetup(q) {
 				max = val[1];
 			}
 			if ($._angleMode == DEGREES) {
-				min *= $._RADTODEG;
-				max *= $._RADTODEG;
+				min *= DEGTORAD;
+				max *= DEGTORAD;
 			}
 			Box2D.b2RevoluteJoint_SetLimits(this.jID, min, max);
 		}
@@ -5893,8 +5913,6 @@ async function q5playPreSetup(q) {
 		set maxPower(val) {
 			Box2D.b2RevoluteJoint_SetMaxMotorTorque(this.jID, val);
 		}
-
-		_display() {}
 	};
 
 	$.SliderJoint = class extends $.Joint {
@@ -5902,15 +5920,37 @@ async function q5playPreSetup(q) {
 			super(spriteA, spriteB, 'slider');
 
 			let j = this._init(b2DefaultPrismaticJointDef());
-			j.enableLimit = true;
-			j.lowerTranslation = -1;
-			j.upperTranslation = 1;
+			j.enableLimit = false;
 			j.enableMotor = true;
-			j.maxMotorForce = 50;
+			j.maxMotorForce = 10;
 			j.motorSpeed = 0;
 
 			this.jID = b2CreatePrismaticJoint(wID, j);
 			jointDict[this.jID.index1] = this;
+		}
+
+		_init(j) {
+			let a = this.spriteA,
+				b = this.spriteB;
+
+			j.base.bodyIdA = a.bdID;
+			j.base.bodyIdB = b.bdID;
+
+			// set the anchor at sprite A's position in B's local frame
+			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+
+			// align the slide axis with the vector from A to B
+			let dx = b.x - a.x;
+			let dy = b.y - a.y;
+			let len = Math.sqrt(dx * dx + dy * dy);
+			let angle = len > 0 ? Math.atan2(dy, dx) : 0;
+
+			let qA = b2Body_GetRotation(a.bdID);
+			let qB = b2Body_GetRotation(b.bdID);
+			j.base.localFrameA.q.SetAngle(angle - qA.GetAngle());
+			j.base.localFrameB.q.SetAngle(angle - qB.GetAngle());
+
+			return j;
 		}
 
 		get translation() {
@@ -5943,6 +5983,21 @@ async function q5playPreSetup(q) {
 				max = val[1];
 			}
 			Box2D.b2PrismaticJoint_SetLimits(this.jID, min / meterSize, max / meterSize);
+			Box2D.b2PrismaticJoint_EnableLimit(this.jID, true);
+		}
+
+		set limits(val) {
+			let min, max;
+			if (typeof val == 'number') {
+				val /= 2;
+				min = -val;
+				max = val;
+			} else {
+				min = val[0];
+				max = val[1];
+			}
+			Box2D.b2PrismaticJoint_SetLimits(this.jID, min / meterSize, max / meterSize);
+			Box2D.b2PrismaticJoint_EnableLimit(this.jID, true);
 		}
 
 		get springEnabled() {
@@ -5953,10 +6008,10 @@ async function q5playPreSetup(q) {
 		}
 
 		get springiness() {
-			return Box2D.b2PrismaticJoint_GetSpringHertz(this.jID);
+			return this._springiness;
 		}
 		set springiness(val) {
-			val = this._springMap ? this._springMap(val) : val;
+			val = this._springMap(val);
 			Box2D.b2PrismaticJoint_SetSpringHertz(this.jID, val);
 		}
 
@@ -5979,6 +6034,7 @@ async function q5playPreSetup(q) {
 		}
 		set speed(val) {
 			Box2D.b2PrismaticJoint_SetMotorSpeed(this.jID, val);
+			b2Joint_WakeBodies(this.jID);
 		}
 
 		get maxPower() {
@@ -5992,14 +6048,14 @@ async function q5playPreSetup(q) {
 			return Box2D.b2PrismaticJoint_GetMotorForce(this.jID);
 		}
 
-		// get energy() {
-		// 	return Box2D.b2PrismaticJoint_GetSpeed(this.jID);
-		// }
+		get energy() {
+			return Box2D.b2PrismaticJoint_GetSpeed(this.jID);
+		}
 	};
 
 	$.GrabberJoint = class extends $.Joint {
-		constructor(pointer, sprite) {
-			sprite ??= pointer;
+		constructor(grabPoint, sprite) {
+			sprite ??= grabPoint;
 			super(sprite, sprite, 'grabber');
 
 			let bd = b2DefaultBodyDef();
@@ -6025,11 +6081,11 @@ async function q5playPreSetup(q) {
 
 			this.jID = b2CreateMotorJoint(wID, j);
 
-			let offX = sprite.x - (pointer[0] || pointer.x),
-				offY = sprite.y - (pointer[1] || pointer.y);
+			let offX = sprite.x - (grabPoint[0] || grabPoint.x),
+				offY = sprite.y - (grabPoint[1] || grabPoint.y);
 			if (!isSlop(offX) || !isSlop(offY)) {
 				this._setOffsetB(-offX, -offY);
-				this.target = pointer;
+				this.target = grabPoint;
 			}
 
 			this.sprite = sprite;
@@ -7800,7 +7856,7 @@ async function q5playPreSetup(q) {
 			s._vel._magCached = false;
 
 			if (s._hasImagery || s._userDefinedDraw) {
-				s._rotation = Math.atan2(data[2], data[3]) * $._RADTODEG;
+				s._rotation = Math.atan2(data[2], data[3]) * RADTODEG;
 			}
 
 			if (s.debug || (!s._hasImagery && !s._userDefinedDraw)) {
