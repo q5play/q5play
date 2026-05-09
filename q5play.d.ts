@@ -105,6 +105,7 @@ declare global {
 		type: string;
 		geom: any;
 		density: number;
+		applyWind(speed: number, angle: number, drag?: number, lift?: number): void;
 		scaleBy(scaleX: number, scaleY?: number): void;
 		delete(): void;
 	}
@@ -678,11 +679,7 @@ declare global {
 		get rotationDrag(): number;
 		set rotationDrag(val: number);
 		/**
-		 * Known issue, this doesn't work yet.
-		 * https://github.com/q5play/q5play/issues/36
-		 *
 		 * If true, the sprite can not rotate.
-		 * @deprecated
 		 * @default false
 		 */
 		get rotationLock(): boolean;
@@ -870,6 +867,14 @@ declare global {
 		 * @param n The point the force is applied from, relative to the sprite's center of mass. Accepts a coordinate array or object with x and y properties. If not given, the force is applied at the center of mass.
 		 */
 		applyForceScaled(amount: number, origin?: any): void;
+		/**
+		 * Applies wind force to the sprite.
+		 * @param strength the strength of the wind
+		 * @param angle the angle the wind is blowing at
+		 * @param drag the force that opposes the relative velocity
+		 * @param lift the force that is perpendicular to the relative velocity
+		 */
+		applyWind(strength: number, angle: number, drag?: number, lift?: number): void;
 		/**
 		 * Applies a force to the sprite's center of mass attracting it to
 		 * the given position.
@@ -1521,10 +1526,7 @@ declare global {
 		 */
 		rotationDrag: number;
 		/**
-		 * Known issue, this doesn't work.
-		 *
 		 * If true, the group sprites can not rotate.
-		 * @deprecated
 		 */
 		rotationLock: boolean;
 		/**
@@ -1732,6 +1734,7 @@ declare global {
 		passes(target: Group): void;
 		applyForce(amount: number, origin?: [] | { x: number; y: number } | Q5.Vector): void;
 		applyForceScaled(amount: number, origin?: [] | { x: number; y: number } | Q5.Vector): void;
+		applyWind(speed: number, angle: number, drag?: number, lift?: number): void;
 		attractTo(x: number | any, y?: number, force?: number): void;
 		applyTorque(torque: any): void;
 		moveTowards(x: number | any, y?: number, tracking?: number): void;
@@ -1915,8 +1918,7 @@ declare global {
 		set allowSleeping(val: boolean);
 		/**
 		 * Finds the first sprite (with a physics body) that
-		 * intersects a ray (line), excluding any sprites that intersect
-		 * with the starting point.
+		 * intersects a ray (line).
 		 *
 		 * @param startPos starting position of the ray cast
 		 * @param direction direction of the ray
@@ -1926,8 +1928,7 @@ declare global {
 		rayCast(startPos: any, direction: number, maxDistance: number): Sprite;
 		/**
 		 * Finds sprites (with physics bodies) that intersect
-		 * a line (ray), excluding any sprites that intersect the
-		 * starting point.
+		 * a line (ray).
 		 *
 		 * @param startPos starting position of the ray cast
 		 * @param direction direction of the ray
@@ -2172,10 +2173,12 @@ declare global {
 		set limitsEnabled(val: boolean);
 		/**
 		 * The minimum length allowed when limits are enabled.
+		 * @readonly
 		 */
 		get minLength(): number;
 		/**
 		 * The maximum length allowed when limits are enabled.
+		 * @readonly
 		 */
 		get maxLength(): number;
 		/**
@@ -2354,12 +2357,12 @@ declare global {
 		set limitsEnabled(val: boolean);
 		/**
 		 * The lower limit of rotation.
-		 * @default undefined
+		 * @readonly
 		 */
 		get minAngle(): number;
 		/**
 		 * The upper limit of rotation.
-		 * @default undefined
+		 * @readonly
 		 */
 		get maxAngle(): number;
 		/**
@@ -2453,10 +2456,6 @@ declare global {
 		 * or an array with the lower and upper translation limits.
 		 */
 		set range(val: [number, number] | number);
-		/**
-		 * Alias for range.
-		 */
-		set limits(val: [number, number] | number);
 		/**
 		 * Whether spring behavior is enabled.
 		 * @default false

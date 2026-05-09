@@ -85,6 +85,7 @@ async function q5playPreSetup(q) {
 		b2World_OverlapShape,
 		b2World_CastRay,
 		b2World_CastRayClosest,
+		b2World_CastShape,
 		b2World_SetCustomFilterCallback,
 		b2World_SetPreSolveCallback,
 		b2World_GetGravity,
@@ -537,6 +538,12 @@ async function q5playPreSetup(q) {
 		set density(val) {
 			this._density = val;
 			b2Shape_SetDensity(this.id, val);
+		}
+
+		applyWind(strength, angle, drag = 0, lift = 0) {
+			const wind = new b2Vec2(strength * $.cos(angle), strength * $.sin(angle));
+			b2Shape_ApplyWind(this.id, wind, drag, lift, true);
+			wind.delete();
 		}
 	};
 
@@ -2053,17 +2060,15 @@ async function q5playPreSetup(q) {
 		}
 		set rotationLock(val) {
 			if (this.watch) this.mod[25] = true;
+			this._rotationLock = val;
+			if (!this._physicsEnabled) return;
 
-			// let mass = this.mass;
-
-			// TODO: not working, shape is ignored by physics sim after this
-			let locks = new b2MotionLocks();
+			const locks = new b2MotionLocks();
 			locks.linearX = false;
 			locks.linearY = false;
 			locks.angularZ = val;
 			b2Body_SetMotionLocks(this.bdID, locks);
-
-			// this.mass = mass;
+			locks.delete();
 		}
 
 		get rotationSpeed() {
@@ -2761,6 +2766,14 @@ async function q5playPreSetup(q) {
 
 		applyTorque(val) {
 			b2Body_ApplyTorque(this.bdID, val, true);
+		}
+
+		applyWind(strength, angle, drag = 0, lift = 0) {
+			const wind = new b2Vec2(strength * $.cos(angle), strength * $.sin(angle));
+			for (let shape of this._shapes) {
+				b2Shape_ApplyWind(shape.id, wind, drag, lift, true);
+			}
+			wind.delete();
 		}
 
 		angleTo(x, y) {
@@ -4467,6 +4480,16 @@ async function q5playPreSetup(q) {
 			}
 		}
 
+		applyWind(strength, angle, drag = 0, lift = 0) {
+			const wind = new b2Vec2(strength * $.cos(angle), strength * $.sin(angle));
+			for (let s of this) {
+				for (let shape of s._shapes) {
+					b2Shape_ApplyWind(shape.id, wind, drag, lift, true);
+				}
+			}
+			wind.delete();
+		}
+
 		_resetCentroid() {
 			let x = 0;
 			let y = 0;
@@ -4787,7 +4810,7 @@ async function q5playPreSetup(q) {
 	$.Visuals.prototype.addAni = $.Group.prototype.addAni = $.Sprite.prototype.addAni;
 	$.Visuals.prototype.addAnis = $.Group.prototype.addAnis = $.Sprite.prototype.addAnis;
 
-	class RayInfo {
+	class CastInfo {
 		constructor(sprite, px, py, nx, ny, fraction, maxDistance) {
 			this.sprite = sprite;
 			this._px = px;
@@ -5183,7 +5206,7 @@ async function q5playPreSetup(q) {
 				if (shape?.sprite) {
 					const s = shape.sprite;
 
-					s.ray = new RayInfo(
+					s.cast = new CastInfo(
 						s,
 						castResult.point.x,
 						castResult.point.y,
@@ -5200,7 +5223,54 @@ async function q5playPreSetup(q) {
 			});
 
 			// sort results by distance from start
-			results.sort((a, b) => a.ray.distance - b.ray.distance);
+			results.sort((a, b) => a.cast.distance - b.cast.distance);
+			return results;
+		}
+
+		circleCast(startPos, endPos, radius) {
+			let sprites = this.circleCastAll(startPos, endPos, radius, () => true);
+			return sprites[0];
+		}
+
+		circleCastAll(startPos, endPos, radius, limiter) {
+			const startX = startPos.x ?? startPos[0];
+			const startY = startPos.y ?? startPos[1];
+			const endX = endPos.x ?? endPos[0];
+			const endY = endPos.y ?? endPos[1];
+
+			const maxDistance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+			const center = scaleTo(startX, startY);
+			const proxy = b2MakeProxy(center, 1, radius / meterSize);
+			const translation = scaleTo(endX - startX, endY - startY);
+
+			const results = [];
+
+			b2World_CastShape(wID, proxy, translation, NULL_FILTER, (castResult) => {
+				const shape = shapeDict[castResult.shapeId.index1];
+				if (shape?.sprite) {
+					const s = shape.sprite;
+
+					s.cast = new CastInfo(
+						s,
+						castResult.point.x,
+						castResult.point.y,
+						castResult.normal.x,
+						castResult.normal.y,
+						castResult.fraction,
+						maxDistance
+					);
+					results.push(s);
+
+					if (limiter && limiter(s)) return 0; // stop cast
+				}
+				return 1; // continue to collect all hits
+			});
+
+			proxy.delete();
+
+			// sort results by distance from start
+			results.sort((a, b) => a.cast.distance - b.cast.distance);
 			return results;
 		}
 	};
@@ -5497,7 +5567,7 @@ async function q5playPreSetup(q) {
 		}
 
 		_draw(xA, yA, xB, yB) {
-			if (xB) $.line(xA, yA, xB, yB);
+			if (xB || yB) $.line(xA, yA, xB, yB);
 			else $.point(xA, yA);
 		}
 
@@ -6032,20 +6102,6 @@ async function q5playPreSetup(q) {
 		}
 
 		set range(val) {
-			let min, max;
-			if (typeof val == 'number') {
-				val /= 2;
-				min = -val;
-				max = val;
-			} else {
-				min = val[0];
-				max = val[1];
-			}
-			Box2D.b2PrismaticJoint_SetLimits(this.jID, min / meterSize, max / meterSize);
-			Box2D.b2PrismaticJoint_EnableLimit(this.jID, true);
-		}
-
-		set limits(val) {
 			let min, max;
 			if (typeof val == 'number') {
 				val /= 2;
