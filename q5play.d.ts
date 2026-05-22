@@ -1,4 +1,9 @@
+/** @module q5play */
+
 import 'q5';
+
+// only used to build the q5play.org/docs
+// import type { b2BodyId, b2WorldId, b2JointId } from './Box2D.deluxe.d.ts';
 
 declare global {
 	class Q5Play {
@@ -13,6 +18,7 @@ declare global {
 		sprites: {
 			[key: number]: Sprite;
 		};
+
 		/**
 		 * Contains all the groups in the sketch.
 		 *
@@ -21,14 +27,17 @@ declare global {
 		groups: {
 			[key: number]: Group;
 		};
+
 		groupsCreated: number;
 		spritesCreated: number;
 		spritesDrawn: number;
+
 		/**
 		 * The default color palette, at index 0 of this array,
 		 * has all the letters of the English alphabet mapped to colors.
 		 */
 		palettes: any[];
+
 		/**
 		 * Friendly rounding makes some Sprite getters return nice rounded numbers
 		 * if a decimal value is within linear slop range (+/-0.005) or
@@ -41,13 +50,16 @@ declare global {
 		 * @default true
 		 */
 		friendlyRounding: boolean;
+
 		/**
 		 * Information about the operating system being used.
 		 */
 		os: {};
+
 		context: string;
 		hasMouse: boolean;
 		standardizeKeyboard: boolean;
+
 		/**
 		 * Displays the version of q5play being used,
 		 * the number of sprites being drawn
@@ -70,15 +82,18 @@ declare global {
 		 * @default false
 		 */
 		renderStats: boolean;
+
 		/**
 		 * "Made with q5play" [splash screen](https://en.wikipedia.org/wiki/Splash_screen) displayed during
 		 * initial page load by default.
 		 */
 		splashScreen(): Promise<void>;
+
 		/**
 		 * Runs automatically before each draw function call.
 		 */
 		update(): void;
+
 		/**
 		 * Runs automatically after each draw function call.
 		 */
@@ -120,6 +135,10 @@ declare global {
 		friction: number;
 		bounciness: number;
 		density: number;
+		get rollingResistance(): number;
+		set rollingResistance(val: number);
+		get surfaceSpeed(): number;
+		set surfaceSpeed(val: number);
 	}
 
 	/**
@@ -136,45 +155,53 @@ declare global {
 	}
 
 	/**
-	 * Visual objects store images and animations that can be displayed
-	 * with respect to the camera.
+	 * A Visual object stores an image or animation(s)
+	 * which can be displayed with respect to the camera.
 	 */
 	class Visual {
 		/**
 		 * Horizontal position of the visual.
 		 */
 		x: number;
+
 		/**
 		 * Vertical position of the visual.
 		 */
 		y: number;
+
 		/**
 		 * Horizontal velocity of the visual.
 		 */
 		vx: number;
+
 		/**
 		 * Vertical velocity of the visual.
 		 */
 		vy: number;
+
 		/**
 		 * Draws the visual on the canvas.
 		 */
 		draw(): void;
+
 		/**
 		 * Current image or frame of animation being displayed.
 		 */
 		get img(): Q5.Image;
-		set img(image: Q5.Image);
+		set img(image: string | Q5.Image);
+
 		/**
 		 * Current animation.
 		 */
 		get ani(): Ani;
 		set ani(val: Ani);
+
 		/**
 		 * Stores animations.
 		 * Keys are the animation label, values are Ani objects
 		 */
 		get anis(): Anis;
+
 		/**
 		 * Adds an animation to the Sprite or Visual.
 		 *
@@ -183,6 +210,26 @@ declare global {
 		 * @returns A promise that fulfills when the animation is loaded
 		 */
 		addAni(spriteSheetURL: string, frameCount: number): Promise<void>;
+
+		/**
+		 * Add multiple animations to the Sprite or Visual.
+		 *
+		 * @param atlases an object with animation names as keys and
+		 * an animation or animation atlas as values
+		 * @returns A promise that fulfills when the animations are loaded
+		 */
+		addAnis(atlases: {}): Promise<void>;
+
+		/**
+		 * Add multiple animations to the Sprite or Visual.
+		 *
+		 * @param spriteSheetURL the URL of the sprite sheet image
+		 * @param atlases an object with animation names as keys and
+		 * an animation or animation atlas as values
+		 * @returns A promise that fulfills when the animations are loaded
+		 */
+		addAnis(spriteSheetURL: string, atlases: {}): Promise<void>;
+
 		/**
 		 * Add multiple animations to the Sprite or Visual.
 		 *
@@ -192,7 +239,8 @@ declare global {
 		 * an animation or animation atlas as values
 		 * @returns A promise that fulfills when the animations are loaded
 		 */
-		addAnis(spriteSheetURL?: string, frameSize?: string, atlases: {}): Promise<void>;
+		addAnis(spriteSheetURL: string, frameSize: string, atlases: {}): Promise<void>;
+
 		/**
 		 * Changes the sprite's animation. Use `addAni` to define the
 		 * animation(s) first.
@@ -200,6 +248,7 @@ declare global {
 		 * @param name the name of the animation to switch to
 		 */
 		changeAni(name: string): void;
+
 		/**
 		 * Plays an animation.
 		 *
@@ -212,6 +261,7 @@ declare global {
 		 * @returns A promise that fulfills when the animation completes
 		 */
 		playAni(name: string): Promise<void>;
+
 		/**
 		 * Plays a sequence of animations.
 		 *
@@ -237,6 +287,9 @@ declare global {
 	const KINEMATIC: 'kinematic';
 	const KIN: 'kinematic';
 
+	/**
+	 * A Sprite has a Box2D physics body with a collider (by default), which can interact with other sprites in the physics simulation.
+	 */
 	class Sprite extends Visual {
 		/**
 		 * Creates a new sprite.
@@ -252,9 +305,131 @@ declare global {
 		 * STATIC or KINEMATIC
 		 */
 		constructor(x?: number, y?: number, w?: number, h?: number, physicsType?: string);
+
+		/**
+		 * Creates a new sprite.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param w width of the collider
+		 * @param h height of the collider
+		 * @param roundedRadius corner radius for a rounded box collider
+		 * @param physicsType physics type is DYNAMIC by default, can be
+		 * STATIC or KINEMATIC
+		 */
+		constructor(x?: number, y?: number, w?: number, h?: number, roundedRadius?: number, physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a circle collider.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param d diameter of the circle collider
+		 * @param physicsType physics type is DYNAMIC by default, can be
+		 * STATIC or KINEMATIC
+		 */
+		constructor(x: number, y: number, d: number, physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a capsule collider.
+		 * @param points array of two [x, y] points defining the capsule's endpoints
+		 * @param roundedRadius the radius of the capsule's rounded ends
+		 * @param physicsType physics type is DYNAMIC by default, can be
+		 * STATIC or KINEMATIC
+		 */
+		constructor(points: [number, number][], roundedRadius: number, physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a chain or polygon collider defined by absolute vertex positions.
+		 * If the first and last vertex are the same and the shape is convex, it becomes a polygon.
+		 * @param vertices array of [x, y] vertex positions
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		constructor(vertices: [number, number][], physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a chain collider defined by relative vertex offsets from the sprite's position.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param vertices array of relative [x, y] vertex offsets
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		constructor(x: number, y: number, vertices: [number, number][], physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a chain collider defined by alternating segment lengths and angles.
+		 * Each angle is relative to the previous segment's angle.
+		 * If the last value is 5, the chain is closed into a loop.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param distAngles alternating segment lengths and relative angles; append 5 to close the chain
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		constructor(x: number, y: number, distAngles: number[], physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a rounded chain collider defined by alternating segment lengths and angles.
+		 * Each angle is relative to the previous segment's angle.
+		 * If the last value is 5, the chain is closed into a loop.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param distAngles alternating segment lengths and relative angles; append 5 to close the chain
+		 * @param roundedRadius the rounded radius of the chain's segments
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		constructor(x: number, y: number, distAngles: number[], roundedRadius: number, physicsType?: string);
+
+		/**
+		 * Creates a new sprite with a regular polygon collider.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param sideLength the length of each side of the polygon
+		 * @param polygonName 'triangle', 'square', 'pentagon', 'hexagon', 'septagon', or 'octagon'
+		 * @param roundedRadius corner radius for a rounded polygon
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		constructor(
+			x: number,
+			y: number,
+			sideLength: number,
+			polygonName: string,
+			roundedRadius?: number,
+			physicsType?: string
+		);
+
+		constructor(ani: string | Ani | Q5.Image, x?: number, y?: number, w?: number, h?: number, physicsType?: string);
+		constructor(
+			ani: string | Ani | Q5.Image,
+			x?: number,
+			y?: number,
+			w?: number,
+			h?: number,
+			roundedRadius?: number,
+			physicsType?: string
+		);
+		constructor(ani: string | Ani | Q5.Image, x: number, y: number, d: number, physicsType?: string);
+		constructor(ani: string | Ani | Q5.Image, points: [number, number][], roundedRadius: number, physicsType?: string);
+		constructor(ani: string | Ani | Q5.Image, vertices: [number, number][], physicsType?: string);
+		constructor(ani: string | Ani | Q5.Image, x: number, y: number, vertices: [number, number][], physicsType?: string);
+		constructor(ani: string | Ani | Q5.Image, x: number, y: number, distAngles: number[], physicsType?: string);
+		constructor(
+			ani: string | Ani | Q5.Image,
+			x: number,
+			y: number,
+			distAngles: number[],
+			roundedRadius: number,
+			physicsType?: string
+		);
+		constructor(
+			ani: string | Ani | Q5.Image,
+			x: number,
+			y: number,
+			sideLength: number,
+			polygonName: string,
+			roundedRadius?: number,
+			physicsType?: string
+		);
+
 		/**
 		 * Creates a new sprite with an overlap sensor instead of a collider.
-		 *
 		 * @param x horizontal position
 		 * @param y vertical position
 		 * @param w width of the sensor
@@ -263,6 +438,160 @@ declare global {
 		 * STATIC or KINEMATIC
 		 */
 		static withSensor(x?: number, y?: number, w?: number, h?: number, physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with an overlap sensor instead of a collider.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param w width of the sensor
+		 * @param h height of the sensor
+		 * @param roundedRadius corner radius for a rounded box sensor
+		 * @param physicsType physics type is DYNAMIC by default, can be
+		 * STATIC or KINEMATIC
+		 */
+		static withSensor(
+			x?: number,
+			y?: number,
+			w?: number,
+			h?: number,
+			roundedRadius?: number,
+			physicsType?: string
+		): Sprite;
+
+		/**
+		 * Creates a new sprite with a circle overlap sensor.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param d diameter of the circle sensor
+		 * @param physicsType physics type is DYNAMIC by default, can be
+		 * STATIC or KINEMATIC
+		 */
+		static withSensor(x: number, y: number, d: number, physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with a capsule overlap sensor.
+		 * @param points array of two [x, y] points defining the capsule's endpoints
+		 * @param roundedRadius the radius of the capsule's rounded ends
+		 * @param physicsType physics type is DYNAMIC by default, can be
+		 * STATIC or KINEMATIC
+		 */
+		static withSensor(points: [number, number][], roundedRadius: number, physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with a chain overlap sensor defined by absolute vertex positions.
+		 * If the first and last vertex are the same and the shape is convex, it becomes a polygon sensor.
+		 * @param vertices array of [x, y] vertex positions
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		static withSensor(vertices: [number, number][], physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with a chain overlap sensor defined by relative vertex offsets from the sprite's position.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param vertices array of relative [x, y] vertex offsets
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		static withSensor(x: number, y: number, vertices: [number, number][], physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with a chain overlap sensor defined by alternating segment lengths and angles.
+		 * Each angle is relative to the previous segment's angle.
+		 * If the last value is 5, the chain is closed into a loop.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param distAngles alternating segment lengths and relative angles; append 5 to close the chain
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		static withSensor(x: number, y: number, distAngles: number[], physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with a rounded chain overlap sensor defined by alternating segment lengths and angles.
+		 * Each angle is relative to the previous segment's angle.
+		 * If the last value is 5, the chain is closed into a loop.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param distAngles alternating segment lengths and relative angles; append 5 to close the chain
+		 * @param roundedRadius the rounded radius of the chain's segments
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		static withSensor(x: number, y: number, distAngles: number[], roundedRadius: number, physicsType?: string): Sprite;
+
+		/**
+		 * Creates a new sprite with a regular polygon overlap sensor.
+		 * @param x horizontal position
+		 * @param y vertical position
+		 * @param sideLength the length of each side of the polygon
+		 * @param polygonName 'triangle', 'square', 'pentagon', 'hexagon', 'septagon', or 'octagon'
+		 * @param roundedRadius corner radius for a rounded polygon
+		 * @param physicsType physics type is DYNAMIC by default, can be STATIC or KINEMATIC
+		 */
+		static withSensor(
+			x: number,
+			y: number,
+			sideLength: number,
+			polygonName: string,
+			roundedRadius?: number,
+			physicsType?: string
+		): Sprite;
+
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			x?: number,
+			y?: number,
+			w?: number,
+			h?: number,
+			physicsType?: string
+		): Sprite;
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			x?: number,
+			y?: number,
+			w?: number,
+			h?: number,
+			roundedRadius?: number,
+			physicsType?: string
+		): Sprite;
+		static withSensor(ani: string | Ani | Q5.Image, x: number, y: number, d: number, physicsType?: string): Sprite;
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			points: [number, number][],
+			roundedRadius: number,
+			physicsType?: string
+		): Sprite;
+		static withSensor(ani: string | Ani | Q5.Image, vertices: [number, number][], physicsType?: string): Sprite;
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			x: number,
+			y: number,
+			vertices: [number, number][],
+			physicsType?: string
+		): Sprite;
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			x: number,
+			y: number,
+			distAngles: number[],
+			physicsType?: string
+		): Sprite;
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			x: number,
+			y: number,
+			distAngles: number[],
+			roundedRadius: number,
+			physicsType?: string
+		): Sprite;
+		static withSensor(
+			ani: string | Ani | Q5.Image,
+			x: number,
+			y: number,
+			sideLength: number,
+			polygonName: string,
+			roundedRadius?: number,
+			physicsType?: string
+		): Sprite;
+
 		/**
 		 * The physics type of the sprite, which determines how it interacts with
 		 * other sprites in the physics simulation.
@@ -272,6 +601,7 @@ declare global {
 		 */
 		get physics(): string;
 		set physics(val: string);
+
 		/**
 		 * The physics type of the sprite, which determines how it interacts with
 		 * other sprites in the physics simulation.
@@ -281,40 +611,53 @@ declare global {
 		 */
 		get physicsType(): string;
 		set physicsType(val: string);
+
 		/**
 		 * If true, the sprite's physics body is included in the physics simulation.
 		 * @default true
 		 */
 		get physicsEnabled(): boolean;
 		set physicsEnabled(val: boolean);
+
 		/**
 		 * Each sprite has a unique id number. Don't change it!
 		 * They are useful for debugging.
 		 */
 		idNum: number;
+
+		/**
+		 * The Box2D body id for the sprite's physics body. Don't change it!
+		 */
+		bdID: b2BodyId;
+
 		/**
 		 * Groups the sprite belongs to.
 		 * @default [allSprites]
 		 */
 		groups: Group[];
+
 		/**
 		 * Keys are the animation label, values are Ani objects.
 		 */
 		animations: Anis;
+
 		/**
 		 * Array of colliders that are part of the sprite's physics body.
 		 */
 		colliders: Collider[];
+
 		/**
 		 * Array of sensors that are part of the sprite's physics body.
 		 * Sensors are used to detect overlaps without causing physical collisions.
 		 */
 		sensors: Sensor[];
+
 		/**
 		 * Joints that the sprite is attached to.
 		 * @default []
 		 */
 		joints: Joint[];
+
 		/**
 		 * If set to true, q5play will record all changes to the sprite's
 		 * properties in its `mod` array. Intended to be used to enable
@@ -322,6 +665,7 @@ declare global {
 		 * @default undefined
 		 */
 		watch: boolean;
+
 		/**
 		 * Modification tracking object.
 		 *
@@ -334,39 +678,52 @@ declare global {
 		 * to only the sprite properties that have been modified.
 		 */
 		mod: {};
+
 		/**
 		 * The horizontal position of the sprite.
 		 */
 		get x(): number;
 		set x(val: number);
+
 		/**
 		 * The vertical position of the sprite.
 		 */
 		get y(): number;
 		set y(val: number);
+
 		/**
 		 * The width of the sprite.
 		 */
 		get w(): number;
 		set w(val: number);
+
 		/**
 		 * The height of the sprite.
 		 */
 		get h(): number;
 		set h(val: number);
+
 		/**
-		 * The sprite's position on the previous frame.
+		 * The sprite's x position on the previous frame.
 		 */
-		prevPos: {};
+		prevX: number;
+
+		/**
+		 * The sprite's y position on the previous frame.
+		 */
+		prevY: number;
+
 		/**
 		 * The sprite's rotation on the previous frame.
 		 */
 		prevRotation: number;
+
 		/**
 		 * Text displayed at the center of the sprite.
 		 * @default undefined
 		 */
 		text: string;
+
 		/**
 		 * Adds a collider to the sprite's physics body.
 		 *
@@ -383,8 +740,10 @@ declare global {
 		 * @param offsetY distance from the center of the sprite
 		 * @param w width of the collider
 		 * @param h height of the collider
+		 * @param roundedRadius corner radius for a rounded box collider
 		 */
-		addCollider(offsetX: number, offsetY: number, w?: number, h?: number): void;
+		addCollider(offsetX: number, offsetY: number, w?: number, h?: number, roundedRadius?: number): void;
+
 		/**
 		 * Adds an overlap sensor to the sprite's physics body.
 		 *
@@ -401,13 +760,16 @@ declare global {
 		 * @param offsetY distance from the center of the sprite
 		 * @param w width of the collider
 		 * @param h height of the collider
+		 * @param roundedRadius corner radius for a rounded box sensor
 		 */
-		addSensor(offsetX: number, offsetY: number, w?: number, h?: number): void;
+		addSensor(offsetX: number, offsetY: number, w?: number, h?: number, roundedRadius?: number): void;
+
 		/**
 		 * The mass of the sprite's physics body.
 		 */
 		get mass(): number;
 		set mass(val: number);
+
 		/**
 		 * The center of mass of the sprite's physics body, the point at which
 		 * the physics body is balanced and rotates around. By default it's the
@@ -415,6 +777,7 @@ declare global {
 		 */
 		get centerOfMass(): { x: number; y: number };
 		set centerOfMass(val: { x: number; y: number });
+
 		/**
 		 * If true, the center of mass of the sprite's physics body is fixed to
 		 * the sprite's [x, y] position.
@@ -426,11 +789,13 @@ declare global {
 		 */
 		get fixedCenterOfMass(): boolean;
 		set fixedCenterOfMass(val: boolean);
+
 		/**
 		 * Recalculates the sprite's mass based on its current
 		 * density and size.
 		 */
 		resetMass(): void;
+
 		/**
 		 * The angle of the sprite's rotation, not the direction it's moving.
 		 *
@@ -440,26 +805,31 @@ declare global {
 		 */
 		get rotation(): number;
 		set rotation(val: number);
+
 		/**
 		 * Removes colliders from the sprite's physics body.
 		 */
-		removeColliders(): void;
+		deleteColliders(): void;
+
 		/**
 		 * Removes overlap sensors from the sprite's physics body.
 		 */
-		removeSensors(): void;
+		deleteSensors(): void;
+
 		/**
 		 * If true, a sprite is updated by q5play before each physics update.
 		 * @default true
 		 */
 		get autoUpdate(): boolean;
 		set autoUpdate(val: boolean);
+
 		/**
 		 * If true, a sprite is drawn by q5play after each physics update.
 		 * @default true
 		 */
 		get autoDraw(): boolean;
 		set autoDraw(val: boolean);
+
 		/**
 		 * Controls the ability for a sprite to "sleep".
 		 *
@@ -470,18 +840,21 @@ declare global {
 		 */
 		get allowSleeping(): boolean;
 		set allowSleeping(val: boolean);
+
 		/**
 		 * The bounciness of the sprite's physics body.
 		 * @default 0.2
 		 */
 		get bounciness(): number;
 		set bounciness(val: number);
+
 		/**
 		 * The speed of the sprite's rotation in angles per frame.
 		 * @default 0
 		 */
 		get rotationSpeed(): number;
 		set rotationSpeed(val: number);
+
 		/**
 		 * The sprite's current fill color.
 		 *
@@ -489,6 +862,7 @@ declare global {
 		 */
 		get color(): Q5.Color;
 		set color(val: Q5.Color);
+
 		/**
 		 * The sprite's current fill colour.
 		 *
@@ -496,6 +870,7 @@ declare global {
 		 */
 		get colour(): Q5.Color;
 		set colour(val: Q5.Color);
+
 		/**
 		 * The sprite's current fill color.
 		 *
@@ -503,27 +878,32 @@ declare global {
 		 */
 		get fill(): Q5.Color;
 		set fill(val: Q5.Color);
+
 		/**
 		 * The sprite's stroke color.
 		 */
 		get stroke(): Q5.Color;
 		set stroke(val: Q5.Color);
+
 		/**
 		 * The sprite's stroke weight, the thickness of its outline.
 		 */
 		get strokeWeight(): number;
 		set strokeWeight(val: number);
+
 		/**
 		 * The sprite's text fill color. Black by default.
 		 * @default black (#000000)
 		 */
 		get textFill(): Q5.Color;
 		set textFill(val: Q5.Color);
+
 		/**
 		 * The sprite's text size, the sketch's current textSize by default.
 		 */
 		get textSize(): number;
 		set textSize(val: number);
+
 		/**
 		 * The sprite's text stroke color.
 		 * No stroke by default, does not inherit from the sketch's stroke color.
@@ -531,6 +911,7 @@ declare global {
 		 */
 		get textStroke(): Q5.Color;
 		set textStroke(val: Q5.Color);
+
 		/**
 		 * The sprite's text stroke weight, the thickness of its outline.
 		 * No stroke by default, does not inherit from the sketch's stroke weight.
@@ -538,11 +919,13 @@ declare global {
 		 */
 		get textStrokeWeight(): number;
 		set textStrokeWeight(val: number);
+
 		/**
 		 * The tile character that represents the sprite in a tile map.
 		 */
 		get tile(): string;
 		set tile(val: string);
+
 		/**
 		 * A bearing indicates the direction that needs to be followed to
 		 * reach a destination.
@@ -553,30 +936,39 @@ declare global {
 		 */
 		get bearing(): number;
 		set bearing(val: number);
+
 		/**
 		 * If true, outlines of the sprite's colliders and sensors will be drawn.
 		 * @default false
 		 */
 		get debug(): boolean;
 		set debug(val: boolean);
+
 		/**
 		 * The density of the sprite's physics body.
 		 * @default 1
 		 */
 		get density(): number;
 		set density(val: number);
+
 		/**
 		 * The angle of the sprite's movement.
+		 *
+		 * Can be set with directional strings like "up", "down", "left", "right",
+		 * "upRight", "upLeft", "downRight", and "downLeft". The setter's input parser ignores
+		 * capitalization, spaces, underscores, dashes, and cardinal direction word order.
 		 * @default 0 ("right")
 		 */
 		get direction(): number;
-		set direction(val: number);
+		set direction(val: number | string);
+
 		/**
 		 * The amount of resistance a sprite has to being moved.
 		 * @default 0
 		 */
 		get drag(): number;
 		set drag(val: number);
+
 		/**
 		 * Displays the sprite.
 		 *
@@ -592,6 +984,7 @@ declare global {
 		 */
 		get draw(): Function;
 		set draw(val: Function);
+
 		/**
 		 * The amount the sprite's colliders resist moving
 		 * when rubbing against other colliders.
@@ -599,6 +992,7 @@ declare global {
 		 */
 		get friction(): number;
 		set friction(val: number);
+
 		/**
 		 * The sprite's heading. This is a string that can be set to
 		 * "up", "down", "left", "right", "upRight", "upLeft", "downRight"
@@ -609,6 +1003,7 @@ declare global {
 		 */
 		get heading(): string;
 		set heading(val: string);
+
 		/**
 		 * Set this to true if the sprite goes really fast to prevent
 		 * inaccurate physics simulation.
@@ -616,6 +1011,7 @@ declare global {
 		 */
 		get isSuperFast(): boolean;
 		set isSuperFast(val: boolean);
+
 		/**
 		 * Sprites with the highest layer value get drawn first.
 		 *
@@ -623,6 +1019,7 @@ declare global {
 		 */
 		get layer(): number;
 		set layer(val: number);
+
 		/**
 		 * When the physics simulation is progressed in `world.physicsUpdate`,
 		 * each sprite's life is decreased by `world.timeScale`.
@@ -633,22 +1030,32 @@ declare global {
 		 */
 		get life(): number;
 		set life(val: number);
+
 		/**
 		 * The sprite's opacity. 0 is transparent, 1 is opaque.
 		 * @default 1
 		 */
 		get opacity(): number;
 		set opacity(val: number);
+
 		/**
-		 * Alias for sprite.prevPos
+		 * The sprite's x position on the previous frame.
+		 * Alias for sprite.prevX.
 		 */
-		get previousPosition(): any;
-		set previousPosition(val: any);
+		get previousX(): number;
+
 		/**
-		 * Alias for sprite.prevRotation
+		 * The sprite's y position on the previous frame.
+		 * Alias for sprite.prevY.
+		 */
+		get previousY(): number;
+
+		/**
+		 * The sprite's rotation on the previous frame.
+		 * Alias for sprite.prevRotation.
 		 */
 		get previousRotation(): number;
-		set previousRotation(val: number);
+
 		/**
 		 * If true, q5play will draw sprites at integer pixel precision.
 		 *
@@ -659,12 +1066,14 @@ declare global {
 		 */
 		get pixelPerfect(): boolean;
 		set pixelPerfect(val: boolean);
+
 		/**
-		 * If the sprite has been removed from the world.
+		 * If the sprite has been deleted from the world.
 		 * @default false
 		 */
-		get removed(): boolean;
-		set removed(val: boolean);
+		get deleted(): boolean;
+		set deleted(val: boolean);
+
 		/**
 		 * Simulates friction that slows down a sprite rolling on another sprite,
 		 * like a soccer ball rolling to a stop on high grass.
@@ -672,18 +1081,21 @@ declare global {
 		 */
 		get rollingResistance(): number;
 		set rollingResistance(val: number);
+
 		/**
 		 * The amount the sprite resists rotating.
 		 * @default 0
 		 */
 		get rotationDrag(): number;
 		set rotationDrag(val: number);
+
 		/**
 		 * If true, the sprite can not rotate.
 		 * @default false
 		 */
 		get rotationLock(): boolean;
 		set rotationLock(val: boolean);
+
 		/**
 		 * Horizontal and vertical scale of the sprite.
 		 *
@@ -696,12 +1108,14 @@ declare global {
 		 */
 		get scale(): number | { x: number; y: number };
 		set scale(val: number | [] | { x: number; y: number });
+
 		/**
 		 * Scales the the sprite.
 		 * @param x scaleX or uniform scale factor
 		 * @param y scaleY
 		 */
 		scaleBy(x: number, y?: number): void;
+
 		/**
 		 * Wake a sprite up or put it to sleep.
 		 *
@@ -712,6 +1126,14 @@ declare global {
 		 */
 		get sleeping(): boolean;
 		set sleeping(val: boolean);
+
+		/**
+		 * The minimum speed (in m/s) at which the sprite must be moving
+		 * before it is considered awake.
+		 */
+		get sleepThreshold(): number;
+		set sleepThreshold(val: number);
+
 		/**
 		 * The sprite's speed.
 		 *
@@ -721,12 +1143,14 @@ declare global {
 		 */
 		get speed(): number;
 		set speed(val: number);
+
 		/**
 		 * Efficiently sets the sprite's speed and direction at the same time.
 		 * @param speed
 		 * @param direction
 		 */
 		setSpeedAndDirection(speed: number, direction: number): void;
+
 		/**
 		 * The sprite's speed along the surface of its collider(s),
 		 * like a conveyor belt.
@@ -734,6 +1158,7 @@ declare global {
 		 */
 		get surfaceSpeed(): number;
 		set surfaceSpeed(val: number);
+
 		/**
 		 * Tint color applied to the sprite when drawn.
 		 *
@@ -743,6 +1168,7 @@ declare global {
 		 */
 		get tint(): Q5.Color;
 		set tint(val: Q5.Color);
+
 		/**
 		 * If true the sprite is shown, if set to false the sprite is hidden.
 		 *
@@ -752,71 +1178,91 @@ declare global {
 		 */
 		get visible(): boolean;
 		set visible(val: boolean);
+
 		/**
-		 * The position vector {x, y}
+		 * Gets the sprite's position as a readonly object {x, y} which
+		 * won't be updated if the sprite moves. Useful for saving
+		 * the sprite's position at a specific moment in time.
 		 */
-		get pos(): Q5.Vector;
-		set pos(val: [] | { x: number; y: number } | Q5.Vector);
+		get pos(): { x: number; y: number };
+
 		/**
-		 * The position vector {x, y}
+		 * The sprite's position vector.
+		 */
+		set pos(val: number[] | { x: number; y: number });
+
+		/**
+		 * The sprite's position vector.
 		 */
 		get position(): Q5.Vector;
-		set position(val: [] | { x: number; y: number } | Q5.Vector);
+		set position(val: number[] | { x: number; y: number });
+
 		/**
 		 * The sprite's absolute position on the canvas.
 		 * @readonly
 		 */
 		get canvasPos(): any;
+
 		/**
 		 * Half the width of the sprite.
 		 */
 		get hw(): number;
 		set hw(val: number);
+
 		/**
 		 * The width of the sprite.
 		 */
 		get width(): number;
 		set width(val: number);
+
 		/**
 		 * Half the width of the sprite.
 		 */
 		get halfWidth(): number;
 		set halfWidth(val: number);
+
 		/**
 		 * Half the height of the sprite.
 		 */
 		get hh(): number;
 		set hh(val: number);
+
 		/**
 		 * The height of the sprite.
 		 */
 		get height(): number;
 		set height(val: number);
+
 		/**
 		 * Half the height of the sprite.
 		 */
 		get halfHeight(): number;
 		set halfHeight(val: number);
+
 		/**
 		 * The diameter of a circular sprite.
 		 */
 		get d(): number;
 		set d(val: number);
+
 		/**
 		 * The diameter of a circular sprite.
 		 */
 		get diameter(): number;
 		set diameter(val: number);
+
 		/**
 		 * The radius of a circular sprite.
 		 */
 		get r(): number;
 		set r(val: number);
+
 		/**
 		 * The radius of a circular sprite.
 		 */
 		get radius(): number;
 		set radius(val: number);
+
 		/**
 		 * Runs before each physics update by default.
 		 *
@@ -828,45 +1274,93 @@ declare global {
 		 */
 		get update(): Function;
 		set update(val: Function);
+
 		/**
 		 * The sprite's velocity vector {x, y}
 		 * @default {x: 0, y: 0}
 		 */
 		get vel(): Q5.Vector;
 		set vel(val: [] | { x: number; y: number } | Q5.Vector);
+
 		/**
 		 * The sprite's velocity vector {x, y}
 		 * @default {x: 0, y: 0}
 		 */
 		get velocity(): Q5.Vector;
 		set velocity(val: [] | { x: number; y: number } | Q5.Vector);
+
 		/**
 		 * Whether the sprite can be grabbed by a pointer.
 		 */
 		get grabbable(): boolean;
 		set grabbable(val: boolean);
+
 		/**
 		 * A ratio that defines how much the sprite is affected by gravity.
 		 * @default 1
 		 */
 		get gravityScale(): number;
 		set gravityScale(val: number);
+
 		/**
 		 * If this function is given a force amount, the force is applied
 		 * at the angle of the sprite's current bearing. Force can
 		 * also be given as a vector.
 		 *
 		 * @param amount
-		 * @param origin The point the force is applied from, relative to the sprite's center of mass. Accepts a coordinate array or object with x and y properties. If not given, the force is applied at the center of mass.
+		 * @param origin The point the force is applied from, relative to the sprite's center of mass. Accepts an object with `x` and `y` properties. If not given, the force is applied at the center of mass.
 		 */
-		applyForce(amount: number, origin?: any): void;
+		/**
+		 * Applies a force to the sprite.
+		 *
+		 * - If the first argument is a number, it is treated as a force magnitude
+		 *   applied at the sprite's current bearing.
+		 * - If the first argument is an object, it is treated
+		 *   as a force vector `{x, y}`.
+		 *
+		 * The optional `origin` is the point (relative to the sprite's center)
+		 * where the force is applied. `origin` accepts an object with `x` and
+		 * `y` properties. Arrays are not accepted for input args.
+		 */
+		/**
+		 * Applies a force magnitude at the sprite's current bearing.
+		 * @param amount force magnitude
+		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
+		 */
+		applyForce(amount: number, origin?: { x: number; y: number }): void;
+
+		/**
+		 * Applies a force vector to the sprite.
+		 * @param force force vector as an object with `x` and `y` properties or array of [x, y]
+		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
+		 */
+		applyForce(force: { x: number; y: number } | number[], origin?: { x: number; y: number }): void;
+
 		/**
 		 * Applies a force that's scaled to the sprite's mass.
 		 *
 		 * @param amount
-		 * @param n The point the force is applied from, relative to the sprite's center of mass. Accepts a coordinate array or object with x and y properties. If not given, the force is applied at the center of mass.
+		 * @param n The point the force is applied from, relative to the sprite's center of mass. Accepts an object with `x` and `y` properties. If not given, the force is applied at the center of mass.
 		 */
-		applyForceScaled(amount: number, origin?: any): void;
+		/**
+		 * Applies a force scaled to the sprite's mass.
+		 *
+		 * See `applyForce` for argument forms. Arrays are not accepted for input args.
+		 */
+		/**
+		 * Applies a force scaled to the sprite's mass using a magnitude.
+		 * @param amount force magnitude
+		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
+		 */
+		applyForceScaled(amount: number, origin?: { x: number; y: number }): void;
+
+		/**
+		 * Applies a force scaled to the sprite's mass using a vector.
+		 * @param force force vector as an object with `x` and `y` properties
+		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
+		 */
+		applyForceScaled(force: { x: number; y: number }, origin?: { x: number; y: number }): void;
+
 		/**
 		 * Applies wind force to the sprite.
 		 * @param strength the strength of the wind
@@ -875,22 +1369,41 @@ declare global {
 		 * @param lift the force that is perpendicular to the relative velocity
 		 */
 		applyWind(strength: number, angle: number, drag?: number, lift?: number): void;
+
 		/**
 		 * Applies a force to the sprite's center of mass attracting it to
 		 * the given position.
-		 * @param x x coordinate or coordinate array or object with x and y properties
-		 * @param y
+		 * @param x x coordinate
+		 * @param y y coordinate
 		 * @param force
 		 */
-		attractTo(x: number | any, y?: number, force?: number): void;
+		attractTo(x: number, y: number, force?: number): void;
+
 		/**
-		 * Applies a force to the sprite's center of mass repelling it to
+		 * Applies a force to the sprite's center of mass attracting it to
 		 * the given position.
-		 * @param x x coordinate or coordinate array or object with x and y properties
-		 * @param y
+		 * @param pos object with x and y properties
 		 * @param force
 		 */
-		repelFrom(x: number | any, y?: number, force?: number): void;
+		attractTo(pos: { x: number; y: number }, force?: number): void;
+
+		/**
+		 * Applies a force to the sprite's center of mass repelling it from
+		 * the given position.
+		 * @param x x coordinate
+		 * @param y y coordinate
+		 * @param force
+		 */
+		repelFrom(x: number, y: number, force?: number): void;
+
+		/**
+		 * Applies a force to the sprite's center of mass repelling it from
+		 * the given position.
+		 * @param pos object with x and y properties
+		 * @param force
+		 */
+		repelFrom(pos: { x: number; y: number }, force?: number): void;
+
 		/**
 		 * Apply a torque on the sprite's physics body.
 		 * Torque is the force that causes rotation.
@@ -903,68 +1416,189 @@ declare global {
 		 * @param torque
 		 */
 		applyTorque(torque: any): void;
+
 		/**
-		 * Moves a sprite towards a position at a percentage of the distance
+		 * Attempts to move the sprite to a destination at a constant speed
+		 * and stops the sprite if it reaches the destination.
+		 *
+		 * The destination check is deferred until the sprite is estimated to be
+		 * at the target position, based on `world.physicsTime`.
+		 *
+		 * @param x destination x, or `null` to only move on the y-axis
+		 * @param y destination y, or `null` to only move on the x-axis
+		 * @param speed movement speed in pixels per frame, defaults to the sprite's current speed or 1
+		 * @returns a lazy thenable that resolves `true` if the sprite reached the
+		 * destination, or `false` if it didn't.
+		 */
+		moveTo(x: number | null, y: number | null, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Attempts to move the sprite to a destination at a constant speed
+		 * and stops the sprite if it reaches the destination.
+		 *
+		 * @param pos destination object with x and y properties
+		 * @param speed movement speed in pixels per frame, defaults to the sprite's current speed or 1
+		 * @returns a lazy thenable that resolves `true` if the sprite reached the
+		 * destination, or `false` if it didn't.
+		 */
+		moveTo(pos: { x: number | null; y: number | null }, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Moves the sprite towards a position at a percentage of the distance
 		 * between itself and the destination.
 		 *
-		 * @param x destination x or coordinate array or an object with x and y properties
-		 * @param y destination y
+		 * @param x destination x, or `null` to only move on the y-axis
+		 * @param y destination y, or `null` to only move on the x-axis
 		 * @param tracking percent of the distance to move towards the destination as a 0-1 value, default is 0.1 (10% tracking)
 		 */
-		moveTowards(x: number | any, y?: number, tracking?: number): void;
+		moveTowards(x: number | null, y: number | null, tracking?: number): void;
+
 		/**
-		 * Moves the sprite away from a position, the opposite of moveTowards,
-		 * at a percentage of the distance between itself and the position.
-		 * @param x destination x or coordinate array or an object with x and y properties
-		 * @param y destination y
-		 * @param repel percent of the distance to the repel position as a 0-1 value, default is 0.1 (10% repel)
-		 */
-		moveAway(x: number | any, y?: number, repel?: number): void;
-		/**
-		 * Rotates the sprite towards an angle or position
-		 * with x and y properties.
+		 * Moves the sprite towards a position at a percentage of the distance
+		 * between itself and the destination.
 		 *
-		 * @param angle angle in degrees or coordinate array or an object with x and y properties
-		 * @param tracking percent of the distance to rotate on each frame towards the target angle, default is 0.1 (10%)
-		 * @param facing (only specify if position is given) rotation angle the sprite should be at when "facing" the position, default is 0
+		 * @param pos destination object with x and y properties
+		 * @param tracking percent of the distance to move towards the destination as a 0-1 value, default is 0.1 (10% tracking)
 		 */
-		rotateTowards(angle: number | any, tracking?: number): void;
+		moveTowards(pos: { x: number | null; y: number | null }, tracking?: number): void;
+
+		/**
+		 * Rotates the sprite to a target angle at a constant speed,
+		 * stopping if it arrives.
+		 *
+		 * The destination check is deferred until the sprite is estimated to be
+		 * at the target angle, based on `world.physicsTime`.
+		 *
+		 * @param angle target rotation angle
+		 * @param speed rotation speed in degrees (or radians) per frame, defaults to the sprite's current rotationSpeed or 1
+		 * @returns a lazy thenable that resolves `true` if the sprite reached the
+		 * target angle, or `false` if it didn't.
+		 */
+		rotateTo(angle: number, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates the sprite to face a position at a constant speed,
+		 * stopping if it arrives.
+		 *
+		 * @param pos object with x and y properties
+		 * @param speed rotation speed in degrees (or radians) per frame, defaults to the sprite's current rotationSpeed or 1
+		 * @param facing rotation angle the sprite should be at when "facing" the position, default is 0
+		 * @returns a lazy thenable that resolves `true` if the sprite reached the
+		 * target angle, or `false` if it didn't.
+		 */
+		rotateTo(pos: { x: number; y: number }, speed?: number, facing?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates the sprite by the smallest angular distance to a target angle
+		 * at a constant speed, stopping when it arrives.
+		 *
+		 * @param angle target rotation angle
+		 * @param speed absolute rotation per frame, defaults to the sprite's current rotationSpeed or 1
+		 * @returns a lazy thenable that resolves `true` if the sprite reached the
+		 * target angle, or `false` if it didn't.
+		 */
+		rotateMinTo(angle: number, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates the sprite by the smallest angular distance to face a position
+		 * at a constant speed, stopping when it arrives.
+		 *
+		 * @param pos object with x and y properties
+		 * @param speed absolute rotation per frame, defaults to the sprite's current rotationSpeed or 1
+		 * @param facing rotation angle the sprite should be at when "facing" the position, default is 0
+		 * @returns a lazy thenable that resolves `true` if the sprite reached the
+		 * target angle, or `false` if it didn't.
+		 */
+		rotateMinTo(pos: { x: number; y: number }, speed?: number, facing?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates the sprite towards an angle.
+		 *
+		 * @param angle angle in degrees
+		 * @param tracking percent of the distance to rotate on each frame towards the target angle, default is 0.1 (10%)
+		 */
+		rotateTowards(angle: number, tracking?: number): void;
+
+		/**
+		 * Rotates the sprite towards a position.
+		 *
+		 * @param pos object with x and y properties
+		 * @param tracking percent of the distance to rotate on each frame towards the target position, default is 0.1 (10%)
+		 * @param facing rotation angle the sprite should be at when "facing" the position, default is 0
+		 */
+		rotateTowards(pos: { x: number; y: number }, tracking?: number, facing?: number): void;
+
 		/**
 		 * Finds the angle from this sprite to the given position.
 		 *
-		 * Can be used to change the direction of a sprite so it moves
-		 * to a position or object, as shown in the example.
+		 * Equivalent to `atan2(y - sprite.y, x - sprite.x) + facing`.
+		 * Returns the sprite's current rotation if the position is within 0.01 pixels.
 		 *
-		 * Used internally by `moveTo` and `moveTowards`.
+		 * Can be used to set the direction of a sprite so it moves toward a position.
 		 *
-		 * @param x x coordinate or coordinate array or object with x and y properties
-		 * @param y
-		 * @returns angle
+		 * @param x x coordinate
+		 * @param y y coordinate
+		 * @param facing offset angle added to the result, default is 0
+		 * @returns angle to the position
 		 */
-		angleTo(x: number | any, y?: number): number;
+		angleTo(x: number, y: number, facing?: number): number;
 		/**
-		 * Finds the rotation angle the sprite should be at when "facing"
-		 * a position.
+		 * Finds the angle from this sprite to the given position.
 		 *
-		 * @param x x coordinate or coordinate array or object with x and y properties
-		 * @param y
-		 * @param facing relative angle the sprite should be at when "facing" the position, default is 0
-		 * @returns the rotation angle the sprite should be at when "facing" the position
+		 * @param pos object with x and y properties
+		 * @param facing offset angle added to the result, default is 0
+		 * @returns angle to the position
 		 */
-		rotationToFace(x: number | any, y?: number, facing?: number): number;
+		angleTo(pos: { x: number; y: number }, facing?: number): number;
+
 		/**
-		 * Finds the minimum angle distance that the sprite would have
-		 * to rotate to "face" a position at a specified facing rotation,
-		 * taking into account the current rotation of the sprite.
+		 * Finds the minimum angular distance the sprite would need to rotate
+		 * to face a position, taking into account the sprite's current rotation.
 		 *
-		 * Used internally by `rotateTowards`.
+		 * Useful for `rotateTowards`-style logic where you need the signed delta
+		 * rather than an absolute target angle.
 		 *
-		 * @param x x coordinate or coordinate array or object with x and y properties
-		 * @param y
-		 * @param facing relative angle the sprite should be at when "facing" the position, default is 0
-		 * @returns the minimum angle distance to face the position
+		 * @param x x coordinate
+		 * @param y y coordinate
+		 * @param facing offset angle, default is 0
+		 * @returns the minimum angular distance to face the position
 		 */
-		angleToFace(x: number | any, y?: number, facing?: number): number;
+		angleDistTo(x: number, y: number, facing?: number): number;
+
+		/**
+		 * Finds the minimum angular distance the sprite would need to rotate
+		 * to face a position, taking into account the sprite's current rotation.
+		 *
+		 * @param pos object with x and y properties
+		 * @param facing offset angle, default is 0
+		 * @returns the minimum angular distance to face the position
+		 */
+		angleDistTo(pos: { x: number; y: number }, facing?: number): number;
+
+		/**
+		 * Moves and rotates a sprite's physics body towards a target transform
+		 * at a percentage of the distance on each frame.
+		 *
+		 * Uses Box2D's `b2Body_SetTargetTransform` for maximum efficiency
+		 * compared to using `moveTowards` and `rotateTowards` separately.
+		 *
+		 * @param x destination x
+		 * @param y destination y
+		 * @param rotation target rotation angle
+		 * @param tracking percent of the distance to move towards the target as a 0-1 value, default is 0.1 (10% tracking)
+		 */
+		transformTowards(x: number, y: number, rotation?: number, tracking?: number): void;
+
+		/**
+		 * Moves and rotates a sprite's physics body towards a target transform
+		 * at a percentage of the distance on each frame.
+		 *
+		 * @param pos destination object with x and y properties
+		 * @param rotation target rotation angle
+		 * @param tracking percent of the distance to move towards the target as a 0-1 value, default is 0.1 (10% tracking)
+		 */
+		transformTowards(pos: { x: number; y: number }, rotation?: number, tracking?: number): void;
+
 		/**
 		 * Deletes the Sprite from the sketch and all the groups it
 		 * belongs to.
@@ -976,11 +1610,13 @@ declare global {
 		 * sprite use `sprite.visible = false` instead.
 		 */
 		delete(): void;
+
 		/**
 		 * Returns the sprite's unique identifier `sprite.idNum`.
 		 * @returns the sprite's id
 		 */
 		toString(): string;
+
 		/**
 		 * Returns true on the first frame that the sprite collides with the
 		 * target sprite or group.
@@ -992,6 +1628,7 @@ declare global {
 		 * @param callback
 		 */
 		collides(target: Sprite | Group, callback?: Function): boolean;
+
 		/**
 		 * Returns a truthy value while the sprite is colliding with the
 		 * target sprite or group. The value is the number of frames that
@@ -1002,6 +1639,7 @@ declare global {
 		 * @return {Number} frames
 		 */
 		colliding(target: Sprite | Group, callback?: Function): number;
+
 		/**
 		 * Returns true on the first frame that the sprite no longer overlaps
 		 * with the target sprite or group.
@@ -1011,6 +1649,7 @@ declare global {
 		 * @return {Boolean}
 		 */
 		collided(target: Sprite | Group, callback?: Function): boolean;
+
 		/**
 		 * Returns true on the first frame that the sprite overlaps with the
 		 * target sprite or group.
@@ -1022,6 +1661,7 @@ declare global {
 		 * @param callback
 		 */
 		overlaps(target: Sprite | Group, callback?: Function): boolean;
+
 		/**
 		 * Returns a truthy value while the sprite is overlapping with the
 		 * target sprite or group. The value returned is the number of
@@ -1032,6 +1672,7 @@ declare global {
 		 * @return {Number} frames
 		 */
 		overlapping(target: Sprite | Group, callback?: Function): number;
+
 		/**
 		 * Returns true on the first frame that the sprite no longer overlaps
 		 * with the target sprite or group.
@@ -1041,18 +1682,21 @@ declare global {
 		 * @return {Boolean}
 		 */
 		overlapped(target: Sprite | Group, callback?: Function): boolean;
+
 		/**
 		 * Sets a pass through contact relationship between the sprite
 		 * and a target sprite or group.
 		 * @param target
 		 */
 		pass(target: Sprite | Group): void;
+
 		/**
 		 * Sets a pass through contact relationship between the sprite
 		 * and a target sprite or group.
 		 * @param target
 		 */
 		passes(target: Sprite | Group): void;
+
 		/**
 		 * Creates overlap sensors that are the same size as the sprite's
 		 * colliders. If you'd like to add more sensors to a sprite, use the
@@ -1062,14 +1706,23 @@ declare global {
 		 * function is called but the sprite has no overlap sensors.
 		 */
 		addDefaultSensors(): void;
+
 		/**
-		 * Returns the distance to another sprite, the mouse, a touch,
-		 * or any other object with x and y properties. Uses p5's `dist`
-		 * function.
-		 * @param o coordinate array or object with x and y properties
+		 * Returns the distance to another sprite, the mouse, a touch pointer,
+		 * or any other object with x and y properties. Uses q5's `dist` function.
+		 * @param x
+		 * @param y
 		 * @returns distance
 		 */
-		distanceTo(o: any): number;
+		distanceTo(x: number, y: number): number;
+
+		/**
+		 * Returns the distance to another sprite, the mouse, a touch pointer,
+		 * or any other object with x and y properties. Uses q5's `dist` function.
+		 * @param pos object with x and y properties
+		 * @returns distance
+		 */
+		distanceTo(pos: { x: number; y: number }): number;
 	}
 
 	class Ani extends Array<Q5.Image> {
@@ -1080,11 +1733,13 @@ declare global {
 		 * @param args the frames of the animation
 		 */
 		constructor(...args: Q5.Image[]);
+
 		/**
 		 * The name of the animation
 		 */
 		name: string;
 		targetFrame: number;
+
 		/**
 		 * The distance from the sprite or visual's position
 		 * that the animation is drawn at.
@@ -1092,21 +1747,25 @@ declare global {
 		 * @prop {Number} y vertical offset
 		 */
 		offset: { x: number; y: number };
+
 		/**
 		 * True if the animation is currently playing.
 		 * @default true
 		 */
 		playing: boolean;
+
 		/**
 		 * Animation visibility.
 		 * @default true
 		 */
 		visible: boolean;
+
 		/**
 		 * If set to false the animation will stop after reaching the last frame
 		 * @default true
 		 */
 		looping: boolean;
+
 		/**
 		 * Ends the loop on frame 0 instead of the last frame.
 		 * This is useful for animations that are symmetric.
@@ -1115,6 +1774,7 @@ declare global {
 		 * @default false
 		 */
 		endOnFirstFrame: boolean;
+
 		/**
 		 * True if frame changed during the last draw cycle
 		 */
@@ -1123,11 +1783,13 @@ declare global {
 		onChange: any;
 		rotation: any;
 		spriteSheet: any;
+
 		/**
 		 * The index of the current frame that the animation is on.
 		 */
 		get frame(): number;
 		set frame(val: number);
+
 		/**
 		 * Delay between frames in number of draw cycles.
 		 * If set to 4 the framerate of the animation would be the
@@ -1136,6 +1798,7 @@ declare global {
 		 */
 		get frameDelay(): number;
 		set frameDelay(val: number);
+
 		/**
 		 * The animation's scale.
 		 *
@@ -1145,30 +1808,36 @@ declare global {
 		 */
 		get scale(): number | { x: number; y: number };
 		set scale(val: number | { x: number; y: number });
+
 		/**
 		 * Make a copy of the animation, with its own playback state,
 		 * independent of the original animation.
 		 * @return {Ani}
 		 */
 		clone(): Ani;
+
 		/**
 		 * Updates the animation's playback state. This is called automatically
 		 */
 		update(): void;
+
 		/**
 		 * Plays the animation, starting from the specified frame.
 		 *
 		 * @returns [Promise] a promise that resolves when the animation completes
 		 */
 		play(frame: any): Promise<any>;
+
 		/**
 		 * Pauses the animation.
 		 */
 		pause(frame: any): void;
+
 		/**
 		 * Stops the animation. Alt for pause.
 		 */
 		stop(frame: any): void;
+
 		/**
 		 * Plays the animation backwards.
 		 * Equivalent to ani.goToFrame(0)
@@ -1177,22 +1846,27 @@ declare global {
 		 * rewinding
 		 */
 		rewind(): Promise<any>;
+
 		/**
 		 * Plays the animation forwards and loops it.
 		 */
 		loop(): void;
+
 		/**
 		 * Prevents the animation from looping
 		 */
 		noLoop(): void;
+
 		/**
 		 * Goes to the next frame and stops.
 		 */
 		nextFrame(): void;
+
 		/**
 		 * Goes to the previous frame and stops.
 		 */
 		previousFrame(): void;
+
 		/**
 		 * Plays the animation forward or backward toward a target frame.
 		 *
@@ -1200,33 +1874,40 @@ declare global {
 		 * @returns [Promise] a promise that resolves when the animation completes
 		 */
 		goToFrame(toFrame: number): Promise<any>;
+
 		/**
 		 * The index of the last frame. Read only.
 		 */
 		get lastFrame(): number;
+
 		/**
 		 * The current frame as Q5.Image. Read only.
 		 */
 		get frameImage(): Q5.Image;
+
 		/**
 		 * Width of the animation's current frame.
 		 */
 		get w(): number;
+
 		/**
 		 * Width of the animation's current frame.
 		 */
 		get width(): number;
 		get defaultWidth(): any;
+
 		/**
 		 * Height of the animation's current frame.
 		 */
 		get h(): number;
+
 		/**
 		 * Height of the animation's current frame.
 		 */
 		get height(): number;
 		get defaultHeight(): any;
 	}
+
 	/**
 	 * Stores animations.
 	 *
@@ -1241,6 +1922,7 @@ declare global {
 		scale: number | { x: number; y: number };
 		looping: boolean;
 		playing: boolean;
+
 		/**
 		 * Cuts sprite sheet frames into separate images, instead of rendering
 		 * sections of the sprite sheet.
@@ -1249,15 +1931,18 @@ declare global {
 		 * but uses more memory and may cause longer load times.
 		 */
 		cutFrames: boolean;
+		
 		endOnFirstFrame: boolean;
 		w: number;
 		width: number;
 		h: number;
 		height: number;
+
 		/**
 		 * Frame size of the animations in the collection, in the format "WIDTHxHEIGHT", for example "32x32".
 		 */
 		frameSize: string;
+
 		/**
 		 * The sprite sheet image used by the animations in the collection.
 		 */
@@ -1265,27 +1950,32 @@ declare global {
 	}
 
 	/**
-	 * Visual objects store images and animations that can be displayed
-	 * with respect to the camera.
-	 */
-	class Visuals extends Array<Visual> {
+	 * A collection of and blueprint for Visual objects
+	 * that store an image or animation(s)
+	 * which can be displayed with respect to the camera.
+	*/
+	class Visuals<T extends Visual = Visual> extends Array<T> {
 		/**
 		 * Draws the visuals on the canvas.
 		 */
 		draw(): void;
+
 		/**
 		 * Current image.
 		 */
 		img: Q5.Image;
+
 		/**
 		 * Current animation.
 		 */
 		ani: Ani;
+
 		/**
 		 * Stores animations.
 		 * Keys are the animation label, values are Ani objects
 		 */
 		get anis(): Anis;
+
 		/**
 		 * Adds an animation to the Group or Visuals array.
 		 *
@@ -1294,6 +1984,26 @@ declare global {
 		 * @returns A promise that fulfills when the animation is loaded
 		 */
 		addAni(spriteSheetURL: string, frameCount: number): Promise<void>;
+
+		/**
+		 * Add multiple animations to the Group or Visuals array.
+		 *
+		 * @param atlases an object with animation names as keys and
+		 * an animation or animation atlas as values
+		 * @returns A promise that fulfills when the animations are loaded
+		 */
+		addAnis(atlases: {}): Promise<void>;
+
+		/**
+		 * Add multiple animations to the Group or Visuals array.
+		 *
+		 * @param spriteSheetURL the URL of the sprite sheet image
+		 * @param atlases an object with animation names as keys and
+		 * an animation or animation atlas as values
+		 * @returns A promise that fulfills when the animations are loaded
+		 */
+		addAnis(spriteSheetURL: string, atlases: {}): Promise<void>;
+
 		/**
 		 * Add multiple animations to the Group or Visuals array.
 		 *
@@ -1304,6 +2014,7 @@ declare global {
 		 * @returns A promise that fulfills when the animations are loaded
 		 */
 		addAnis(spriteSheetURL: string, frameSize: string, atlases: {}): Promise<void>;
+
 		/**
 		 * Detects when visuals go outside the given culling boundary,
 		 * relative to the camera.
@@ -1316,10 +2027,12 @@ declare global {
 		 * @return {Number} the number of visuals culled
 		 */
 		cull(top?: number, bottom?: number, left?: number, right?: number, cb?: Function): number;
+
 		/**
 		 * The tile character that represents the Visuals or Group in a tile map.
 		 */
 		tile: string;
+
 		/**
 		 * Adds sprites to the group based on a tile map.
 		 *
@@ -1332,19 +2045,28 @@ declare global {
 		addTiles(tiles: string | string[], x?: number, y?: number, colWidth?: number, rowHeight?: number): void;
 	}
 
-	class Group extends Visuals {
+	/**
+	 * A Group is a collection of and blueprint for
+	 * sprites with similar traits and behaviors.
+	 */
+	class Group extends Visuals<Sprite> {
 		/**
-		 * An array of sprites with similar traits and behaviors.
+		 * A Group is a collection of and blueprint for
+		 * sprites with similar traits and behaviors.
 		 *
-		 * Group extends Array, so you can use them in for of loops. They
-		 * inherit all the functions and properties of standard arrays
+		 * Group extends Visuals which extends Array,
+		 * so you can use them in for loops. They've got
+		 * all the functions and properties of standard arrays
 		 * such as `group.length` and functions like `group.includes()`.
 		 *
 		 * Changing a group setting changes it for all the sprites in the
-		 * group, similar to class inheritance. Groups can have subgroups,
-		 * creating a hierarchy of inheritance.
+		 * group ("dynamic inheritance").
 		 *
-		 * @param sprites the sprites to add to the group
+		 * All groups inherit from the base group `allSprites`.
+		 *
+		 * Groups can have subgroups, creating a hierarchy of inheritance.
+		 *
+		 * @param [sprites] the sprites to add to the group
 		 */
 		constructor(...sprites: Sprite[]);
 
@@ -1352,18 +2074,22 @@ declare global {
 		 * Horizontal position of group sprites.
 		 */
 		x: number;
+
 		/**
 		 * Vertical position of group sprites.
 		 */
 		y: number;
+
 		/**
 		 * Velocity of group sprites.
 		 */
 		vel: number;
+
 		/**
 		 * Velocity of group sprites.
 		 */
 		velocity: number;
+
 		/**
 		 * The angle of the group sprites' rotation, not the direction it's moving.
 		 *
@@ -1371,6 +2097,7 @@ declare global {
 		 * a range of -180 to 180.
 		 */
 		rotation: number;
+
 		/**
 		 * The speed of the group sprites' rotation in angles per frame.
 		 */
@@ -1380,6 +2107,7 @@ declare global {
 		 * If true, group sprites are drawn by q5play after each physics update.
 		 */
 		autoDraw: boolean;
+
 		/**
 		 * Controls the ability for group sprites to "sleep".
 		 *
@@ -1388,10 +2116,12 @@ declare global {
 		 * with anything that it wasn't already colliding with.
 		 */
 		allowSleeping: boolean;
+
 		/**
 		 * If true, group sprites are updated by q5play before each physics update.
 		 */
 		autoUpdate: number;
+
 		/**
 		 * A bearing indicates the direction that needs to be followed to
 		 * reach a destination.
@@ -1401,38 +2131,46 @@ declare global {
 		 * using the `applyForce` function.
 		 */
 		bearing: number;
+
 		/**
 		 * The bounciness of the group sprites' physics body.
 		 */
 		bounciness: number;
+
 		/**
 		 * The group sprites' current fill color.
 		 *
 		 * By default sprites get a random color.
 		 */
 		color: Q5.Color;
+
 		/**
 		 * The diameter of a circular sprite.
 		 */
 		d: number;
+
 		/**
 		 * The diameter of a circular sprite.
 		 */
 		diameter: number;
+
 		/**
 		 * If true, outlines of the group sprites' colliders and sensors will be drawn.
 		 *
 		 * Use the keyboard shortcut Command+B to toggle `allSprites.debug`.
 		 */
 		debug: boolean;
+
 		/**
 		 * The density of the group sprites' physics body.
 		 */
 		density: number;
+
 		/**
 		 * The angle of the group sprites' movement.
 		 */
 		direction: number;
+
 		/**
 		 * The amount of resistance group sprites has to being moved.
 		 */
@@ -1443,14 +2181,17 @@ declare global {
 		 * when rubbing against other colliders.
 		 */
 		friction: number;
+
 		/**
 		 * Whether the group sprites can be grabbed by a pointer.
 		 */
 		grabbable: boolean;
+
 		/**
 		 * A ratio that defines how much the group sprites are affected by gravity.
 		 */
 		gravityScale: number;
+
 		/**
 		 * The group sprites' heading. This is a string that can be set to
 		 * "up", "down", "left", "right", "upRight", "upLeft", "downRight"
@@ -1459,25 +2200,30 @@ declare global {
 		 * underscores, dashes, and cardinal direction word order.
 		 */
 		heading: string;
+
 		/**
 		 * The height of the group sprites.
 		 */
 		h: number;
+
 		/**
 		 * The height of the group sprites.
 		 */
 		height: number;
+
 		/**
 		 * Set this to true if the group sprites goes really fast to prevent
 		 * inaccurate physics simulation.
 		 */
 		isSuperFast: boolean;
+
 		/**
 		 * Sprites with the highest layer value get drawn first.
 		 *
 		 * By default sprites are drawn in the order they were created in.
 		 */
 		layer: number;
+
 		/**
 		 * When the physics simulation is progressed in `world.physicsUpdate`,
 		 * each sprite's life is decreased by `world.timeScale`.
@@ -1486,10 +2232,12 @@ declare global {
 		 * be removed.
 		 */
 		life: number;
+
 		/**
 		 * The mass of the group sprites' physics body.
 		 */
 		mass: number;
+
 		/**
 		 * The physics type of the group sprites, which determines how it interacts with
 		 * other sprites in the physics simulation.
@@ -1497,6 +2245,7 @@ declare global {
 		 * It can be set to DYNAMIC/DYN, STATIC/STA, or KINEMATIC/KIN.
 		 */
 		physics: string;
+
 		/**
 		 * The physics type of the group sprites, which determines how it interacts with
 		 * other sprites in the physics simulation.
@@ -1504,10 +2253,12 @@ declare global {
 		 * It can be set to DYNAMIC/DYN, STATIC/STA, or KINEMATIC/KIN.
 		 */
 		physicsType: string;
+
 		/**
 		 * If true, the group sprites' physics body is included in the physics simulation.
 		 */
 		physicsEnabled: boolean;
+
 		/**
 		 * If true, q5play will draw sprites at integer pixel precision.
 		 *
@@ -1516,19 +2267,23 @@ declare global {
 		 * By default q5play draws sprites with subpixel rendering.
 		 */
 		pixelPerfect: boolean;
+
 		/**
 		 * Simulates friction that slows down group sprites rolling on another sprite,
 		 * like a soccer ball rolling to a stop on high grass.
 		 */
 		rollingResistance: number;
+
 		/**
 		 * The amount the group sprites resists rotating.
 		 */
 		rotationDrag: number;
+
 		/**
 		 * If true, the group sprites can not rotate.
 		 */
 		rotationLock: boolean;
+
 		/**
 		 * Horizontal and vertical scale of the group sprites.
 		 *
@@ -1538,7 +2293,7 @@ declare global {
 		 * number. This enables users to do things like `sprite.scale *= 2`
 		 * to double the group sprites' scale.
 		 */
-		scale: number | Q5.Vector;
+		scale: number | [] | { x: number; y: number };
 
 		/**
 		 * Wake group sprites up or put it to sleep.
@@ -1548,14 +2303,17 @@ declare global {
 		 * with anything that it wasn't already colliding with.
 		 */
 		sleeping: boolean;
+
 		/**
 		 * The group sprites' stroke color.
 		 */
 		stroke: Q5.Color;
+
 		/**
 		 * The group sprites' stroke weight, the thickness of its outline.
 		 */
 		strokeWeight: number;
+
 		/**
 		 * The group sprites' speed.
 		 *
@@ -1563,33 +2321,40 @@ declare global {
 		 * 180 degrees opposite of its current direction angle.
 		 */
 		speed: number;
+
 		/**
 		 * The group sprites' speed along the surface of its collider(s),
 		 * like a conveyor belt.
 		 */
 		surfaceSpeed: number;
+
 		/**
 		 * Text displayed at the center of the group sprites.
 		 */
 		text: number;
+
 		/**
 		 * The group sprites' text fill color. Black by default.
 		 */
 		textFill: Q5.Color;
+
 		/**
 		 * The group sprites' text stroke color.
 		 * No stroke by default, does not inherit from the sketch's stroke color.
 		 */
 		textStroke: Q5.Color;
+
 		/**
 		 * The group sprites' text stroke weight, the thickness of its outline.
 		 * No stroke by default, does not inherit from the sketch's stroke weight.
 		 */
 		textStrokeWeight: number;
+
 		/**
 		 * The group sprites' text size, the sketch's current textSize by default.
 		 */
 		textSize: number;
+
 		/**
 		 * If true the group sprites are shown, if set to false the group sprites are hidden.
 		 *
@@ -1597,10 +2362,12 @@ declare global {
 		 * set to true again if it goes back on screen.
 		 */
 		visible: boolean;
+
 		/**
 		 * The width of the group sprites.
 		 */
 		w: number;
+
 		/**
 		 * The width of the group sprites.
 		 */
@@ -1611,6 +2378,7 @@ declare global {
 		 * It's useful for debugging.
 		 */
 		idNum: number;
+
 		/**
 		 * Groups can have subgroups, which inherit the properties
 		 * of their parent groups.
@@ -1619,18 +2387,22 @@ declare global {
 		subgroups: {
 			[x: string]: any;
 		}[];
+
 		/**
 		 * The direct parent group that this group inherits properties from.
 		 */
 		parent: any;
+
 		/**
 		 * Creates a new sprite with the traits of the group and adds it to the group.
 		 */
 		Sprite: typeof Sprite;
+
 		/**
 		 * Creates a new subgroup that inherits the traits of the group.
 		 */
 		Group: typeof Group;
+
 		/**
 		 * A property of the `allSprites` group only,
 		 * that controls whether sprites are automatically deleted
@@ -1640,28 +2412,33 @@ declare global {
 		 * remain false for the rest of the sketch, unless changed.
 		 */
 		autoCull: boolean;
+
 		/**
 		 * New group sprites will not have physics bodies (can't have colliders).
 		 */
 		visualOnly: boolean;
+
 		/**
 		 * Alias for `group.push`.
 		 *
 		 * Adds a sprite to the end of the group.
 		 */
 		add: (...sprites: Sprite[]) => number;
+
 		/**
 		 * Alias for `group.includes`.
 		 *
 		 * Check if a sprite is in the group.
 		 */
 		contains: (searchElement: Sprite, fromIndex?: number) => boolean;
+
 		/**
 		 * Depending on the value that the amount property is set to, the group will
 		 * either add or delete sprites.
 		 */
 		get amount(): number;
 		set amount(val: number);
+
 		/**
 		 * Returns true on the first frame that the group collides with the
 		 * target group.
@@ -1673,6 +2450,7 @@ declare global {
 		 * @param callback
 		 */
 		collides(target: Group, callback?: Function): boolean;
+
 		/**
 		 * Returns the amount of frames that the group has been colliding
 		 * with the target group for, which is a truthy value. Returns 0 if
@@ -1683,6 +2461,7 @@ declare global {
 		 * @return {Number} frames
 		 */
 		colliding(target: Group, callback?: Function): number;
+
 		/**
 		 * Returns true on the first frame that the group no longer overlaps
 		 * with the target group.
@@ -1692,6 +2471,7 @@ declare global {
 		 * @return {Boolean}
 		 */
 		collided(target: Group, callback?: Function): boolean;
+
 		/**
 		 * Returns true on the first frame that the group overlaps with the
 		 * target group.
@@ -1703,6 +2483,7 @@ declare global {
 		 * @param callback
 		 */
 		overlaps(target: Group, callback?: Function): boolean;
+
 		/**
 		 * Returns the amount of frames that the group has been overlapping
 		 * with the target group for, which is a truthy value. Returns 0 if
@@ -1713,6 +2494,7 @@ declare global {
 		 * @return {Number} frames
 		 */
 		overlapping(target: Group, callback?: Function): number;
+
 		/**
 		 * Returns true on the first frame that the group no longer overlaps
 		 * with the target group.
@@ -1722,24 +2504,136 @@ declare global {
 		 * @return {Boolean}
 		 */
 		overlapped(target: Group, callback?: Function): boolean;
+
 		/**
 		 * Sets a pass through contact relationship between the group and the target group.
 		 * @param target
 		 */
 		pass(target: Group): void;
+
 		/**
 		 * Sets a pass through contact relationship between the group and the target group.
 		 * @param target
 		 */
 		passes(target: Group): void;
-		applyForce(amount: number, origin?: [] | { x: number; y: number } | Q5.Vector): void;
-		applyForceScaled(amount: number, origin?: [] | { x: number; y: number } | Q5.Vector): void;
+
+		/**
+		 * Applies a force magnitude to the group at its bearing.
+		 */
+		applyForce(amount: number, origin?: { x: number; y: number }): void;
+
+		/**
+		 * Applies a force vector to the group.
+		 */
+		applyForce(force: { x: number; y: number }, origin?: { x: number; y: number }): void;
+
+		/**
+		 * Applies a force scaled to member masses using a magnitude.
+		 */
+		applyForceScaled(amount: number, origin?: { x: number; y: number }): void;
+
+		/**
+		 * Applies a force scaled to member masses using a vector.
+		 */
+		applyForceScaled(force: { x: number; y: number }, origin?: { x: number; y: number }): void;
 		applyWind(speed: number, angle: number, drag?: number, lift?: number): void;
-		attractTo(x: number | any, y?: number, force?: number): void;
+
+		/**
+		 * Applies a force to the group's center of mass attracting it to
+		 * the given position.
+		 */
+		attractTo(x: number, y: number, force?: number): void;
+
+		/**
+		 * Applies a force to the group's center of mass attracting it to
+		 * the given position.
+		 */
+		attractTo(pos: { x: number; y: number }, force?: number): void;
 		applyTorque(torque: any): void;
-		moveTowards(x: number | any, y?: number, tracking?: number): void;
-		moveAway(x: number | any, y?: number, repel?: number): void;
-		repelFrom(x: number | any, y?: number, force?: number): void;
+
+		/**
+		 * Moves each sprite in the group to a destination at a constant speed,
+		 * maintaining their relative offsets from the group's centroid.
+		 */
+		moveTo(x: number | null, y: number | null, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Moves each sprite in the group to a destination at a constant speed,
+		 * maintaining their relative offsets from the group's centroid.
+		 */
+		moveTo(pos: { x: number | null; y: number | null }, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Moves the group towards a position.
+		 */
+		moveTowards(x: number | null, y: number | null, tracking?: number): void;
+
+		/**
+		 * Moves the group towards a position.
+		 */
+		moveTowards(pos: { x: number | null; y: number | null }, tracking?: number): void;
+
+		/**
+		 * Rotates each sprite in the group to a target angle. The sign of `speed`
+		 * determines direction: positive = CW, negative = CCW.
+		 */
+		rotateTo(angle: number, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates each sprite in the group to face a position. The sign of `speed`
+		 * determines direction: positive = CW, negative = CCW.
+		 */
+		rotateTo(pos: { x: number; y: number }, speed?: number, facing?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates each sprite in the group by the given angle amount at the given speed.
+		 */
+		rotate(angle: number, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates each sprite in the group by the smallest angular distance to
+		 * a target angle, stopping when they arrive.
+		 */
+		rotateMinTo(angle: number, speed?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates each sprite in the group by the smallest angular distance to
+		 * face a position, stopping when they arrive.
+		 */
+		rotateMinTo(pos: { x: number; y: number }, speed?: number, facing?: number): PromiseLike<boolean>;
+
+		/**
+		 * Rotates each sprite in the group towards an angle.
+		 */
+		rotateTowards(angle: number, tracking?: number): void;
+
+		/**
+		 * Rotates each sprite in the group towards a position.
+		 */
+		rotateTowards(pos: { x: number; y: number }, tracking?: number, facing?: number): void;
+
+		/**
+		 * Moves and rotates each sprite in the group towards a target transform,
+		 * maintaining their relative offsets from the group's centroid.
+		 */
+		transformTowards(x: number, y: number, rotation?: number, tracking?: number): void;
+
+		/**
+		 * Moves and rotates each sprite in the group towards a target transform,
+		 * maintaining their relative offsets from the group's centroid.
+		 */
+		transformTowards(pos: { x: number; y: number }, rotation?: number, tracking?: number): void;
+
+		/**
+		 * Applies a repelling force from a position.
+		 */
+		repelFrom(x: number, y: number, force?: number): void;
+
+		/**
+		 * Applies a repelling force from a position.
+		 */
+		repelFrom(pos: { x: number; y: number }, force?: number): void;
+
 		/**
 		 * Detects when sprites go outside the given culling boundary
 		 * relative to the camera.
@@ -1757,6 +2651,7 @@ declare global {
 		 * @return {Number} the number of sprites culled
 		 */
 		cull(top?: number, bottom?: number, left?: number, right?: number, cb?: Function): number;
+
 		/**
 		 * If removalCount is greater than 0, that amount of
 		 * sprites starting from the start index will be removed
@@ -1772,6 +2667,7 @@ declare global {
 		 * @return {Sprite[]} the removed sprites
 		 */
 		splice(start: number, removalCount: number, ...sprites: Sprite[]): Sprite[];
+
 		/**
 		 * Removes a sprite from this group and its sub groups (if any),
 		 * but does not delete it from the world.
@@ -1780,6 +2676,13 @@ declare global {
 		 * @return {Sprite} the deleted sprite or undefined if the specified sprite was not found
 		 */
 		remove(item: Sprite | number): Sprite;
+
+		/**
+		 * Removes all sprites from this group without deleting them.
+		 * @returns the removed sprites
+		 */
+		removeAll(): Sprite[];
+
 		/**
 		 * Deletes the group and all its sprites
 		 * from the world and every other group they belong to.
@@ -1787,22 +2690,28 @@ declare global {
 		 * Don't attempt to use a group after deleting it.
 		 */
 		delete(): void;
+
 		/**
 		 * Deletes all the sprites in the group.
 		 *
 		 * Does not delete the group itself.
 		 */
 		deleteAll(): void;
+
 		/**
 		 * Updates all the sprites in the group.
 		 */
 		update(): void;
+
 		/**
 		 * Draws all the sprites in the group.
 		 */
 		draw(): void;
 	}
 
+	/**
+	 * The World is the Box2D physics simulation.
+	 */
 	class World {
 		/**
 		 * Gravity force vector that affects all dynamic physics colliders.
@@ -1812,6 +2721,7 @@ declare global {
 		 */
 		get gravity(): any;
 		set gravity(val: any);
+
 		/**
 		 * The lowest velocity an object can have before it is considered
 		 * to be at rest.
@@ -1824,10 +2734,12 @@ declare global {
 		 */
 		get bounceThreshold(): number;
 		set bounceThreshold(val: number);
+
 		/**
 		 * The time elapsed in the physics simulation in seconds.
 		 */
 		physicsTime: number;
+
 		/**
 		 * Represents the size of a meter in pixels.
 		 *
@@ -1840,15 +2752,18 @@ declare global {
 		 * @default 60
 		 */
 		meterSize: number;
+
 		/**
 		 * @default true
 		 */
 		autoStep: boolean;
+
 		/**
 		 * Performs a physics simulation step that advances all sprites
 		 * forward in time by 1 / updateRate * timeScale if no timeStep is given.
 		 */
 		physicsUpdate(timeStep?: number): void;
+
 		/**
 		 * A time scale of 1.0 represents real time.
 		 * Accepts decimal values between 0 and 2.
@@ -1856,6 +2771,7 @@ declare global {
 		 */
 		get timeScale(): number;
 		set timeScale(val: number);
+
 		/**
 		 * The fixed update rate of the physics simulation in hertz.
 		 *
@@ -1868,16 +2784,18 @@ declare global {
 		 */
 		get updateRate(): number;
 		set updateRate(val: number);
+
 		/**
 		 * The real time in seconds since the world was created, including
 		 * time spent paused.
 		 */
 		get realTime(): number;
+
 		/**
 		 * Returns the sprites at a position, ordered by layer.
 		 *
 		 * Sprites must have a physics body to be detected.
-		 * @param x x coordinate or coordinate array or object with x and y properties
+		 * @param x x coordinate or object with x and y properties
 		 * @param y
 		 * @param radius the distance from the point that sprites can be detected at, default is 0 (only sprites that overlap the point will be detected)
 		 * @param group limit results to a specific group,
@@ -1886,25 +2804,45 @@ declare global {
 		 * sprites drawn when the camera was active, true by default
 		 * @returns an array of sprites
 		 */
-		getSpritesAt(
-			x: number | any,
-			y?: number,
-			radius?: number,
-			group?: Group,
-			cameraActiveWhenDrawn?: boolean
-		): Sprite[];
+		getSpritesAt(x: number, y: number, radius?: number, group?: Group, cameraActiveWhenDrawn?: boolean): Sprite[];
+
+		/**
+		 * Returns the sprites at a position, ordered by layer.
+		 *
+		 * Sprites must have a physics body to be detected.
+		 * @param pos object with x and y properties
+		 * @param radius the distance from the point that sprites can be detected at, default is 0 (only sprites that overlap the point will be detected)
+		 * @param group limit results to a specific group, allSprites by default
+		 * @param cameraActiveWhenDrawn limit results to sprites drawn when the camera was active, true by default
+		 * @returns an array of sprites
+		 */
+		getSpritesAt(pos: { x: number; y: number }, radius?: number, group?: Group, cameraActiveWhenDrawn?: boolean): Sprite[];
+
 		/**
 		 * Returns the sprite at the specified position
 		 * on the top most layer, drawn when the camera was on.
 		 *
 		 * The sprite must have a physics body to be detected.
-		 * @param x x coordinate or coordinate array or object with x and y properties
+		 * @param x x coordinate or object with x and y properties
 		 * @param y
 		 * @param radius the distance from the point that sprites can be detected at, default is 0 (only sprites that overlap the point will be detected)
 		 * @param group the group to search
 		 * @returns a sprite
 		 */
-		getSpriteAt(x: number | any, y?: number, radius?: number, group?: Group): Sprite;
+		getSpriteAt(x: number, y: number, radius?: number, group?: Group): Sprite;
+
+		/**
+		 * Returns the sprite at the specified position
+		 * on the top most layer, drawn when the camera was on.
+		 *
+		 * The sprite must have a physics body to be detected.
+		 * @param pos object with x and y properties
+		 * @param radius the distance from the point that sprites can be detected at, default is 0 (only sprites that overlap the point will be detected)
+		 * @param group the group to search
+		 * @returns a sprite
+		 */
+		getSpriteAt(pos: { x: number; y: number }, radius?: number, group?: Group): Sprite;
+
 		/**
 		 * "Sleeping" sprites get temporarily ignored during physics
 		 * simulation. A sprite starts "sleeping" when it stops moving and
@@ -1916,39 +2854,131 @@ declare global {
 		 */
 		get allowSleeping(): boolean;
 		set allowSleeping(val: boolean);
+
 		/**
 		 * Finds the first sprite (with a physics body) that
 		 * intersects a ray (line).
 		 *
-		 * @param startPos starting position of the ray cast
-		 * @param direction direction of the ray
-		 * @param maxDistance max distance the ray should check
+		 * @param startPos starting position of the ray cast, object with x and y properties or array [x, y]
+		 * @param direction direction angle of the ray
+		 * @param maxDistance max distance the ray should check, default 10000
 		 * @returns The first sprite the ray hits or undefined
 		 */
-		rayCast(startPos: any, direction: number, maxDistance: number): Sprite;
+		rayCast(startPos: { x: number; y: number } | number[], direction: number, maxDistance?: number): Sprite;
+
 		/**
-		 * Finds sprites (with physics bodies) that intersect
-		 * a line (ray).
+		 * Finds the first sprite (with a physics body) that
+		 * intersects a ray from startPos to endPos.
 		 *
 		 * @param startPos starting position of the ray cast
-		 * @param direction direction of the ray
-		 * @param maxDistance max distance the ray should check
-		 * @param limiter callback that's run each time the ray intersects a sprite, receives an intersected sprite as an input parameter, return true to stop the ray
+		 * @param endPos end position of the ray cast
+		 * @returns The first sprite the ray hits or undefined
+		 */
+		rayCast(startPos: { x: number; y: number } | number[], endPos: { x: number; y: number } | number[]): Sprite;
+
+		/**
+		 * Finds all sprites (with physics bodies) that intersect
+		 * a ray (line), sorted by distance.
+		 *
+		 * @param startPos starting position of the ray cast, object with x and y properties or array [x, y]
+		 * @param direction direction angle of the ray
+		 * @param maxDistance max distance the ray should check, default 10000
+		 * @param limiter callback run each time the ray hits a sprite; return true to stop the ray
 		 * @returns An array of sprites that the ray cast hit, sorted by distance. The sprite closest to the starting point will be at index 0. If a limiter is provided, this array includes the sprite that caused the ray to stop.
 		 */
-		rayCastAll(startPos: any, direction: number, maxDistance: number, limiter?: Function): Sprite[];
+		rayCastAll(startPos: { x: number; y: number } | number[], direction: number, maxDistance?: number, limiter?: Function): Sprite[];
+
+		/**
+		 * Finds all sprites (with physics bodies) that intersect
+		 * a ray from startPos to endPos, sorted by distance.
+		 *
+		 * @param startPos starting position of the ray cast
+		 * @param endPos end position of the ray cast
+		 * @param limiter callback run each time the ray hits a sprite; return true to stop the ray
+		 * @returns An array of sprites that the ray cast hit, sorted by distance.
+		 */
+		rayCastAll(startPos: { x: number; y: number } | number[], endPos: { x: number; y: number } | number[], limiter?: Function): Sprite[];
+
+		/**
+		 * Finds the first sprite (with a physics body) that
+		 * intersects a swept circle (capsule cast) from startPos to endPos.
+		 *
+		 * @param startPos starting position of the cast, object with x and y properties or array [x, y]
+		 * @param endPos end position of the cast
+		 * @param radius radius of the circle
+		 * @returns The first sprite hit or undefined
+		 */
+		circleCast(startPos: { x: number; y: number } | number[], endPos: { x: number; y: number } | number[], radius: number): Sprite;
+
+		/**
+		 * Finds all sprites (with physics bodies) that intersect
+		 * a swept circle (capsule cast) from startPos to endPos, sorted by distance.
+		 *
+		 * @param startPos starting position of the cast
+		 * @param endPos end position of the cast
+		 * @param radius radius of the circle
+		 * @param limiter callback run each time the cast hits a sprite; return true to stop the cast
+		 * @returns An array of sprites hit, sorted by distance.
+		 */
+		circleCastAll(startPos: { x: number; y: number } | number[], endPos: { x: number; y: number } | number[], radius: number, limiter?: Function): Sprite[];
+
 		/**
 		 * Applies an explosive force to sprites within the radius of the explosion.
 		 *
-		 * @param x x coordinate or coordinate array or object with x and y properties of the center of the explosion
+		 * @param x x coordinate or object with x and y properties of the center of the explosion
 		 * @param y
 		 * @param radius the distance from the center of the explosion that sprites can be affected by the explosion
 		 * @param magnitude the strength of the explosion force, default is 1
 		 * @param falloff how much the explosion force decreases as sprites are farther from the center of the explosion, default is 0.1 (10% decrease per pixel)
 		 */
-		explodeAt(x: number | any, y?: number, radius?: number, magnitude?: number, falloff?: number): void;
+		explodeAt(x: number, y: number, radius?: number, magnitude?: number, falloff?: number): void;
+		explodeAt(pos: { x: number; y: number }, radius?: number, magnitude?: number, falloff?: number): void;
+
+		/**
+		 * The number of physics bodies currently awake in the world.
+		 * @readonly
+		 */
+		get awakeBodies(): number;
+
+		/**
+		 * The minimum impact velocity needed for a hit event to be fired.
+		 */
+		get hitThreshold(): number;
+		set hitThreshold(val: number);
+
+		/**
+		 * Box2D world performance profile data.
+		 * @readonly
+		 */
+		get profile(): any;
+
+		/**
+		 * Box2D world counter/statistics data.
+		 * @readonly
+		 */
+		get debugInfo(): any;
+
+		/**
+		 * The number of sub-steps per physics update.
+		 * More sub-steps increases accuracy at the cost of performance.
+		 * @default 4
+		 */
+		subSteps: number;
+
+		/**
+		 * Alias for `physicsUpdate`.
+		 */
+		step(timeStep?: number): void;
+
+		/**
+		 * The Box2D world ID. Don't change it!
+		 */
+		wID: b2WorldId;
 	}
 
+	/**
+	 * The Camera controls the position and zoom of the view of the world that is drawn on the canvas.
+	 */
 	class Camera {
 		/**
 		 * Read only. True if the camera is active.
@@ -1956,26 +2986,37 @@ declare global {
 		 * @default false
 		 */
 		isActive: boolean;
-		/**
-		 * The camera's position. {x, y}
-		 */
-		get pos(): any;
-		set pos(val: any);
+
 		/**
 		 * The camera's x position.
 		 */
 		get x(): number;
 		set x(val: number);
+
 		/**
 		 * The camera's y position.
 		 */
 		get y(): number;
 		set y(val: number);
+
 		/**
-		 * The camera's position. Alias for pos.
+		 * Gets the camera's position as a readonly {x, y} object that
+		 * won't be updated if the camera moves. Useful for saving the
+		 * camera's position at a specific moment in time.
 		 */
-		get position(): any;
-		set position(val: any);
+		get pos(): { x: number; y: number };
+
+		/**
+		 * The camera's position.
+		 */
+		set pos(val: number[] | { x: number; y: number });
+
+		/**
+		 * The camera's position vector.
+		 */
+		get position(): Q5.Vector;
+		set position(val: number[] | { x: number; y: number });
+
 		/**
 		 * Moves the camera to a position.
 		 *
@@ -1985,6 +3026,7 @@ declare global {
 		 * @returns resolves true when the camera reaches the target position
 		 */
 		moveTo(x: number, y: number, speed: number): Promise<boolean>;
+
 		/**
 		 * Camera zoom.
 		 *
@@ -1995,6 +3037,7 @@ declare global {
 		 */
 		get zoom(): number;
 		set zoom(val: number);
+
 		/**
 		 * Zoom the camera at a given speed.
 		 *
@@ -2003,6 +3046,7 @@ declare global {
 		 * @returns resolves true when the camera reaches the target zoom
 		 */
 		zoomTo(target: number, speed: number): Promise<boolean>;
+
 		/**
 		 * Activates the camera.
 		 *
@@ -2010,6 +3054,7 @@ declare global {
 		 * camera.off() is called.
 		 */
 		on(): void;
+
 		/**
 		 * Deactivates the camera.
 		 *
@@ -2019,11 +3064,12 @@ declare global {
 		off(): void;
 	}
 
+	/**
+	 * A Joint is used to constrain the movement of two sprites relative
+	 * to each other, which can lead to nuanced physics interactions.
+	 */
 	class Joint {
 		/**
-		 * Joints are used to constrain the movement of two sprites relative
-		 * to each other. They can be used to create complex physics objects.
-		 *
 		 * Don't use the Joint constructor directly, use one of these
 		 * joint constructors instead:
 		 *
@@ -2035,14 +3081,17 @@ declare global {
 		 * @param type
 		 */
 		constructor(spriteA: Sprite, spriteB: Sprite, type?: string);
+
 		/**
 		 * The first sprite in the joint.
 		 */
 		spriteA: Sprite;
+
 		/**
 		 * The second sprite in the joint.
 		 */
 		spriteB: Sprite;
+
 		/**
 		 * The type of joint. Can be one of:
 		 *
@@ -2051,12 +3100,14 @@ declare global {
 		 * Can't be changed after the joint is created.
 		 */
 		type: string;
+
 		/**
 		 * Determines whether to draw the joint if spriteA
 		 * or spriteB is drawn.
 		 * @default true
 		 */
 		visible: boolean;
+
 		/**
 		 * Offset to the joint's anchorA position from the center of spriteA.
 		 *
@@ -2064,7 +3115,8 @@ declare global {
 		 * @default {x: 0, y: 0}
 		 */
 		get offsetA(): Q5.Vector;
-		set offsetA(val: Q5.Vector);
+		set offsetA(val: [] | { x: number; y: number } | Q5.Vector);
+
 		/**
 		 * Offset to the joint's anchorB position from the center of spriteB.
 		 *
@@ -2072,12 +3124,14 @@ declare global {
 		 * @default {x: 0, y: 0}
 		 */
 		get offsetB(): Q5.Vector;
-		set offsetB(val: Q5.Vector);
+		set offsetB(val: [] | { x: number; y: number } | Q5.Vector);
+
 		/**
 		 * Function that draws the joint. Can be overridden by the user.
 		 */
 		get draw(): Function;
 		set draw(val: Function);
+
 		/**
 		 * Set to true if you want the joint's sprites to collide with
 		 * each other.
@@ -2085,16 +3139,19 @@ declare global {
 		 */
 		get collideConnected(): boolean;
 		set collideConnected(val: boolean);
+
 		/**
 		 * How much force the joint is applying to keep the two sprites together.
 		 * @readonly
 		 */
 		get reactionForce(): any;
+
 		/**
 		 * How much torque the joint is applying to keep the two sprites together.
 		 * @readonly
 		 */
 		get reactionTorque(): any;
+
 		/**
 		 * The amount of force that must be applied to the joint before it breaks.
 		 *
@@ -2104,6 +3161,7 @@ declare global {
 		 */
 		get forceThreshold(): number;
 		set forceThreshold(val: number);
+
 		/**
 		 * The amount of torque that must be applied to the joint before it breaks.
 		 *
@@ -2113,6 +3171,7 @@ declare global {
 		 */
 		get torqueThreshold(): number;
 		set torqueThreshold(val: number);
+
 		/**
 		 * This function is run when the joint's reaction force exceeds the
 		 * force threshold or its reaction torque exceeds the torque threshold.
@@ -2121,11 +3180,17 @@ declare global {
 		 * and the joint is deleted, simulating a break.
 		 */
 		onStrain(): void;
+
 		/**
 		 * Deletes the joint from the world and from each of the
 		 * associated sprites' joints arrays.
 		 */
 		delete(): void;
+
+		/**
+		 * The Box2D joint ID. Don't change it!
+		 */
+		jID: b2JointId;
 	}
 
 	class GlueJoint extends Joint {
@@ -2151,11 +3216,13 @@ declare global {
 		 * @param spriteB
 		 */
 		constructor(spriteA: Sprite, spriteB: Sprite);
+
 		/**
 		 * The current distance between the two joint anchors.
 		 * @readonly
 		 */
 		get currentLength(): number;
+
 		/**
 		 * The target length of the joint between the two joint anchors.
 		 *
@@ -2164,6 +3231,7 @@ declare global {
 		 */
 		get length(): number;
 		set length(val: number);
+
 		/**
 		 * Whether the joint's length limits are enabled.
 		 * When enabled a min/max length range constrains the joint.
@@ -2171,27 +3239,32 @@ declare global {
 		 */
 		get limitsEnabled(): boolean;
 		set limitsEnabled(val: boolean);
+
 		/**
 		 * The minimum length allowed when limits are enabled.
 		 * @readonly
 		 */
 		get minLength(): number;
+
 		/**
 		 * The maximum length allowed when limits are enabled.
 		 * @readonly
 		 */
 		get maxLength(): number;
+
 		/**
 		 * Accepts a number to set a symmetric range
 		 * or an array with the minimum and maximum length limits.
 		 */
 		set range(val: [number, number] | number);
+
 		/**
 		 * Whether spring behavior is enabled for the joint.
 		 * @default true
 		 */
 		get springEnabled(): boolean;
 		set springEnabled(val: boolean);
+
 		/**
 		 * The springiness of the joint, a 0-1 ratio.
 		 *
@@ -2200,6 +3273,7 @@ declare global {
 		 */
 		get springiness(): number;
 		set springiness(val: number);
+
 		/**
 		 * Damping is a 0-1 ratio describing how quickly the joint loses
 		 * vibrational energy.
@@ -2213,23 +3287,27 @@ declare global {
 		 */
 		get damping(): number;
 		set damping(val: number);
+
 		/**
 		 * Whether the joint's motor is enabled.
 		 * @default false
 		 */
 		get motorEnabled(): boolean;
 		set motorEnabled(val: boolean);
+
 		/**
 		 * Motor speed.
 		 * @default 0
 		 */
 		get speed(): number;
 		set speed(val: number);
+
 		/**
 		 * Maximum motor force the motor can apply.
 		 */
 		get maxPower(): number;
 		set maxPower(val: number);
+
 		/**
 		 * The current motor force being applied by the joint.
 		 * @readonly
@@ -2248,6 +3326,7 @@ declare global {
 		 * @param spriteB the wheel
 		 */
 		constructor(spriteA: Sprite, spriteB: Sprite);
+
 		/**
 		 * The angle at which the wheel is attached to the vehicle body.
 		 *
@@ -2256,6 +3335,7 @@ declare global {
 		 */
 		get angle(): number;
 		set angle(val: number);
+
 		/**
 		 * Whether the joint's suspension limits are enabled.
 		 * When enabled a min/max distance from resting constrains the joint.
@@ -2263,6 +3343,7 @@ declare global {
 		 */
 		get limitsEnabled(): boolean;
 		set limitsEnabled(val: boolean);
+
 		/**
 		 * The minimum distance the wheel's suspension can contract
 		 * from 0, which represents the resting position,
@@ -2270,6 +3351,7 @@ declare global {
 		 * @readonly
 		 */
 		get lowerLimit(): number;
+
 		/**
 		 * The maximum distance the wheel's suspension can extend
 		 * from 0, which represents the resting position,
@@ -2277,6 +3359,7 @@ declare global {
 		 * @readonly
 		 */
 		get upperLimit(): number;
+
 		/**
 		 * The distance the wheel's suspension can contract or extend
 		 * from 0, which represents the resting position.
@@ -2285,6 +3368,7 @@ declare global {
 		 * or an array with the minimum and maximum length limits.
 		 */
 		set range(val: [number, number] | number);
+
 		/**
 		 * Whether the wheel joint has suspension,
 		 * which can make it ride smoother over bumps.
@@ -2292,6 +3376,7 @@ declare global {
 		 */
 		get springEnabled(): boolean;
 		set springEnabled(val: boolean);
+
 		/**
 		 * The springiness of the joint, a 0-1 ratio.
 		 *
@@ -2300,6 +3385,7 @@ declare global {
 		 */
 		get springiness(): number;
 		set springiness(val: number);
+
 		/**
 		 * Damping is a 0-1 ratio describing how quickly the joint loses
 		 * vibrational energy.
@@ -2313,23 +3399,27 @@ declare global {
 		 */
 		get damping(): number;
 		set damping(val: number);
+
 		/**
 		 * Whether the joint's motor is enabled.
 		 * @default false
 		 */
 		get motorEnabled(): boolean;
 		set motorEnabled(val: boolean);
+
 		/**
 		 * Motor speed.
 		 * @default 0
 		 */
 		get speed(): number;
 		set speed(val: number);
+
 		/**
 		 * Maximum torque the motor can apply.
 		 */
 		get maxPower(): number;
 		set maxPower(val: number);
+
 		/**
 		 * The current torque being applied by the motor.
 		 * @readonly
@@ -2348,6 +3438,7 @@ declare global {
 		 * @param spriteB
 		 */
 		constructor(spriteA: Sprite, spriteB: Sprite);
+
 		/**
 		 * Whether the joint's angle limits are enabled.
 		 * When enabled a min/max angle range constrains the joint.
@@ -2355,32 +3446,38 @@ declare global {
 		 */
 		get limitsEnabled(): boolean;
 		set limitsEnabled(val: boolean);
+
 		/**
 		 * The lower limit of rotation.
 		 * @readonly
 		 */
 		get minAngle(): number;
+
 		/**
 		 * The upper limit of rotation.
 		 * @readonly
 		 */
 		get maxAngle(): number;
+
 		/**
 		 * Accepts a number to set a symmetric range
 		 * or an array with the lower and upper limits of rotation.
 		 */
 		set range(val: [number, number] | number);
+
 		/**
 		 * The joint's current angle of rotation.
 		 * @readonly
 		 */
 		get angle(): number;
+
 		/**
 		 * Whether spring behavior is enabled.
 		 * @default false
 		 */
 		get springEnabled(): boolean;
 		set springEnabled(val: boolean);
+
 		/**
 		 * The springiness of the joint, a 0-1 ratio.
 		 *
@@ -2389,29 +3486,34 @@ declare global {
 		 */
 		get springiness(): number;
 		set springiness(val: number);
+
 		/**
 		 * Damping ratio, 0-1. Higher values reduce oscillation faster.
 		 * @default 0
 		 */
 		get damping(): number;
 		set damping(val: number);
+
 		/**
 		 * Whether the joint's motor is enabled.
 		 * @default false
 		 */
 		get motorEnabled(): boolean;
 		set motorEnabled(val: boolean);
+
 		/**
 		 * Motor speed.
 		 * @default 0
 		 */
 		get speed(): number;
 		set speed(val: number);
+
 		/**
 		 * Maximum torque the motor can apply.
 		 */
 		get maxPower(): number;
 		set maxPower(val: number);
+
 		/**
 		 * The current torque being applied by the motor.
 		 * @readonly
@@ -2430,38 +3532,45 @@ declare global {
 		 * @param spriteB
 		 */
 		constructor(spriteA: Sprite, spriteB: Sprite);
+
 		/**
 		 * The current displacement of spriteB along the slide axis.
 		 * @readonly
 		 */
 		get translation(): number;
+
 		/**
 		 * Whether the joint's translation limits are enabled.
 		 * @default false
 		 */
 		get limitsEnabled(): boolean;
 		set limitsEnabled(val: boolean);
+
 		/**
 		 * The mathematical lower limit of translation.
 		 * @readonly
 		 */
 		get lowerLimit(): number;
+
 		/**
 		 * The mathematical upper limit of translation.
 		 * @readonly
 		 */
 		get upperLimit(): number;
+
 		/**
 		 * Accepts a number to set a symmetric range
 		 * or an array with the lower and upper translation limits.
 		 */
 		set range(val: [number, number] | number);
+
 		/**
 		 * Whether spring behavior is enabled.
 		 * @default false
 		 */
 		get springEnabled(): boolean;
 		set springEnabled(val: boolean);
+
 		/**
 		 * The springiness of the joint, a 0-1 ratio.
 		 *
@@ -2470,35 +3579,41 @@ declare global {
 		 */
 		get springiness(): number;
 		set springiness(val: number);
+
 		/**
 		 * Damping ratio, 0-1. Higher values reduce oscillation faster.
 		 * @default 0
 		 */
 		get damping(): number;
 		set damping(val: number);
+
 		/**
 		 * Whether the joint's motor is enabled.
 		 * @default true
 		 */
 		get motorEnabled(): boolean;
 		set motorEnabled(val: boolean);
+
 		/**
 		 * Motor speed.
 		 * @default 0
 		 */
 		get speed(): number;
 		set speed(val: number);
+
 		/**
 		 * Maximum force the motor can apply.
 		 * @default 10
 		 */
 		get maxPower(): number;
 		set maxPower(val: number);
+
 		/**
 		 * The current motor force being applied.
 		 * @readonly
 		 */
 		get power(): number;
+
 		/**
 		 * The current sliding speed of the joint.
 		 * @readonly
@@ -2515,16 +3630,19 @@ declare global {
 		 * @param sprite the sprite to grab
 		 */
 		constructor(pointer: any, sprite: Sprite);
+
 		/**
 		 * The sprite being grabbed by the joint.
 		 */
 		sprite: Sprite;
+
 		/**
 		 * The target position of the joint that the sprite will be
 		 * moved towards. Can be a coordinate array or object with x and y properties.
 		 */
 		get target(): any;
 		set target(pos: any);
+
 		/**
 		 * The maximum spring force that the joint can exert on the sprite.
 		 *
@@ -2532,6 +3650,7 @@ declare global {
 		 */
 		get maxForce(): number;
 		set maxForce(val: number);
+
 		/**
 		 * The maximum torque that the joint can exert on the sprite.
 		 *
@@ -2540,6 +3659,30 @@ declare global {
 		 */
 		get maxTorque(): number;
 		set maxTorque(val: number);
+	}
+
+	class CastInfo {
+		/**
+		 * The sprite that was hit by the ray or circle cast.
+		 */
+		sprite: Sprite;
+
+		/**
+		 * The distance from the start of the cast to the intersection point.
+		 */
+		distance: number;
+
+		/**
+		 * The intersection point of the cast with the sprite's shape.
+		 * @readonly
+		 */
+		get intersect(): { x: number; y: number };
+
+		/**
+		 * The angle of incidence of the cast at the intersection point.
+		 * @readonly
+		 */
+		get incidence(): number;
 	}
 
 	class Scale {
@@ -2566,16 +3709,19 @@ declare global {
 		 * @default 12
 		 */
 		holdThreshold: number;
+
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user presses the input
 		 */
 		presses(inp?: string): boolean;
+
 		/**
 		 * @param inp
 		 * @returns the amount of frames the user has been pressing the input
 		 */
 		pressing(inp?: string): number;
+
 		/**
 		 * Same as the `released` function, which is preferred.
 		 * @deprecated
@@ -2583,21 +3729,25 @@ declare global {
 		 * @returns true on the first frame that the user released the input
 		 */
 		pressed(inp?: string): boolean;
+
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user holds the input
 		 */
 		holds(inp?: string): boolean;
+
 		/**
 		 * @param inp
 		 * @returns the amount of frames the user has been holding the input
 		 */
 		holding(inp?: string): number;
+
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user released a held input
 		 */
 		held(inp?: string): boolean;
+
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user released the input
@@ -2611,91 +3761,111 @@ declare global {
 		 * The mouse's x position in the world.
 		 */
 		x: number;
+
 		/**
 		 * The mouse's y position in the world.
 		 */
 		y: number;
+
 		/**
 		 * The mouse's absolute position on the canvas.
 		 * @property {Number} x
 		 * @property {Number} y
 		 */
 		canvasPos: { x: number; y: number };
+
 		/**
 		 * The mouse's left button.
 		 */
 		left: number;
+
 		/**
 		 * The mouse's center button.
 		 */
 		center: number;
+
 		/**
 		 * The mouse's right button.
 		 */
 		right: number;
+
 		/**
 		 * Contains the scroll status of the mouse wheel.
 		 * @property {Number} x the horizontal scroll amount
 		 * @property {Number} y the vertical scroll amount
 		 */
 		scrollDelta: { x: number; y: number };
+
 		/**
 		 * Contains the drag status of each of the mouse's buttons.
 		 */
 		drag: {};
+
 		/**
 		 * True if the mouse is currently on the canvas.
 		 * @default false
 		 */
 		isOnCanvas: boolean;
+
 		/**
 		 * True if the mouse has ever interacted with the canvas.
 		 * @default false
 		 */
 		isActive: boolean;
+
 		/**
-		 * The mouse's position.
+		 * Gets the mouse's current position in the world as a readonly object {x, y}
+		 * that won't updated if the mouse moves.
 		 */
-		get pos(): {};
+		get pos(): { x: number; y: number };
+
 		/**
-		 * The mouse's position. Alias for pos.
+		 * The mouse's current position.
 		 */
-		get position(): {};
+		get position(): { x: number; y: number };
+
 		/**
 		 * The mouse's CSS cursor style.
 		 * @default 'default'
 		 */
 		get cursor(): string;
 		set cursor(val: string);
+
 		/**
 		 * Controls whether the mouse is visible or not.
 		 * @default true
 		 */
 		get visible(): boolean;
 		set visible(val: boolean);
+
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user moves the mouse while pressing the input
 		 */
 		drags(inp?: string): boolean;
+
 		/**
 		 * @param inp
 		 * @returns the amount of frames the user has been moving the mouse while pressing the input
 		 */
 		dragging(inp?: string): number;
+
 		/**
 		 * @param inp
 		 * @returns true on the first frame that the user releases the input after dragging the mouse
 		 */
 		dragged(inp?: string): boolean;
+
 		/**
 		 * @returns true on the first frame that the user scrolls the mouse wheel
 		 */
 		scrolls(): boolean;
+
 		/**
 		 * @returns the amount of frames the user has been scrolling the mouse wheel
 		 */
 		scrolling(): number;
+
 		/**
 		 * @returns true on the first frame that the user stops scrolling the mouse wheel
 		 */
@@ -2704,26 +3874,32 @@ declare global {
 
 	class _Pointer extends InputDevice {
 		constructor(pointer: any);
+
 		/**
 		 * The pointer's x position in the physics world.
 		 */
 		x: number;
+
 		/**
 		 * The pointer's y position in the physics world.
 		 */
 		y: number;
+
 		/**
 		 * The pointer's unique identifier.
 		 */
 		id: number;
+
 		/**
 		 * The amount of frames the pointer has been active for.
 		 */
 		duration: number;
+
 		/**
 		 * The pointer's absolute position on the canvas.
 		 */
 		canvasPos: { x: number; y: number };
+
 		/**
 		 * The pointer's pressure level, from 0 to 1.
 		 *
@@ -2731,33 +3907,40 @@ declare global {
 		 * the value is 0.5 when the pointer is pressing.
 		 */
 		pressure: number;
+
 		/**
 		 * The amount of frames the user has been clicking, touching,
 		 * or drawing on the screen with the pointer.
 		 */
 		press: number;
+
 		/**
 		 * @returns true on the first frame that the pointer grabs a sprite
 		 */
 		grabs(): boolean;
+
 		/**
 		 * @returns the amount of frames the pointer has been grabbing a sprite
 		 */
 		grabbing(): number;
+
 		/**
 		 * @returns true on the first frame that the pointer releases a grabbed sprite
 		 */
 		grabbed(): boolean;
+
 		/**
 		 * @param sprite
 		 * @returns true on the first frame that the pointer overlaps the sprite
 		 */
 		overlaps(sprite: Sprite): boolean;
+
 		/**
 		 * @param sprite
 		 * @returns the amount of frames the pointer has been overlapping the sprite
 		 */
 		overlapping(sprite: Sprite): number;
+
 		/**
 		 * @param sprite
 		 * @returns true on the first frame that the pointer stops overlapping the sprite
@@ -2805,29 +3988,35 @@ declare global {
 		b: number;
 		x: number;
 		y: number;
+
 		/**
 		 * Left shoulder button.
 		 */
 		l: number;
+
 		/**
 		 * Right shoulder button.
 		 */
 		r: number;
+
 		/**
 		 * Digital left trigger.
 		 */
 		lt: number;
+
 		/**
 		 * Digital right trigger.
 		 */
 		rt: number;
 		select: number;
 		start: number;
+
 		/**
 		 * Left stick button.
 		 * Activated by pressing down on the left analog stick.
 		 */
 		lsb: number;
+
 		/**
 		 * Right stick button.
 		 * Activated by pressing down on the right analog stick.
@@ -2837,6 +4026,7 @@ declare global {
 		down: number;
 		left: number;
 		right: number;
+
 		/**
 		 * Has x and y properties with -1 to 1 values which
 		 * represent the position of the left analog stick.
@@ -2844,6 +4034,7 @@ declare global {
 		 * {x: 0, y: 0} is the center position.
 		 */
 		leftStick: any;
+
 		/**
 		 * Has x and y properties with -1 to 1 values which
 		 * represent the position of the right analog stick.
@@ -2851,30 +4042,36 @@ declare global {
 		 * {x: 0, y: 0} is the center position.
 		 */
 		rightStick: any;
+
 		/**
 		 * Analog value 0-1 of the left trigger.
 		 * @default 0
 		 */
 		leftTrigger: number;
+
 		/**
 		 * Analog value 0-1 of the right trigger.
 		 * @default 0
 		 */
 		rightTrigger: number;
+
 		/**
 		 * Button names are mapped to `gamepad.buttons` indices.
 		 */
 		buttonMapping: any;
+
 		/**
 		 * Sticks and triggers are mapped to `gamepad.axes` indices.
 		 */
 		axeMapping: any;
+
 		/**
 		 * If the controller is a mock controller.
 		 */
 		isMock: boolean;
 		gamepad: Gamepad;
 		id: any;
+
 		/**
 		 * True if the controller has analog triggers.
 		 * False if the controller has digital (button) triggers.
@@ -2884,67 +4081,81 @@ declare global {
 		get circle(): number;
 		get square(): number;
 		get triangle(): number;
+
 		/**
 		 * Alias for `leftStick`.
 		 */
 		get ls(): any;
+
 		/**
 		 * Alias for `rightStick`.
 		 */
 		get rs(): any;
+
 		/**
 		 * Alias for `l` (left shoulder button).
 		 * `lb` is what it's called on Xbox controllers.
 		 */
 		get lb(): number;
+
 		/**
 		 * Alias for `r` (right shoulder button).
 		 * `rb` is what it's called on Xbox controllers.
 		 */
 		get rb(): number;
+
 		/**
 		 * Alias for `l` (left shoulder button).
 		 * `l1` is what it's called on PlayStation controllers.
 		 */
 		get l1(): number;
+
 		/**
 		 * Alias for `r` (right shoulder button).
 		 * `r1` is what it's called on PlayStation controllers.
 		 */
 		get r1(): number;
+
 		/**
 		 * Alias for `lt` (digital left trigger).
 		 * `zl` is what it's called on Nintendo controllers.
 		 */
 		get zl(): number;
+
 		/**
 		 * Alias for `rt` (digital right trigger).
 		 * `zr` is what it's called on Nintendo controllers.
 		 */
 		get zr(): number;
+
 		/**
 		 * Alias for `leftTrigger` (analog left trigger).
 		 * `l2` is what it's called on PlayStation controllers.
 		 */
 		get l2(): number;
+
 		/**
 		 * Alias for `rightTrigger` (analog right trigger).
 		 * `r2` is what it's called on PlayStation controllers.
 		 */
 		get r2(): number;
+
 		/**
 		 * Verbose alias for `lsb`.
 		 */
 		get leftStickButton(): number;
+
 		/**
 		 * Verbose alias for `rsb`.
 		 */
 		get rightStickButton(): number;
+
 		/**
 		 * Alias for `lsb` (left stick button).
 		 * `l3` is what it's called on PlayStation controllers.
 		 */
 		get l3(): number;
+
 		/**
 		 * Alias for `rsb` (right stick button).
 		 * `r3` is what it's called on PlayStation controllers.
@@ -2959,12 +4170,14 @@ declare global {
 		 * triggers, and sticks on game controllers.
 		 */
 		constructor();
+
 		/**
 		 * Swap controller positions in this controllers array.
 		 * @param indexA
 		 * @param indexB
 		 */
 		swap(indexA: number, indexB: number): void;
+
 		/**
 		 * Removes a controller from this controllers array
 		 * by setting `contros[index] = null`.
@@ -2973,6 +4186,7 @@ declare global {
 		 * @param index
 		 */
 		remove(index: number): void;
+
 		/**
 		 * Runs when a controller is connected. By default it
 		 * always returns true. Overwrite this function to customize
@@ -2987,6 +4201,7 @@ declare global {
 		 * @returns true if the controller should be added to this q5play controllers array
 		 */
 		onConnect(gamepad: Gamepad): boolean;
+
 		/**
 		 * Runs when a controller is disconnected. by default it
 		 * always returns false. Overwrite this function to customize
@@ -3002,10 +4217,20 @@ declare global {
 		onDisconnect(gamepad: Gamepad): boolean;
 	}
 
-	function colorPal(c: string, palette: number | any): string;
+	function colorPal(c: string, palette: { [key: string]: string } | string[]): string;
 	function EmojiImage(emoji: string, textSize: number): Q5.Image;
-	function spriteArt(txt: string, scale: number, palette: number | any): Q5.Image;
-	function animation(ani: Ani, x: number, y: number, r: number, sX: number, sY: number): void;
+	function spriteArt(txt: string, scale: number, palette: { [key: string]: string } | string[]): Q5.Image;
+
+	/**
+	 * Draws an animation.
+	 * @param ani the animation
+	 * @param x x coordinate to draw the animation at
+	 * @param y y coordinate to draw the animation at
+	 * @param dW display width
+	 * @param dH display height
+	 */
+	function animation(ani: Ani, x: number, y: number, dW: number, dH: number): void;
+
 	/**
 	 * @param milliseconds if not specified, delays until the next frame draw
 	 * @returns resolves after the delay

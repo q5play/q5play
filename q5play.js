@@ -12,12 +12,12 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.1
+ * @version 4.2
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
-let q5play_version = '4.1';
+let q5play_version = '4.2';
 
 if (typeof globalThis.Q5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
@@ -396,7 +396,9 @@ async function q5playPreSetup(q) {
 	const scaleFrom = (x, y) => ({ x: x * meterSize, y: y * meterSize });
 
 	const linearSlop = 0.005,
-		angularSlop = 0.000582;
+		angularSlop = 0.0333;
+
+	let visualSlop = 0.5;
 
 	const isSlop = (val) => Math.abs(val) <= linearSlop;
 	const fixRound = (val) => {
@@ -1199,10 +1201,10 @@ async function q5playPreSetup(q) {
 				else this.addCollider(...args);
 			}
 
-			this.prevPos = { x, y };
+			this.prevX = x;
+			this.prevY = y;
 			this.prevRotation = 0;
-			this._dest = { x, y };
-			this._destIdx = 0;
+
 			this._debug = false;
 
 			if (!group._isAllSpritesGroup) $.allSprites.push(this);
@@ -1891,7 +1893,7 @@ async function q5playPreSetup(q) {
 			}
 			const speed = this._vel.mag();
 			if (speed) {
-				this._setVel($.cos(val) * speed, $.sin(val) * speed);
+				this.__setVel($.cos(val) * speed, $.sin(val) * speed);
 				this._vel._magCached = false;
 			}
 			this._vel._direction = val;
@@ -1999,18 +2001,16 @@ async function q5playPreSetup(q) {
 			this._opacity = val;
 		}
 
-		get previousPosition() {
-			return this.prevPos;
+		get previousX() {
+			return this.prevX;
 		}
-		set previousPosition(val) {
-			this.prevPos = val;
+
+		get previousY() {
+			return this.prevY;
 		}
 
 		get previousRotation() {
 			return this.prevRotation;
-		}
-		set previousRotation(val) {
-			this.prevRotation = val;
 		}
 
 		get pixelPerfect() {
@@ -2035,8 +2035,9 @@ async function q5playPreSetup(q) {
 		get rotation() {
 			if (!this._physicsEnabled || !usePhysics) return this._rotation || 0;
 			let val = b2Body_GetRotation(this.bdID).GetAngle();
+			if ($._angleMode == DEGREES) val = $.degrees(val);
 			if (friendlyRounding) val = fixRoundAngular(val);
-			return (this._rotation = $._angleMode == DEGREES ? $.degrees(val) : val);
+			return (this._rotation = val);
 		}
 		set rotation(val) {
 			this._rotation = val;
@@ -2153,14 +2154,14 @@ async function q5playPreSetup(q) {
 			return this._vel.mag();
 		}
 		set speed(val) {
-			if (!val) this._setVel(0, 0);
+			if (!val) this.__setVel(0, 0);
 			else {
 				const mag = this._vel.mag();
 				if (mag > 0) {
-					this._setVel((this._vel.x / mag) * val, (this._vel.y / mag) * val);
+					this.__setVel((this._vel.x / mag) * val, (this._vel.y / mag) * val);
 				} else {
 					const dir = this._vel.direction();
-					this._setVel($.cos(dir) * val, $.sin(dir) * val);
+					this.__setVel($.cos(dir) * val, $.sin(dir) * val);
 				}
 			}
 			this._vel._mag = val;
@@ -2168,7 +2169,7 @@ async function q5playPreSetup(q) {
 		}
 
 		setSpeedAndDirection(speed, direction) {
-			this._setVel($.cos(direction) * speed, $.sin(direction) * speed);
+			this.__setVel($.cos(direction) * speed, $.sin(direction) * speed);
 			this._vel._mag = speed;
 			this._vel._direction = direction;
 			this._vel._magCached = this._vel._directionCached = true;
@@ -2230,7 +2231,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get pos() {
-			return this._pos;
+			return { x: this._posX, y: this._posY };
 		}
 		set pos(val) {
 			if (val == $.mouse && !$.mouse.isActive) return;
@@ -2409,10 +2410,19 @@ async function q5playPreSetup(q) {
 		}
 		set vel(val) {
 			this._setVel(val[0] ?? val.x, val[1] ?? val.y);
-			this._vel._magCached = this._vel._directionCached = false;
 		}
 
 		_setVel(x, y) {
+			if (this._physicsEnabled) {
+				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
+			}
+			this._velX = x;
+			this._velY = y;
+			this._velSynced = true;
+			this._vel._magCached = this._vel._directionCached = false;
+		}
+
+		__setVel(x, y) {
 			if (this._physicsEnabled) {
 				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
 			}
@@ -2447,6 +2457,9 @@ async function q5playPreSetup(q) {
 
 		_update() {
 			if (this._customUpdate) this._customUpdate();
+			this.prevX = this._posX;
+			this.prevY = this._posY;
+			this.prevRotation = this.rotation;
 			if (this.autoUpdate) this.autoUpdate = null;
 		}
 
@@ -2466,6 +2479,70 @@ async function q5playPreSetup(q) {
 				if (this.rotation != this.prevRotation) {
 					this.mod[3] = this.mod[4] = true;
 				}
+			}
+
+			if (this._destArrivalTime !== undefined && $.world.physicsTime >= this._destArrivalTime) {
+				const x = this._posX,
+					y = this._posY,
+					prevX = this.prevX,
+					prevY = this.prevY,
+					destX = this._destX,
+					destY = this._destY;
+
+				const destReachedX =
+					destX === undefined || (destX >= Math.min(prevX, x) - visualSlop && destX <= Math.max(prevX, x) + visualSlop);
+				const destReachedY =
+					destY === undefined || (destY >= Math.min(prevY, y) - visualSlop && destY <= Math.max(prevY, y) + visualSlop);
+				const destReached = destReachedX && destReachedY;
+
+				if (destReached) {
+					this._setVel(0, 0);
+					this.rotationSpeed = 0;
+					this.pos = [this._destX ?? this._posX, this._destY ?? this._posY];
+					if (this._destRot !== undefined) {
+						this.rotation = this._destRot;
+					}
+				}
+
+				if (this._destResolve) {
+					this._destResolve(destReached);
+					this._destResolve = undefined;
+				}
+
+				this._destX = this._destY = this._destRot = this._destArrivalTime = undefined;
+			}
+
+			if (this._destRotArrivalTime !== undefined && $.world.physicsTime >= this._destRotArrivalTime) {
+				const isDeg = $._angleMode == DEGREES,
+					full = isDeg ? 360 : $.TWO_PI,
+					half = isDeg ? 180 : Math.PI,
+					prevRot = this.prevRotation,
+					currRot = this.rotation,
+					destRot = this._destRot;
+
+				// normalize destRot to [-half, half) to match this.rotation's range
+				let nd = ((destRot % full) + full) % full;
+				if (nd >= half) nd -= full;
+
+				// when the sprite crosses the ±half boundary, prevRot and currRot jump
+				// by ~full°; invert the range check so nd is tested against the arc that
+				// was actually traversed rather than the gap between them
+				const crossed180 = Math.abs(prevRot - currRot) > half;
+				const rotReached = crossed180
+					? nd >= Math.max(prevRot, currRot) - visualSlop || nd <= Math.min(prevRot, currRot) + visualSlop
+					: nd >= Math.min(prevRot, currRot) - visualSlop && nd <= Math.max(prevRot, currRot) + visualSlop;
+
+				if (rotReached) {
+					this.rotationSpeed = 0;
+					this.rotation = nd;
+				}
+
+				if (this._destRotationResolve) {
+					this._destRotationResolve(rotReached);
+					this._destRotationResolve = undefined;
+				}
+
+				this._destRot = this._destRotArrivalTime = undefined;
 			}
 
 			if (!this._physicsEnabled && !this._deleted) return;
@@ -2776,32 +2853,6 @@ async function q5playPreSetup(q) {
 			wind.delete();
 		}
 
-		angleTo(x, y) {
-			if (typeof x == 'object') {
-				y = x.y;
-				x = x.x;
-			}
-			return $.atan2(y - this.y, x - this.x);
-		}
-
-		rotationToFace(x, y, facing) {
-			if (typeof x == 'object') {
-				facing = y;
-				y = x.y;
-				x = x.x;
-			}
-			// if the sprite is too close to the position, don't rotate
-			if (Math.abs(x - this.x) < 0.01 && Math.abs(y - this.y) < 0.01) {
-				return 0;
-			}
-			return this.angleTo(x, y) + (facing || 0);
-		}
-
-		angleToFace(x, y, facing) {
-			let ang = this.rotationToFace(x, y, facing);
-			return minAngleDist(ang, this.rotation);
-		}
-
 		moveTowards(x, y, tracking) {
 			if (x === undefined) return;
 
@@ -2816,13 +2867,13 @@ async function q5playPreSetup(q) {
 
 			let velX, velY;
 
-			if (x !== null) {
+			if (x !== null && x !== undefined) {
 				let diffX = x - this.x;
 				if (!isSlop(diffX)) {
 					velX = diffX * tracking;
 				} else velX = 0;
 			} else velX = this._velX;
-			if (y !== null) {
+			if (y !== null && y !== undefined) {
 				let diffY = y - this.y;
 				if (!isSlop(diffY)) {
 					velY = diffY * tracking;
@@ -2830,7 +2881,155 @@ async function q5playPreSetup(q) {
 			} else velY = this._velY;
 
 			this._setVel(velX, velY);
-			this._vel._magCached = this._vel._directionCached = false;
+		}
+
+		moveTo(x, y, speed) {
+			if (x === undefined && (y === undefined || y === null)) return;
+
+			if (x !== null && x !== undefined && typeof x != 'number') {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				speed = y;
+				y = pos.y;
+				x = pos.x;
+			}
+
+			const moveX = x !== null && x !== undefined;
+			const moveY = y !== null && y !== undefined;
+
+			speed ||= this.speed || 1;
+
+			const dist =
+				moveX && moveY
+					? Math.hypot(x - this._posX, y - this._posY)
+					: moveX
+						? Math.abs(x - this._posX)
+						: Math.abs(y - this._posY);
+
+			if (this._destResolve) {
+				this._destResolve(false);
+				this._destResolve = undefined;
+			}
+
+			this._destX = moveX ? x : undefined;
+			this._destY = moveY ? y : undefined;
+			this._destArrivalTime = $.world.physicsTime + dist / (speed * $.world._updateRate);
+
+			if (dist > 0) {
+				if (moveX && moveY) {
+					this.setSpeedAndDirection(speed, $.atan2(y - this.y, x - this.x));
+				} else if (moveX) {
+					this._setVel(x > this._posX ? speed : -speed, this._velY);
+				} else {
+					this._setVel(this._velX, y > this._posY ? speed : -speed);
+				}
+			}
+
+			return {
+				then: (onFulfilled) => {
+					this._destResolve = onFulfilled;
+				}
+			};
+		}
+
+		angleTo(x, y, facing = 0) {
+			if (typeof x == 'object') {
+				facing = y || 0;
+				y = x.y;
+				x = x.x;
+			}
+			// if the sprite is too close to the position, don't rotate
+			if (Math.abs(x - this.x) < 0.01 && Math.abs(y - this.y) < 0.01) {
+				return this.rotation;
+			}
+			return $.atan2(y - this.y, x - this.x) + facing;
+		}
+
+		angleDistTo(x, y, facing = 0) {
+			if (typeof x == 'object') {
+				facing = y || 0;
+				y = x.y;
+				x = x.x;
+			}
+			// if the sprite is too close to the position, don't rotate
+			if (Math.abs(x - this.x) < 0.01 && Math.abs(y - this.y) < 0.01) {
+				return 0;
+			}
+			return minAngleDist($.atan2(y - this.y, x - this.x) + facing, this.rotation);
+		}
+
+		rotateTo(angle, speed) {
+			let args = arguments;
+			let x, y, facing;
+			if (typeof args[0] != 'number') {
+				x = args[0].x;
+				y = args[0].y;
+				speed = args[1];
+				facing = args[2];
+			} else if (arguments.length > 2) {
+				x = args[0];
+				y = args[1];
+				speed = args[2];
+				facing = args[3];
+			}
+
+			if (x !== undefined) angle = this.angleTo(x, y, facing);
+
+			const full = $._angleMode == DEGREES ? 360 : $.TWO_PI;
+			let angleDist = (angle - this.rotation) % full;
+			if (angleDist < 0 && speed > 0) angleDist += full;
+			if (angleDist > 0 && speed < 0) angleDist -= full;
+
+			return this.rotate(angleDist, speed);
+		}
+
+		rotateMinTo(angle, speed, facing) {
+			let args = arguments;
+			let x, y;
+			if (typeof args[0] != 'number') {
+				x = args[0].x;
+				y = args[0].y;
+				speed = args[1];
+				facing = args[2];
+			} else if (args.length > 2) {
+				x = args[0];
+				y = args[1];
+				speed = args[2];
+				facing = args[3];
+			}
+
+			if (x !== undefined) angle = this.angleTo(x, y, facing);
+
+			return this.rotate(minAngleDist(angle, this.rotation), speed);
+		}
+
+		rotate(angleDist, speed) {
+			if (Math.abs(angleDist) <= angularSlop) return;
+
+			speed ||= this.rotationSpeed || 1;
+			speed = Math.abs(speed) * Math.sign(angleDist);
+
+			// cap speed so the sprite doesn't overshoot the destination in one physics step
+			if (Math.abs(speed) > Math.abs(angleDist)) speed = angleDist;
+
+			this._destRotArrivalTime = $.world.physicsTime + Math.abs(angleDist) / (Math.abs(speed) * $.world._updateRate);
+
+			this._destRot = this.rotation + angleDist;
+
+			if (this._destRotationResolve) {
+				this._destRotationResolve(false);
+				this._destRotationResolve = undefined;
+			}
+
+			this.rotationSpeed = speed;
+
+			log(this.rotation, this._destRot, angleDist, speed, this._destRotArrivalTime);
+
+			return {
+				then: (onFulfilled) => {
+					this._destRotationResolve = onFulfilled;
+				}
+			};
 		}
 
 		rotateTowards(angle, tracking) {
@@ -2848,18 +3047,31 @@ async function q5playPreSetup(q) {
 				facing = args[3];
 			}
 
-			if (x !== undefined) angle = this.angleToFace(x, y, facing);
+			if (x !== undefined) angle = this.angleDistTo(x, y, facing);
 			else angle -= this.rotation;
 
 			tracking ??= 0.1;
 			this.rotationSpeed = angle * tracking;
 		}
 
-		_setTargetTransform(x, y, rotation) {
-			let t = new b2Transform();
-			t.p = scaleTo(x, y);
+		transformTowards(x, y, rotation, tracking = 0.1) {
+			if (x === undefined) return;
+
+			if (typeof x != 'number') {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				tracking = rotation ?? tracking;
+				rotation = y;
+				y = pos.y;
+				x = pos.x;
+			}
+
+			const t = new b2Transform();
+			t.p = scaleTo(x ?? this._posX, y ?? this._posY);
+			rotation ??= this._rotation;
+			if ($._angleMode == DEGREES) rotation = (rotation % 360) * DEGTORAD;
 			t.q = b2MakeRot(rotation);
-			b2Body_SetTargetTransform(this.bdID, t, $.world._timeStep);
+			b2Body_SetTargetTransform(this.bdID, t, $.world._timeStep / tracking);
 		}
 
 		delete() {
@@ -4532,6 +4744,134 @@ async function q5playPreSetup(q) {
 			}
 		}
 
+		rotateTowards() {
+			for (let s of this) {
+				s.rotateTowards(...arguments);
+			}
+		}
+
+		rotateTo(angle, speed) {
+			const thenables = [];
+			for (let s of this) {
+				thenables.push(s.rotateTo(...arguments));
+			}
+			return {
+				then: (onFulfilled) => {
+					let pending = thenables.length;
+					if (!pending) return onFulfilled(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) onFulfilled(allReached);
+						});
+					}
+				}
+			};
+		}
+
+		rotate(angle, speed) {
+			const thenables = [];
+			for (let s of this) {
+				thenables.push(s.rotate(...arguments));
+			}
+			return {
+				then: (onFulfilled) => {
+					let pending = thenables.length;
+					if (!pending) return onFulfilled(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) onFulfilled(allReached);
+						});
+					}
+				}
+			};
+		}
+
+		rotateMinTo(angle, speed) {
+			const thenables = [];
+			for (let s of this) {
+				thenables.push(s.rotateMinTo(...arguments));
+			}
+			return {
+				then: (onFulfilled) => {
+					let pending = thenables.length;
+					if (!pending) return onFulfilled(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) onFulfilled(allReached);
+						});
+					}
+				}
+			};
+		}
+
+		transformTowards(x, y, rotation, tracking = 0.1) {
+			if (x === undefined) return;
+
+			if (typeof x != 'number') {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				tracking = rotation ?? tracking;
+				rotation = y;
+				y = pos.y;
+				x = pos.x;
+			}
+
+			this._resetCentroid();
+
+			for (let s of this) {
+				if (s.distCentroid === undefined) {
+					this._resetDistancesFromCentroid();
+				}
+				s.transformTowards(s.distCentroid.x + x, s.distCentroid.y + y, rotation, tracking);
+			}
+		}
+
+		moveTo(x, y, speed) {
+			if (x === undefined && (y === undefined || y === null)) return;
+
+			let nullX = x === null || x === undefined;
+			let nullY = y === null || y === undefined;
+
+			if (!nullX && typeof x != 'number') {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				speed = y;
+				y = pos.y;
+				x = pos.x;
+				nullX = nullY = false;
+			}
+
+			this._resetCentroid();
+			this._resetDistancesFromCentroid();
+
+			const thenables = [];
+			for (let s of this) {
+				const tx = nullX ? null : s.distCentroid.x + x;
+				const ty = nullY ? null : s.distCentroid.y + y;
+				thenables.push(s.moveTo(tx, ty, speed));
+			}
+
+			return {
+				then: (onFulfilled) => {
+					let pending = thenables.length;
+					if (!pending) return onFulfilled(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) onFulfilled(allReached);
+						});
+					}
+				}
+			};
+		}
+
 		toString() {
 			return 'g' + this.idNum;
 		}
@@ -5040,6 +5380,7 @@ async function q5playPreSetup(q) {
 		}
 		set meterSize(val) {
 			meterSize = val;
+			visualSlop = meterSize / 120;
 		}
 
 		get profile() {
@@ -5155,6 +5496,8 @@ async function q5playPreSetup(q) {
 
 			this.physicsTime += timeStep;
 
+			this._sync();
+
 			let sprites = Object.values($.q5play.sprites);
 			let groups = Object.values($.q5play.groups);
 
@@ -5169,6 +5512,71 @@ async function q5playPreSetup(q) {
 			}
 
 			if (this.autoStep) this.autoStep = null;
+		}
+
+		_sync() {
+			jointStack = [];
+			shapeStack = [];
+
+			b2World_Draw(wID, drawCmds.GetDebugDraw());
+
+			let cmdPtr = drawCmds.GetCommandsData(),
+				cmdSize = drawCmds.GetCommandsSize(),
+				cmdStride = drawCmds.GetCommandStride(),
+				offset = cmdPtr,
+				renderJointForces = $.q5play.renderJointForces,
+				s;
+
+			for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
+				// workaround that unpacks data from
+				// the shape material's customColor
+				const customColor = Box2D.HEAPU32[(offset + 4) >> 2],
+					uid = customColor & 0xffffff,
+					isSensor = (customColor >>> 25) & 0x1,
+					isFirstShape = (customColor >>> 26) & 0x1;
+
+				s = $.q5play.sprites[uid];
+
+				let type = Box2D.HEAPU8[offset];
+
+				if (type == 7) {
+					continue;
+				}
+
+				let vertexCount = Box2D.HEAPU16[(offset + 8) >> 1];
+
+				let dataLen = 4;
+				if (type == 1) dataLen = 5 + vertexCount * 2;
+				else if (type == 3 || type == 4) dataLen = 5;
+				let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
+
+				if (!s) {
+					if (type == 0 && renderJointForces) jointStack.push(data);
+					continue;
+				}
+
+				// always keep position in sync since it has a low performance cost
+				// unless the shape is a chain
+				if (type < 4 || (type == 4 && !s._hasCapsuleChain)) {
+					s._posX = data[0] * meterSize;
+					s._posY = data[1] * meterSize;
+				}
+
+				s._velSynced = false;
+				s._vel._magCached = false;
+
+				if (!s.visible) {
+					continue;
+				}
+
+				if (s._hasImagery || s._userDefinedDraw) {
+					s._rotation = Math.atan2(data[2], data[3]) * RADTODEG;
+				}
+
+				if (s.debug || (!s._hasImagery && !s._userDefinedDraw)) {
+					shapeStack.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
+				}
+			}
 		}
 
 		get realTime() {
@@ -5298,7 +5706,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get pos() {
-			return this._pos;
+			return { x: this._pos.x, y: this._pos.y };
 		}
 		set pos(val) {
 			this.x = val[0] ?? val.x;
@@ -6966,7 +7374,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get pos() {
-			return this._pos;
+			return { x: this.x, y: this.y };
 		}
 		get position() {
 			return this._pos;
@@ -7879,71 +8287,6 @@ async function q5playPreSetup(q) {
 		jointStack = [],
 		shapeStack = [];
 
-	$._syncWorld = () => {
-		jointStack = [];
-		shapeStack = [];
-
-		b2World_Draw(wID, drawCmds.GetDebugDraw());
-
-		let cmdPtr = drawCmds.GetCommandsData(),
-			cmdSize = drawCmds.GetCommandsSize(),
-			cmdStride = drawCmds.GetCommandStride(),
-			offset = cmdPtr,
-			renderJointForces = $.q5play.renderJointForces,
-			s;
-
-		for (let i = 0; i < cmdSize; i++, offset += cmdStride) {
-			// workaround that unpacks data from
-			// the shape material's customColor
-			const customColor = Box2D.HEAPU32[(offset + 4) >> 2],
-				uid = customColor & 0xffffff,
-				isSensor = (customColor >>> 25) & 0x1,
-				isFirstShape = (customColor >>> 26) & 0x1;
-
-			s = $.q5play.sprites[uid];
-
-			let type = Box2D.HEAPU8[offset];
-
-			if (type == 7) {
-				continue;
-			}
-
-			let vertexCount = Box2D.HEAPU16[(offset + 8) >> 1];
-
-			let dataLen = 4;
-			if (type == 1) dataLen = 5 + vertexCount * 2;
-			else if (type == 3 || type == 4) dataLen = 5;
-			let data = new Float32Array(Box2D.HEAPU8.buffer, offset + 12, dataLen);
-
-			if (!s) {
-				if (type == 0 && renderJointForces) jointStack.push(data);
-				continue;
-			}
-
-			// always keep position in sync since it has a low performance cost
-			// unless the shape is a chain
-			if (type < 4 || (type == 4 && !s._hasCapsuleChain)) {
-				s._posX = data[0] * meterSize;
-				s._posY = data[1] * meterSize;
-			}
-
-			s._velSynced = false;
-			s._vel._magCached = false;
-
-			if (!s.visible) {
-				continue;
-			}
-
-			if (s._hasImagery || s._userDefinedDraw) {
-				s._rotation = Math.atan2(data[2], data[3]) * RADTODEG;
-			}
-
-			if (s.debug || (!s._hasImagery && !s._userDefinedDraw)) {
-				shapeStack.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
-			}
-		}
-	};
-
 	const colorMax = $._colorFormat,
 		debugGreen = $.color(0, colorMax, 0, colorMax * 0.9),
 		debugGreenFill = $.color(0, colorMax, 0, colorMax * 0.1),
@@ -8242,7 +8585,6 @@ function q5playUpdate() {
 
 	if ($.world.autoStep && $.world.timeScale > 0) {
 		$.world.physicsUpdate();
-		$._syncWorld();
 	}
 	$.world.autoStep ??= true;
 
@@ -8413,8 +8755,7 @@ attractTo -> es:atraerA
 repelFrom -> es:repelerDe
 applyTorque -> es:aplicarTorque
 angleTo -> es:ánguloHacia
-rotationToFace -> es:rotaciónParaMirar
-angleToFace -> es:ánguloParaMirar
+angleDistTo -> es:distÁnguloHacia
 setSpeedAndDirection -> es:establecerVelocidadYDirección
 scaleBy -> es:escalarPor
 resetMass -> es:reiniciarMasa
