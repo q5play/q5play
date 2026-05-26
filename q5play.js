@@ -150,6 +150,7 @@ async function q5playPreSetup(q) {
 		b2CreateChain,
 		b2Chain_GetSegmentCount,
 		b2Chain_GetSegments,
+		b2DestroyChain,
 
 		/* Body */
 		b2BodyType,
@@ -249,7 +250,7 @@ async function q5playPreSetup(q) {
 			this.context = 'web';
 
 			this.update = () => q5playUpdate.call($, q);
-			this.postdraw = () => q5playPostDraw.call($, q);
+			this.draw = () => q5playPostDraw.call($, q);
 
 			if (window.matchMedia) {
 				this.hasMouse = window.matchMedia('(any-hover: none)').matches ? false : true;
@@ -492,13 +493,13 @@ async function q5playPreSetup(q) {
 				geom = this.geom;
 
 			if (type == 0) {
-				let hw = geom._hw * scaleX,
-					hh = geom._hh * scaleY,
+				let hw = geom._hw * Math.abs(scaleX),
+					hh = geom._hh * Math.abs(scaleY),
 					rr;
 
 				if (!geom._rr) geom = b2MakeBox(hw, hh);
 				else {
-					rr = geom._rr * Math.min(scaleX, scaleY);
+					rr = geom._rr * Math.min(Math.abs(scaleX), Math.abs(scaleY));
 					geom = b2MakeRoundedBox(hw, hh, rr);
 				}
 				b2Shape_SetPolygon(id, geom);
@@ -506,11 +507,44 @@ async function q5playPreSetup(q) {
 				geom._hh = hh;
 				geom._rr = rr;
 				this.geom = geom;
+			} else if (type == 1) {
+				// convex polygon
+				geom = b2Shape_GetPolygon(id);
+				let verts = [];
+				for (let i = 0; i < geom.count; i++) {
+					const v = geom.GetVertex(i);
+					verts.push({ x: v.x * scaleX, y: v.y * scaleY });
+				}
+				let hull = b2ComputeHull(verts);
+				let rr = geom.radius * Math.min(scaleX, scaleY);
+				geom = rr ? b2MakeOffsetRoundedPolygon(hull, ZERO_VEC, ZERO_ROT, rr) : b2MakePolygon(hull, 0);
+				b2Shape_SetPolygon(id, geom);
+				this.geom = geom;
 			} else if (type == 3) {
-				geom.radius *= scaleX;
+				geom.radius *= Math.abs(scaleX);
 				b2Shape_SetCircle(id, geom);
 				this.geom = geom;
+			} else if (type == 4 || type == 7) {
+				// capsule (single or capsule chain segment)
+				geom = b2Shape_GetCapsule(id);
+				geom.center1.x *= scaleX;
+				geom.center1.y *= scaleY;
+				geom.center2.x *= scaleX;
+				geom.center2.y *= scaleY;
+				geom.radius *= Math.min(scaleX, scaleY);
+				b2Shape_SetCapsule(id, geom);
+				this.geom = geom;
+			} else if (type == 5) {
+				// segment
+				geom = b2Shape_GetSegment(id);
+				geom.point1.x *= scaleX;
+				geom.point1.y *= scaleY;
+				geom.point2.x *= scaleX;
+				geom.point2.y *= scaleY;
+				b2Shape_SetSegment(id, geom);
+				this.geom = geom;
 			}
+			// type 6 (chain) - handled by sprite's scaleBy, which rescales and sets all segments
 		}
 
 		_enableContactEvents(val = true) {
@@ -996,16 +1030,16 @@ async function q5playPreSetup(q) {
 			});
 
 			this._direction = 0;
-			this._velX = 0;
-			this._velY = 0;
+			this.vx = 0;
+			this.vy = 0;
 			this._velSynced = true;
 			this._vel = $.createVector.call($);
 			this._vel._useCache = true;
 
 			this._syncVel = () => {
 				let v = b2Body_GetLinearVelocity(this.bdID);
-				this._velX = v.x;
-				this._velY = v.y;
+				this.vx = v.x;
+				this.vy = v.y;
 				this._velSynced = true;
 			};
 
@@ -1015,13 +1049,13 @@ async function q5playPreSetup(q) {
 						if (!_this._velSynced && _this._physicsEnabled) {
 							_this._syncVel();
 						}
-						return _this._velX;
+						return _this.vx;
 					},
 					set(val) {
 						if (_this._physicsEnabled) {
 							b2Body_SetLinearVelocity(_this.bdID, new b2Vec2(val, this.y));
 						}
-						_this._velX = val;
+						_this.vx = val;
 						this._magCached = this._directionCached = false;
 					}
 				},
@@ -1030,13 +1064,13 @@ async function q5playPreSetup(q) {
 						if (!_this._velSynced && _this._physicsEnabled) {
 							_this._syncVel();
 						}
-						return _this._velY;
+						return _this.vy;
 					},
 					set(val) {
 						if (_this._physicsEnabled) {
 							b2Body_SetLinearVelocity(_this.bdID, new b2Vec2(this.x, val));
 						}
-						_this._velY = val;
+						_this.vy = val;
 						this._magCached = this._directionCached = false;
 					}
 				}
@@ -1155,8 +1189,7 @@ async function q5playPreSetup(q) {
 				set(val) {
 					if (!val || val == this._x) return;
 					if (_this.watch) _this.mod[26] = true;
-					let scaleX = Math.abs(val / this._x);
-					_this.scaleBy(scaleX, 1);
+					_this.scaleBy(val / this._x, 1);
 					this._x = val;
 					this._avg = (this._x + this._y) * 0.5;
 					_this._shouldScale = this._avg != 1;
@@ -1170,8 +1203,7 @@ async function q5playPreSetup(q) {
 				set(val) {
 					if (!val || val == this._y) return;
 					if (_this.watch) _this.mod[26] = true;
-					let scaleY = Math.abs(val / this._y);
-					_this.scaleBy(1, scaleY);
+					_this.scaleBy(1, val / this._y);
 					this._y = val;
 					this._avg = (this._x + this._y) * 0.5;
 					_this._shouldScale = this._avg != 1;
@@ -1514,10 +1546,10 @@ async function q5playPreSetup(q) {
 							geom.center2 = vecs[i];
 							geom.radius = rr ? rr / meterSize : 0.02;
 							id = b2CreateCapsuleShape(bdID, shape.def, geom);
-							let shapePart = new Collider(this);
-							shape._init(id, 7, geom);
-							shapes.push(shapePart);
-							shapeDict[id.index1] = shapePart;
+							let sh = new Collider(this);
+							sh._init(id, 7, geom);
+							shapes.push(sh);
+							shapeDict[id.index1] = sh;
 						}
 						shape = null;
 						this.isSuperFast = true;
@@ -1535,12 +1567,17 @@ async function q5playPreSetup(q) {
 
 						id = b2CreateChain(bdID, shape.def);
 						shape._init(id, 6);
+						shape.friction = 0.5;
+						shape._points = vecs.map((v) => ({ x: v.x, y: v.y }));
+						shape._isLoopChain = vecs.isLoop;
+						this._chain = shape;
 
 						let count = b2Chain_GetSegmentCount(id);
 						let segments = b2Chain_GetSegments(id, count);
 						for (let segID of segments) {
 							let sh = new Collider(this);
 							sh._init(segID, 6);
+							sh.friction = 0.5;
 							shapes.push(sh);
 							shapeDict[segID.index1] = sh;
 						}
@@ -2090,17 +2127,85 @@ async function q5playPreSetup(q) {
 		scaleBy(x, y) {
 			if (y === undefined) y = x;
 
+			const ax = Math.abs(x),
+				ay = Math.abs(y);
+
 			if (this._shapes) {
 				for (let shape of this._shapes) {
 					shape.scaleBy(x, y);
 				}
 			}
 
-			this._w *= x;
-			this._hw *= x;
+			if (this._hasChain) this._rebuildChain(x, y);
+
+			this._w *= ax;
+			this._hw *= ax;
 			if (this._h) {
-				this._h *= y;
-				this._hh *= y;
+				this._h *= ay;
+				this._hh *= ay;
+			}
+		}
+
+		_rebuildChain(scaleX, scaleY) {
+			const chain = this._chain;
+			const shapes = this._shapes;
+
+			// save properties from existing segments before removing them
+			const firstCollider = this.colliders[0];
+			const savedFriction = firstCollider?._friction ?? 0.5;
+			const savedSurfaceSpeed = firstCollider?._tangentSpeed ?? 0;
+			const savedBounciness = firstCollider?._restitution ?? 0.2;
+			// negate surfaceSpeed when the chain is flipped (odd number of axes negated)
+			const newSurfaceSpeed = scaleX * scaleY < 0 ? -savedSurfaceSpeed : savedSurfaceSpeed;
+
+			// scale the stored points (already in Box2D meter coordinates)
+			for (let p of chain._points) {
+				p.x *= scaleX;
+				p.y *= scaleY;
+			}
+
+			// when an odd number of axes are negated, the winding order reverses,
+			// flipping the collision normal; reverse the point order to compensate
+			if (scaleX * scaleY < 0) chain._points.reverse();
+
+			// clean up old chain segment JS references
+			for (let i = shapes.length - 1; i >= 0; i--) {
+				if (shapes[i].type === 6) {
+					delete shapeDict[shapes[i].id.index1];
+					this.colliders.splice(this.colliders.indexOf(shapes[i]), 1);
+					shapes.splice(i, 1);
+				}
+			}
+
+			// destroy old chain (Box2D frees all segment physics objects)
+			b2DestroyChain(chain.id);
+
+			// recompute packed material data
+			const packedData = ((chain._isFirstShape ? 1 : 0) << 26) | this._uid;
+
+			// create new chain with scaled points
+			const chainDef = new b2DefaultChainDef();
+			chainDef.SetPoints([chain._points[0], ...chain._points, chain._points.at(-1)]);
+			chainDef.isLoop = chain._isLoopChain;
+			chainDef.SetMaterials([{ customColor: packedData }]);
+
+			const newId = b2CreateChain(this.bdID, chainDef);
+			chain._init(newId, 6);
+			chain.friction = savedFriction;
+			chain._tangentSpeed = newSurfaceSpeed;
+
+			// register new chain segments with restored properties
+			const count = b2Chain_GetSegmentCount(newId);
+			const segments = b2Chain_GetSegments(newId, count);
+			for (let segID of segments) {
+				let sh = new Collider(this);
+				sh._init(segID, 6);
+				sh.friction = savedFriction;
+				sh.bounciness = savedBounciness;
+				if (newSurfaceSpeed) sh.surfaceSpeed = newSurfaceSpeed;
+				shapes.push(sh);
+				this.colliders.push(sh);
+				shapeDict[segID.index1] = sh;
 			}
 		}
 
@@ -2124,10 +2229,7 @@ async function q5playPreSetup(q) {
 
 			if (this.watch) this.mod[26] = true;
 
-			let scaleX = Math.abs(x / sc._x);
-			let scaleY = Math.abs(y / sc._y);
-
-			this.scaleBy(scaleX, scaleY);
+			this.scaleBy(x / sc._x, y / sc._y);
 
 			sc._x = x;
 			sc._y = y;
@@ -2181,6 +2283,10 @@ async function q5playPreSetup(q) {
 		}
 		set surfaceSpeed(val) {
 			if (this.watch) this.mod[21] = true;
+			if (this._hasCapsuleChain) {
+				return console.error('Can not set surfaceSpeed of a capsule chain.');
+			}
+			if (this._hasChain) this._chain.surfaceSpeed = val;
 			for (let collider of this.colliders) {
 				collider.surfaceSpeed = val;
 			}
@@ -2412,12 +2518,19 @@ async function q5playPreSetup(q) {
 			this._setVel(val[0] ?? val.x, val[1] ?? val.y);
 		}
 
+		get velocity() {
+			return this._vel;
+		}
+		set velocity(val) {
+			this.vel = val;
+		}
+
 		_setVel(x, y) {
 			if (this._physicsEnabled) {
 				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
 			}
-			this._velX = x;
-			this._velY = y;
+			this.vx = x;
+			this.vy = y;
 			this._velSynced = true;
 			this._vel._magCached = this._vel._directionCached = false;
 		}
@@ -2426,16 +2539,9 @@ async function q5playPreSetup(q) {
 			if (this._physicsEnabled) {
 				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
 			}
-			this._velX = x;
-			this._velY = y;
+			this.vx = x;
+			this.vy = y;
 			this._velSynced = true;
-		}
-
-		get velocity() {
-			return this._vel;
-		}
-		set velocity(val) {
-			this.vel = val;
 		}
 
 		get grabbable() {
@@ -2468,8 +2574,8 @@ async function q5playPreSetup(q) {
 			if (this._life <= 0) {
 				this.delete();
 			} else if (!this._physicsEnabled || !usePhysics) {
-				this._posX += this._velX * timeScale;
-				this._posY += this._velY * timeScale;
+				this._posX += this.vx * timeScale;
+				this._posY += this.vy * timeScale;
 				this._rotation += this._rotationSpeed * timeScale;
 			}
 
@@ -2776,8 +2882,9 @@ async function q5playPreSetup(q) {
 				args[2] = args[1];
 				args[1] = undefined;
 			}
-			let o = {};
-			o.forceVector = new b2Vec2(args[0], args[1]);
+			const v = this._args2Vec(args[0], args[1]),
+				o = {};
+			o.forceVector = new b2Vec2(v.x, v.y);
 			if (args[2] !== undefined) {
 				o.poa = this._args2Vec(args[2], args[3]);
 				o.poa = scaleTo(o.poa.x, o.poa.y);
@@ -2853,34 +2960,19 @@ async function q5playPreSetup(q) {
 			wind.delete();
 		}
 
-		moveTowards(x, y, tracking) {
-			if (x === undefined) return;
+		move(distance, direction, speed) {
+			if (!distance) return;
 
-			if (typeof x != 'number' && x !== null) {
-				let pos = x;
-				if (pos == $.mouse && !$.mouse.isActive) return;
-				tracking = y;
-				y = pos.y;
-				x = pos.x;
+			if (typeof direction == 'string') {
+				directionNamed = true;
+				this._heading = direction;
+				direction = this._getDirectionAngle(direction);
 			}
-			tracking ??= 0.1;
+			direction ??= this.direction;
 
-			let velX, velY;
-
-			if (x !== null && x !== undefined) {
-				let diffX = x - this.x;
-				if (!isSlop(diffX)) {
-					velX = diffX * tracking;
-				} else velX = 0;
-			} else velX = this._velX;
-			if (y !== null && y !== undefined) {
-				let diffY = y - this.y;
-				if (!isSlop(diffY)) {
-					velY = diffY * tracking;
-				} else velY = 0;
-			} else velY = this._velY;
-
-			this._setVel(velX, velY);
+			const x = $.cos(direction) * distance + this.y,
+				y = $.sin(direction) * distance + this.x;
+			return this.moveTo(x, y, speed);
 		}
 
 		moveTo(x, y, speed) {
@@ -2919,9 +3011,9 @@ async function q5playPreSetup(q) {
 				if (moveX && moveY) {
 					this.setSpeedAndDirection(speed, $.atan2(y - this.y, x - this.x));
 				} else if (moveX) {
-					this._setVel(x > this._posX ? speed : -speed, this._velY);
+					this._setVel(x > this._posX ? speed : -speed, this.vy);
 				} else {
-					this._setVel(this._velX, y > this._posY ? speed : -speed);
+					this._setVel(this.vx, y > this._posY ? speed : -speed);
 				}
 			}
 
@@ -2930,6 +3022,36 @@ async function q5playPreSetup(q) {
 					this._destResolve = onFulfilled;
 				}
 			};
+		}
+
+		moveTowards(x, y, tracking) {
+			if (x === undefined) return;
+
+			if (typeof x != 'number' && x !== null) {
+				let pos = x;
+				if (pos == $.mouse && !$.mouse.isActive) return;
+				tracking = y;
+				y = pos.y;
+				x = pos.x;
+			}
+			tracking ??= 0.1;
+
+			let velX, velY;
+
+			if (x !== null && x !== undefined) {
+				let diffX = x - this.x;
+				if (!isSlop(diffX)) {
+					velX = diffX * tracking;
+				} else velX = 0;
+			} else velX = this.vx;
+			if (y !== null && y !== undefined) {
+				let diffY = y - this.y;
+				if (!isSlop(diffY)) {
+					velY = diffY * tracking;
+				} else velY = 0;
+			} else velY = this.vy;
+
+			this._setVel(velX, velY);
 		}
 
 		angleTo(x, y, facing = 0) {
@@ -3022,8 +3144,6 @@ async function q5playPreSetup(q) {
 			}
 
 			this.rotationSpeed = speed;
-
-			log(this.rotation, this._destRot, angleDist, speed, this._destRotArrivalTime);
 
 			return {
 				then: (onFulfilled) => {
@@ -8747,15 +8867,19 @@ addAnis -> es:añadirAnis
 changeAni -> es:cambiarAni
 playAni -> es:reproducirAni
 playAnis -> es:reproducirAnis
+moveTo -> es:moverA
 moveTowards -> es:moverHacia
+rotateTo -> es:rotarA
 rotateTowards -> es:rotarHacia
+transformTowards -> es:transformarHacia
 applyForce -> es:aplicarFuerza
 applyForceScaled -> es:aplicarFuerzaEscalada
 attractTo -> es:atraerA
 repelFrom -> es:repelerDe
 applyTorque -> es:aplicarTorque
-angleTo -> es:ánguloHacia
-angleDistTo -> es:distÁnguloHacia
+applyWind -> es:aplicarViento
+angleTo -> es:ánguloA
+angleDistTo -> es:distÁnguloA
 setSpeedAndDirection -> es:establecerVelocidadYDirección
 scaleBy -> es:escalarPor
 resetMass -> es:reiniciarMasa

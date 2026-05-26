@@ -84,26 +84,26 @@ declare global {
 		renderStats: boolean;
 
 		/**
-		 * "Made with q5play" [splash screen](https://en.wikipedia.org/wiki/Splash_screen) displayed during
-		 * initial page load by default.
+		 * "Made with q5play" [splash screen](https://en.wikipedia.org/wiki/Splash_screen)
+		 * displayed during initial page load by default.
 		 */
 		splashScreen(): Promise<void>;
 
 		/**
-		 * Runs automatically before each draw function call.
+		 * Runs automatically before each q5.draw function call.
 		 */
 		update(): void;
 
 		/**
-		 * Runs automatically after each draw function call.
+		 * Runs automatically after each q5.draw function call.
 		 */
-		postDraw(): void;
+		draw(): void;
 	}
 	const q5play: Q5Play;
 
 	/**
-	 * Box2D v3 ported to WASM is the physics engine that
-	 * q5play uses for its physics simulation.
+	 * Box2D v3 ported to WASM is used by
+	 * q5play to simulate physics.
 	 *
 	 * This variable enables direct access to the Box2D API for
 	 * advanced users who want to do things that aren't wrapped
@@ -1111,8 +1111,11 @@ declare global {
 
 		/**
 		 * Scales the the sprite.
-		 * @param x scaleX or uniform scale factor
-		 * @param y scaleY
+		 * 
+		 * Components can be negative to flip/mirror the sprite on an axis.
+		 * 
+		 * @param x horizontal scale factor or uniform scale factor for both axes
+		 * @param y vertical scale factor
 		 */
 		scaleBy(x: number, y?: number): void;
 
@@ -1154,6 +1157,7 @@ declare global {
 		/**
 		 * The sprite's speed along the surface of its collider(s),
 		 * like a conveyor belt.
+		 * Requires friction to be greater than 1 to have an effect.
 		 * @default 0
 		 */
 		get surfaceSpeed(): number;
