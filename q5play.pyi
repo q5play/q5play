@@ -86,25 +86,25 @@ class Q5Play:
 
     def splashScreen(self) -> Awaitable[None]:
         """
-        "Made with q5play" [splash screen](https://en.wikipedia.org/wiki/Splash_screen) displayed during
-        initial page load by default.
+        "Made with q5play" [splash screen](https://en.wikipedia.org/wiki/Splash_screen)
+        displayed during initial page load by default.
         """
         ...
 
     def update(self) -> None:
-        """Runs automatically before each draw function call."""
+        """Runs automatically before each q5.draw function call."""
         ...
 
-    def postDraw(self) -> None:
-        """Runs automatically after each draw function call."""
+    def draw(self) -> None:
+        """Runs automatically after each q5.draw function call."""
         ...
 
 q5play: Q5Play
 
 Box2D: Any
 """
-Box2D v3 ported to WASM is the physics engine that
-q5play uses for its physics simulation.
+Box2D v3 ported to WASM is used by
+q5play to simulate physics.
 
 This variable enables direct access to the Box2D API for
 advanced users who want to do things that aren't wrapped
@@ -1271,9 +1271,11 @@ class Sprite(Visual):
         """
         Scales the the sprite.
 
+        Components can be negative to flip/mirror the sprite on an axis.
+
         Args:
-            x: scaleX or uniform scale factor
-            y: scaleY
+            x: horizontal scale factor or uniform scale factor for both axes
+            y: vertical scale factor
         """
         ...
 
@@ -1328,6 +1330,7 @@ class Sprite(Visual):
         """
         The sprite's speed along the surface of its collider(s),
         like a conveyor belt.
+        Requires friction to be greater than 1 to have an effect.
 
         Default: `0`
         """
@@ -4397,9 +4400,6 @@ class _Mouse(InputDevice):
 
     y: float
     """The mouse's y position in the world."""
-
-    canvasPos: dict
-    """The mouse's absolute position on the canvas."""
 
     left: float
     """The mouse's left button."""

@@ -19,14 +19,12 @@
 
 let q5play_version = '4.2';
 
-if (typeof globalThis.Q5 == 'undefined') {
+if (typeof globalThis.Q5 == 'undefined' && typeof globalThis.p5 == 'undefined') {
 	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
-	if (typeof globalThis.p5 != 'undefined') {
-		console.error('p5.js is not compatible with q5play. https://github.com/processing/p5.js/issues/7737');
-	}
 }
 
-let box2dPromise;
+let box2dPromise,
+	using_p5 = false;
 
 // called when a new instance of Q5 is created
 async function q5playPreSetup(q) {
@@ -328,7 +326,7 @@ async function q5playPreSetup(q) {
 
 		async splashScreen() {
 			if (document.getElementById('made-with-q5play')) return;
-			if (!using_p5v2) $._incrementPreload();
+			if (!using_p5) $._incrementPreload();
 			let d = document.createElement('div');
 			d.id = 'made-with-q5play';
 			d.style =
@@ -360,27 +358,30 @@ async function q5playPreSetup(q) {
 			d.style.display = 'none';
 			d.remove();
 			document.getElementById('made-with-q5play')?.remove();
-			if (!using_p5v2) $._decrementPreload();
+			if (!using_p5) $._decrementPreload();
 		}
 	};
 
 	$.q5play = new $.Q5Play();
 	delete $.Q5Play;
 
-	let using_p5v1 = !$._q5 && p5.VERSION[0] == 1;
-	let using_p5v2 = !$._q5 && p5.VERSION[0] == 2;
+	using_p5 = !$._q5;
+	if (using_p5 && p5.VERSION[0] != 2) {
+		throw new Error(`q5play requires q5.js or p5.js v2. Detected version: ${p5.VERSION}. Please upgrade.`);
+	}
 
-	// in q5play the default angle mode is degrees
 	const DEGREES = $.DEGREES,
 		DEGTORAD = Math.PI / 180,
 		RADTODEG = 180 / Math.PI;
+
+	// in q5play the default angle mode is degrees
 	$.angleMode(DEGREES);
 
 	// in q5play the default color mode is float RGB
-	$.colorMode($.RGB, 1);
+	if (!using_p5) $.colorMode($.RGB, 1);
 
 	// in q5play the default image mode is center
-	$.imageMode($.CENTER);
+	if (!using_p5) $.imageMode($.CENTER);
 
 	const ZERO_VEC = new b2Vec2(0, 0),
 		ZERO_ROT = b2MakeRot(0),
@@ -871,7 +872,13 @@ async function q5playPreSetup(q) {
 				if (flipY) ani.scale.y = -ani.scale.y;
 
 				if (start < 0) start = ani.length + start;
-				if (start !== undefined) ani._frame = start;
+				if (start !== undefined) {
+					ani._frame = start;
+				} else {
+					// reset so recycled animations don't immediately resolve
+					ani._frame = 0;
+					ani.playing = true;
+				}
 
 				if (end !== undefined) ani.goToFrame(end);
 				else if (ani._frame == ani.lastFrame) resolve();
@@ -988,7 +995,7 @@ async function q5playPreSetup(q) {
 
 			this._posX = x;
 			this._posY = y;
-			this._pos = $.createVector.call($);
+			this._pos = $.createVector.call($, 0, 0);
 
 			let _this = this;
 			Object.defineProperties(this._pos, {
@@ -1010,7 +1017,7 @@ async function q5playPreSetup(q) {
 				}
 			});
 
-			this._canvasPos = $.createVector.call($);
+			this._canvasPos = $.createVector.call($, 0, 0);
 
 			Object.defineProperties(this._canvasPos, {
 				x: {
@@ -1033,7 +1040,7 @@ async function q5playPreSetup(q) {
 			this.vx = 0;
 			this.vy = 0;
 			this._velSynced = true;
-			this._vel = $.createVector.call($);
+			this._vel = $.createVector.call($, 0, 0);
 			this._vel._useCache = true;
 
 			this._syncVel = () => {
@@ -2970,8 +2977,8 @@ async function q5playPreSetup(q) {
 			}
 			direction ??= this.direction;
 
-			const x = $.cos(direction) * distance + this.y,
-				y = $.sin(direction) * distance + this.x;
+			const x = $.cos(direction) * distance + this.x,
+				y = $.sin(direction) * distance + this.y;
 			return this.moveTo(x, y, speed);
 		}
 
@@ -3016,6 +3023,8 @@ async function q5playPreSetup(q) {
 					this._setVel(this.vx, y > this._posY ? speed : -speed);
 				}
 			}
+
+			if ($._py) return new Promise((resolve) => (this._destResolve = resolve));
 
 			return {
 				then: (onFulfilled) => {
@@ -3144,6 +3153,8 @@ async function q5playPreSetup(q) {
 			}
 
 			this.rotationSpeed = speed;
+
+			if ($._py) return new Promise((resolve) => (this._destRotationResolve = resolve));
 
 			return {
 				then: (onFulfilled) => {
@@ -4415,7 +4426,7 @@ async function q5playPreSetup(q) {
 			for (let vecProp of vecProps) {
 				vecProp = '_' + vecProp;
 				if (vecProp != 'vel') this[vecProp] = {};
-				else this[vecProp] = $.createVector.call($);
+				else this[vecProp] = $.createVector.call($, 0, 0);
 				this[vecProp]._x = undefined;
 				this[vecProp]._y = undefined;
 				for (let prop of ['x', 'y']) {
@@ -4875,6 +4886,21 @@ async function q5playPreSetup(q) {
 			for (let s of this) {
 				thenables.push(s.rotateTo(...arguments));
 			}
+
+			if ($._py) {
+				return new Promise((resolve) => {
+					let pending = thenables.length;
+					if (!pending) return resolve(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) resolve(allReached);
+						});
+					}
+				});
+			}
+
 			return {
 				then: (onFulfilled) => {
 					let pending = thenables.length;
@@ -4895,6 +4921,21 @@ async function q5playPreSetup(q) {
 			for (let s of this) {
 				thenables.push(s.rotate(...arguments));
 			}
+
+			if ($._py) {
+				return new Promise((resolve) => {
+					let pending = thenables.length;
+					if (!pending) return resolve(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) resolve(allReached);
+						});
+					}
+				});
+			}
+
 			return {
 				then: (onFulfilled) => {
 					let pending = thenables.length;
@@ -4915,6 +4956,21 @@ async function q5playPreSetup(q) {
 			for (let s of this) {
 				thenables.push(s.rotateMinTo(...arguments));
 			}
+
+			if ($._py) {
+				return new Promise((resolve) => {
+					let pending = thenables.length;
+					if (!pending) return resolve(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) resolve(allReached);
+						});
+					}
+				});
+			}
+
 			return {
 				then: (onFulfilled) => {
 					let pending = thenables.length;
@@ -4975,6 +5031,20 @@ async function q5playPreSetup(q) {
 				const tx = nullX ? null : s.distCentroid.x + x;
 				const ty = nullY ? null : s.distCentroid.y + y;
 				thenables.push(s.moveTo(tx, ty, speed));
+			}
+
+			if ($._py) {
+				return new Promise((resolve) => {
+					let pending = thenables.length;
+					if (!pending) return resolve(true);
+					let allReached = true;
+					for (let t of thenables) {
+						t.then((reached) => {
+							if (!reached) allReached = false;
+							if (--pending === 0) resolve(allReached);
+						});
+					}
+				});
 			}
 
 			return {
@@ -5806,7 +5876,7 @@ async function q5playPreSetup(q) {
 	$.Camera = class {
 		constructor() {
 			// camera position
-			this._pos = $.createVector.call($);
+			this._pos = $.createVector.call($, 0, 0);
 
 			// camera translation
 			this.__pos = { x: 0, y: 0, rounded: {} };
@@ -7076,10 +7146,18 @@ async function q5playPreSetup(q) {
 	};
 
 	$.delay = (milliseconds) => {
-		if (!milliseconds) return new Promise(requestAnimationFrame);
+		if (!milliseconds) {
+			return new Promise((resolve) => {
+				requestAnimationFrame(() => {
+					if (!$._removed) resolve();
+				});
+			});
+		}
 		// else it wraps setTimeout in a Promise
 		return new Promise((resolve) => {
-			setTimeout(resolve, milliseconds);
+			setTimeout(() => {
+				if (!$._removed) resolve();
+			}, milliseconds);
 		});
 	};
 
@@ -7129,6 +7207,8 @@ async function q5playPreSetup(q) {
 	$.Canvas = $.createCanvas = function (w, h) {
 		let args = [...arguments];
 
+		if (using_p5 && !didCreateCanvas && w == 100 && h == 100) return _createCanvas.call($, ...args);
+
 		// prevent p5 v1 overriding the user's canvas with a new default canvas
 		if (didCreateCanvas && w == 100 && h == 100) return;
 
@@ -7159,7 +7239,7 @@ async function q5playPreSetup(q) {
 		let rend = _createCanvas.call($, ...args);
 		$.ctx = $.drawingContext;
 		let c = rend.canvas || rend;
-		window.canvas = c; // for p5 v2
+		if (using_p5) window.canvas = c;
 		if (rend.GL) {
 			c.renderer = 'webgl';
 			$._webgl = true;
@@ -7226,7 +7306,7 @@ async function q5playPreSetup(q) {
 		return rend;
 	};
 
-	$.canvas = $.canvas;
+	$.canvas = $.canvas; // for brython
 
 	const _resizeCanvas = $.resizeCanvas;
 
@@ -7354,7 +7434,7 @@ async function q5playPreSetup(q) {
 
 	$.allSprites = new $.Group();
 	$.world = new $.World();
-	$.camera = new $.Camera();
+	$.camera = $._camera = new $.Camera();
 
 	$.InputDevice = class {
 		constructor() {
@@ -7429,7 +7509,6 @@ async function q5playPreSetup(q) {
 
 			this.x = 0;
 			this.y = 0;
-			this.canvasPos = {};
 			this.isOnCanvas = false;
 			this.isActive = false;
 			this.left = 0;
@@ -7441,7 +7520,7 @@ async function q5playPreSetup(q) {
 			let _this = this;
 
 			// this.x and this.y store the actual position values of the mouse
-			this._pos = $.createVector.call($);
+			this._pos = $.createVector.call($, 0, 0);
 
 			Object.defineProperty(this._pos, 'x', {
 				get() {
@@ -7482,10 +7561,20 @@ async function q5playPreSetup(q) {
 		}
 
 		_update() {
-			let cam = $.camera;
-			let m = this;
-			m.x = $.mouseX / cam.zoom + cam.x;
-			m.y = $.mouseY / cam.zoom + cam.y;
+			let cam = $.camera,
+				m = this,
+				mx = $.mouseX,
+				my = $.mouseY;
+
+			if (using_p5) {
+				if ($._webgpuFallback) {
+					mx -= $.halfWidth;
+					my -= $.halfHeight;
+				}
+			}
+
+			m.x = mx / cam.zoom + cam.x;
+			m.y = my / cam.zoom + cam.y;
 
 			if (m.scroll < 0) m.scroll = 0;
 			if (m.scrollDelta.x == 0 && m.scrollDelta.y == 0) {
@@ -8219,7 +8308,7 @@ async function q5playPreSetup(q) {
 			this[indexB] = tmp;
 			if (indexA == 0 || indexB == 0) {
 				$.contro = this[0];
-				if (!$._q5 && $._isGlobal) {
+				if (using_p5 && $._isGlobal) {
 					window.contro = this[0];
 				}
 			}
@@ -8306,7 +8395,7 @@ async function q5playPreSetup(q) {
 		fpsPos = 0,
 		fpsMin = 60,
 		fpsMax = 240;
-	let statsColor = $.color('lime');
+	let statsColor = $._q5 ? $.color('lime') : 'lime';
 
 	$.renderStats = () => {
 		let rs = $.q5play._renderStats;
@@ -8408,12 +8497,22 @@ async function q5playPreSetup(q) {
 		shapeStack = [];
 
 	const colorMax = $._colorFormat,
-		debugGreen = $.color(0, colorMax, 0, colorMax * 0.9),
-		debugGreenFill = $.color(0, colorMax, 0, colorMax * 0.1),
-		debugYellow = $.color(colorMax, colorMax, 0, colorMax * 0.9),
-		debugYellowFill = $.color(colorMax, colorMax, 0, colorMax * 0.1);
+		debugGreen = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.9) : 'lime',
+		debugGreenFill = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.1) : 'lime',
+		debugYellow = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.9) : 'yellow',
+		debugYellowFill = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.1) : 'yellow';
 
-	if ($.canvas.c2d) {
+	if (using_p5) {
+		$._getFillIdx = () => $._renderer.states.fillColor;
+		$._setFillIdx = (v) => $.fill(v);
+		$._getStrokeIdx = () => $._renderer.states.strokeColor;
+		$._setStrokeIdx = (v) => {
+			if ($._renderer.states.strokeSet) $.stroke(v);
+		};
+		$._getStrokeWeight = () => [$._renderer.states.strokeWeight];
+		$._setStrokeWeight = (v) => $.strokeWeight(...v);
+		$._getImageMode = () => $._renderer.states.imageMode;
+	} else if ($.canvas.c2d) {
 		// polyfill for q5 WebGPU high efficiency functions
 		$._getFillIdx = () => $._fill;
 		$._setFillIdx = (v) => ($._fill = v);
@@ -8599,12 +8698,17 @@ async function q5playPreSetup(q) {
 	};
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','camera','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
+	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
 		for (let p of q5playGlobals) {
-			window[p] = $[p];
+			Object.defineProperty(window, p, {
+				value: $[p],
+				configurable: true,
+				writable: false,
+				enumerable: true
+			});
 		}
 	}
 
@@ -8615,10 +8719,31 @@ async function q5playPreSetup(q) {
 function q5playPostSetup() {
 	const $ = this;
 
-	if ($._isGlobal && window.update) {
-		$.update = window.update;
+	if ($._isGlobal && window.update) $.update = window.update;
+
+	if (using_p5) {
 		// p5 won't run the draw loop without a draw function defined
-		if (!$._q5) window.draw = () => {};
+		window.draw = () => {};
+
+		$.loge = $.log;
+		$.log = console.log;
+		$.camera = $._camera;
+
+		if ($._isGlobal) {
+			Object.defineProperty(window, 'log', {
+				value: console.log
+			});
+			Object.defineProperty(window, 'loge', {
+				value: $.loge
+			});
+			$.camera3D = window.camera;
+			Object.defineProperty(window, 'camera3D', {
+				value: $.camera3D
+			});
+			Object.defineProperty(window, 'camera', {
+				value: $.camera
+			});
+		}
 	}
 
 	$.update ??= $.clear;
@@ -8630,9 +8755,11 @@ function q5playPostSetup() {
 function q5playUpdate() {
 	const $ = this;
 
-	if (!$._q5) {
+	if (using_p5) {
 		$.q5play._preDrawFrameTime = performance.now();
+		$.resetMatrix();
 	}
+
 	$.q5play.spritesDrawn = 0;
 
 	$.contros._update();
@@ -8775,7 +8902,7 @@ function q5playPostDraw() {
 		else if ($.kb[k] > 0) $.kb[k]++;
 	}
 
-	if (!$._q5) {
+	if (using_p5) {
 		$.q5play._postDrawFrameTime = performance.now();
 		$.q5play._fps = Math.round(1000 / ($.q5play._postDrawFrameTime - $.q5play._preDrawFrameTime)) || 1;
 	}
@@ -8783,6 +8910,7 @@ function q5playPostDraw() {
 }
 
 function q5playRemove() {
+	this._removed = true;
 	this.world?.delete();
 }
 
@@ -8982,6 +9110,56 @@ pressure -> es:presión
 `
 };
 q5playClassLangs.Group += q5playClassLangs.Sprite;
+
+if (typeof globalThis.Q5 == 'undefined') {
+	console.warn('p5.js v2 is not fully compatible with q5play. Consider using q5 instead: https://q5js.org');
+
+	p5.addHook = (hook, fn) => {
+		p5.registerAddon((p5, proto, lifecycles) => {
+			lifecycles[hook] = fn;
+		});
+	};
+
+	// p5.js v2 compatibility layer
+	globalThis.Canvas = (...args) => {
+		return new Promise((resolve) => {
+			window.setup = async function () {
+				const $ = p5.instance;
+				$._webgpu = $._webgpuFallback = true;
+
+				$.Canvas(...args);
+
+				// q5play defaults
+				colorMode(RGB, 1);
+				imageMode(CENTER);
+
+				$.halfWidth = width / 2;
+				$.halfHeight = height / 2;
+
+				let _resetMatrix = $.resetMatrix;
+
+				$.resetMatrix = () => {
+					_resetMatrix.call($);
+					$.translate($.halfWidth, $.halfHeight);
+				};
+
+				Object.defineProperty(p5, 'update', {
+					set(fn) {
+						$.update = fn;
+					},
+					get() {
+						return $.update;
+					},
+					configurable: true
+				});
+
+				resolve();
+			};
+		});
+	};
+
+	globalThis.Q5 = globalThis.q5 = p5;
+}
 
 Q5.addHook('presetup', q5playPreSetup);
 Q5.addHook('postsetup', q5playPostSetup);

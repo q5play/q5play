@@ -3772,13 +3772,6 @@ declare global {
 		y: number;
 
 		/**
-		 * The mouse's absolute position on the canvas.
-		 * @property {Number} x
-		 * @property {Number} y
-		 */
-		canvasPos: { x: number; y: number };
-
-		/**
 		 * The mouse's left button.
 		 */
 		left: number;
