@@ -702,6 +702,8 @@ async function q5playPreSetup(q) {
 			if (typeof val == 'string') {
 				if (!val.includes('.')) {
 					val = new $.EmojiImage(val, this.w);
+				} else if (using_p5) {
+					return this._setP5Img(val);
 				} else val = $.loadImage(val);
 			}
 			this._img = this._extendImage(val);
@@ -728,6 +730,13 @@ async function q5playPreSetup(q) {
 				});
 			}
 			return img;
+		}
+
+		async _setP5Img(val) {
+			// for p5 v2 compatibility
+			let img = await $.loadImage(val);
+			this._img = this._extendImage(img);
+			this._hasImagery = true;
 		}
 
 		addAni() {
@@ -1082,6 +1091,30 @@ async function q5playPreSetup(q) {
 					}
 				}
 			});
+
+			if (using_p5) {
+				this._vel.direction = function () {
+					if (!this._directionCached) {
+						const x = this.x,
+							y = this.y;
+						if (x || y) this._direction = $.atan2(this.y, this.x);
+						else this._direction = 0;
+						this._directionCached = this._useCache;
+					}
+					return this._direction;
+				};
+
+				this._vel.setDirection = function (ang) {
+					let mag = this.mag();
+					if (mag) {
+						this.x = mag * $.cos(ang);
+						this.y = mag * $.sin(ang);
+					}
+					this._direction = ang;
+					this._directionCached = this._useCache;
+					return this;
+				};
+			}
 
 			this._heading = 'right';
 
@@ -3611,6 +3644,12 @@ async function q5playPreSetup(q) {
 
 			// image sequence format
 			if (args.length == 2 && typeof args[0] == 'string' && typeof args[1] == 'string' && !args[1].includes('.')) {
+				if (using_p5) {
+					throw new Error(
+						'p5.js v2 does not support preloading or lazy loading images. Convert the image sequence to a sprite sheet.'
+					);
+				}
+
 				let file = args[0],
 					extIndex = file.lastIndexOf('.'),
 					digits = 0;
@@ -3765,7 +3804,9 @@ async function q5playPreSetup(q) {
 					if (typeof sheet == 'string') {
 						sheet = $.loadImage(sheet);
 					}
-					sheet.promise.then(() => {
+					let promise = !using_p5 ? sheet.promise : sheet;
+					promise.then((img) => {
+						if (using_p5) this.spriteSheet = sheet = img;
 						if (!this.length) findFrames();
 
 						if (this._clones) {
@@ -3787,7 +3828,11 @@ async function q5playPreSetup(q) {
 			else {
 				for (let i = 0; i < args.length; i++) {
 					if (args[i] instanceof Q5.Image) this.push(args[i]);
-					else this.push($.loadImage(args[i]));
+					else if (using_p5) {
+						throw new Error(
+							'p5.js v2 does not support preloading or lazy loading images. You need to use `await load(url)`.'
+						);
+					} else this.push($.loadImage(args[i]));
 				}
 			}
 
@@ -4156,6 +4201,8 @@ async function q5playPreSetup(q) {
 			if (typeof val == 'string') {
 				if (!val.includes('.')) {
 					val = new $.EmojiImage(val, this.w || this.width || this.d || this.diameter);
+				} else if (using_p5) {
+					return $.Visual.prototype._setP5Img(val);
 				} else val = $.loadImage(val);
 			}
 			this._img = $.Visual.prototype._extendImage(val);
@@ -7239,11 +7286,18 @@ async function q5playPreSetup(q) {
 		let rend = _createCanvas.call($, ...args);
 		$.ctx = $.drawingContext;
 		let c = rend.canvas || rend;
-		if (using_p5) window.canvas = c;
-		if (rend.GL) {
-			c.renderer = 'webgl';
-			$._webgl = true;
-		} else if (!$._webgpu) $._c2d = true;
+		if (using_p5) {
+			window.canvas = c;
+			if (rend.GPU) {
+				c.renderer = 'webgpu';
+				$._webgpu = true;
+			} else if (rend.GL) {
+				c.renderer = 'webgl';
+				$._webgl = true;
+			} else {
+				$._webgpu = $._webgpuFallback = true;
+			}
+		}
 		c.tabIndex = 0;
 		c.w = args[0];
 		c.h = args[1];
@@ -8497,21 +8551,21 @@ async function q5playPreSetup(q) {
 		shapeStack = [];
 
 	const colorMax = $._colorFormat,
-		debugGreen = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.9) : 'lime',
-		debugGreenFill = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.1) : 'lime',
-		debugYellow = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.9) : 'yellow',
-		debugYellowFill = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.1) : 'yellow';
+		debugGreen = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.9) : '#0f0e',
+		debugGreenFill = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.1) : '#0f02',
+		debugYellow = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.9) : '#ff0e',
+		debugYellowFill = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.1) : '#ff02';
 
 	if (using_p5) {
 		$._getFillIdx = () => $._renderer.states.fillColor;
-		$._setFillIdx = (v) => $.fill(v);
+		$._setFillIdx = (v) => ($._renderer.states.fillColor = v);
 		$._getStrokeIdx = () => $._renderer.states.strokeColor;
-		$._setStrokeIdx = (v) => {
-			if ($._renderer.states.strokeSet) $.stroke(v);
-		};
+		$._setStrokeIdx = (v) => ($._renderer.states.strokeColor = v);
 		$._getStrokeWeight = () => [$._renderer.states.strokeWeight];
 		$._setStrokeWeight = (v) => $.strokeWeight(...v);
 		$._getImageMode = () => $._renderer.states.imageMode;
+		$._doFill = () => {};
+		$._doStroke = () => {};
 	} else if ($.canvas.c2d) {
 		// polyfill for q5 WebGPU high efficiency functions
 		$._getFillIdx = () => $._fill;
@@ -8613,7 +8667,7 @@ async function q5playPreSetup(q) {
 					transformPoint(xf, v);
 					$.vertex(v.x, v.y);
 				}
-				$.endShape(true);
+				$.endShape($.CLOSE);
 				if (rr > 0) {
 					$._setStrokeWeight(swData);
 					$._setStrokeIdx(ogStroke);
@@ -8659,7 +8713,7 @@ async function q5playPreSetup(q) {
 							transformPoint(xf, v);
 							$.vertex(v.x, v.y);
 						}
-						$.endShape(true);
+						$.endShape($.CLOSE);
 					} else {
 						let x = (cmd.data[0] + cmd.data[2]) / 2,
 							y = (cmd.data[1] + cmd.data[3]) / 2;
@@ -8698,7 +8752,7 @@ async function q5playPreSetup(q) {
 	};
 
 	// prettier-ignore
-	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
+	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','camera','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
@@ -8723,26 +8777,19 @@ function q5playPostSetup() {
 
 	if (using_p5) {
 		// p5 won't run the draw loop without a draw function defined
-		window.draw = () => {};
+		window.draw ??= () => {};
 
 		$.loge = $.log;
 		$.log = console.log;
 		$.camera = $._camera;
 
 		if ($._isGlobal) {
-			Object.defineProperty(window, 'log', {
-				value: console.log
-			});
-			Object.defineProperty(window, 'loge', {
-				value: $.loge
-			});
 			$.camera3D = window.camera;
-			Object.defineProperty(window, 'camera3D', {
-				value: $.camera3D
-			});
-			Object.defineProperty(window, 'camera', {
-				value: $.camera
-			});
+			for (let prop of ['log', 'loge', 'camera', 'camera3D']) {
+				Object.defineProperty(window, prop, {
+					value: $[prop]
+				});
+			}
 		}
 	}
 
@@ -9112,7 +9159,8 @@ pressure -> es:presión
 q5playClassLangs.Group += q5playClassLangs.Sprite;
 
 if (typeof globalThis.Q5 == 'undefined') {
-	console.warn('p5.js v2 is not fully compatible with q5play. Consider using q5 instead: https://q5js.org');
+	let upgrade = ' Consider upgrading to q5: https://q5js.org';
+	console.warn('p5.js v2 is not fully compatible with q5play.' + upgrade);
 
 	p5.addHook = (hook, fn) => {
 		p5.registerAddon((p5, proto, lifecycles) => {
@@ -9125,33 +9173,154 @@ if (typeof globalThis.Q5 == 'undefined') {
 		return new Promise((resolve) => {
 			window.setup = async function () {
 				const $ = p5.instance;
-				$._webgpu = $._webgpuFallback = true;
 
 				$.Canvas(...args);
 
 				// q5play defaults
-				colorMode(RGB, 1);
-				imageMode(CENTER);
+				$.angleMode($.DEGREES);
+				$.colorMode($.RGB, 1);
+				$.imageMode($.CENTER);
 
 				$.halfWidth = width / 2;
 				$.halfHeight = height / 2;
+				$.jit = (v) => $.random(-v, v);
 
-				let _resetMatrix = $.resetMatrix;
+				$._loaders = [];
+				$._colorFormat = 1;
 
-				$.resetMatrix = () => {
-					_resetMatrix.call($);
-					$.translate($.halfWidth, $.halfHeight);
+				const imgRegex = /(jpe?g|png|gif|webp|avif|svg)/i,
+					fontRegex = /(ttf|otf|woff2?|eot|json)/i,
+					fontCategoryRegex = /(serif|sans-serif|monospace|cursive|fantasy)/i,
+					audioRegex = /(wav|flac|mp3|ogg|m4a|aac|aiff|weba)/i;
+
+				$.load = function (...urls) {
+					if (Array.isArray(urls[0])) urls = urls[0];
+
+					let promises = [];
+
+					for (let url of urls) {
+						let ext = url.split('.').pop().toLowerCase();
+
+						let obj;
+						if (ext == 'json') {
+							if (url.includes('-msdf.')) {
+								throw new Error('p5.js v2 can not load MSDF fonts.' + upgrade);
+							}
+							obj = $.loadJSON(url);
+						} else if (ext == 'csv') {
+							obj = $.loadCSV(url);
+						} else if (imgRegex.test(ext)) {
+							obj = $.loadImage(url);
+						} else if (fontRegex.test(ext) || fontCategoryRegex.test(url)) {
+							obj = $.loadFont(url);
+						} else if (audioRegex.test(ext)) {
+							obj = $.loadSound(url);
+						} else if (ext == 'xml') {
+							obj = $.loadXML(url);
+						} else {
+							obj = $.loadText(url);
+						}
+						promises.push(obj);
+					}
+
+					if (urls.length == 1) return promises[0];
+					return Promise.all(promises);
 				};
 
-				Object.defineProperty(p5, 'update', {
-					set(fn) {
-						$.update = fn;
+				if ($._webgpuFallback) {
+					$.opacity = function (v) {
+						$.ctx.globalAlpha = v;
+					};
+				}
+
+				$.pushMatrix = $.push;
+				$.popMatrix = $.pop;
+
+				$.loadAll = function () {
+					console.error('p5.js v2 does not have loadAll().' + upgrade);
+				};
+
+				$.displayMode = () => {
+					console.error('p5.js v2 does not have displayMode().' + upgrade);
+				};
+
+				$.MAXED = 'maxed';
+				$.SMOOTH = 'smooth';
+				$.PIXELATED = 'pixelated';
+
+				if ($._isGlobal) {
+					let props = [
+						'halfWidth',
+						'halfHeight',
+						'jit',
+						'load',
+						'opacity',
+						'pushMatrix',
+						'popMatrix',
+						'loadAll',
+						'displayMode',
+						'MAXED',
+						'PIXELATED'
+					];
+					for (let p of props) {
+						window[p] = $[p];
+					}
+				}
+
+				if ($._webgpuFallback) {
+					const _resetMatrix = $.resetMatrix;
+					$.resetMatrix = () => {
+						_resetMatrix.call($);
+						// sets origin to the center of the canvas
+						$.translate($.halfWidth, $.halfHeight);
+					};
+				}
+
+				Object.defineProperty(p5, 'lang', {
+					set() {
+						console.error('p5.js v2 does not support changing language.' + upgrade);
 					},
 					get() {
-						return $.update;
+						return 'en';
 					},
 					configurable: true
 				});
+
+				const entryPoints = [
+					'setup',
+					'update',
+					'draw',
+					'deviceMoved',
+					'deviceTurned',
+					'deviceShaken',
+					'doubleClicked',
+					'mousePressed',
+					'mouseReleased',
+					'mouseMoved',
+					'mouseDragged',
+					'mouseClicked',
+					'mouseWheel',
+					'touchStarted',
+					'touchMoved',
+					'touchEnded',
+					'keyPressed',
+					'keyReleased',
+					'keyTyped',
+					'windowResized'
+				];
+
+				for (let ep of entryPoints) {
+					Object.defineProperty(p5, ep, {
+						set(fn) {
+							$[ep] = fn;
+							if ($._isGlobal) window[ep] = fn;
+						},
+						get() {
+							return $[ep];
+						},
+						configurable: true
+					});
+				}
 
 				resolve();
 			};
