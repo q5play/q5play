@@ -60,6 +60,18 @@ class Q5Play:
 
     standardizeKeyboard: bool
 
+    silent: bool
+    """
+    Set to true to disable q5play's console logs, warnings, and error messages.
+    Severe errors will still be thrown.
+    """
+
+    quiet: bool
+    """
+    Set to true to disable q5play's console logs.
+    Warnings and errors will still be shown, and severe errors will still be thrown.
+    """
+
     renderStats: bool
     """
     Displays the version of q5play being used,

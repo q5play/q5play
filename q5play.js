@@ -12,15 +12,15 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.2
+ * @version 4.3
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
-let q5play_version = '4.2';
+let q5play_version = '4.3';
 
 if (typeof globalThis.Q5 == 'undefined' && typeof globalThis.p5 == 'undefined') {
-	console.error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
+	throw new Error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
 }
 
 let box2dPromise,
@@ -28,8 +28,9 @@ let box2dPromise,
 
 // called when a new instance of Q5 is created
 async function q5playPreSetup(q) {
-	const $ = this,
-		log = console.log;
+	const $ = this;
+
+	using_p5 = !$._q5;
 
 	if (!box2dPromise) {
 		box2dPromise = (async () => {
@@ -246,6 +247,8 @@ async function q5playPreSetup(q) {
 			this.emojiScale = 1;
 			this.os = {};
 			this.context = 'web';
+			this.silent = false;
+			this.quiet = false;
 
 			this.update = () => q5playUpdate.call($, q);
 			this.draw = () => q5playPostDraw.call($, q);
@@ -365,23 +368,27 @@ async function q5playPreSetup(q) {
 	$.q5play = new $.Q5Play();
 	delete $.Q5Play;
 
-	using_p5 = !$._q5;
-	if (using_p5 && p5.VERSION[0] != 2) {
-		throw new Error(`q5play requires q5.js or p5.js v2. Detected version: ${p5.VERSION}. Please upgrade.`);
-	}
+	const log = (...args) => {
+		if (!$.q5play.quiet && !$.q5play.silent) console.log(...args);
+	};
+	const warn = (...args) => {
+		if (!$.q5play.silent) console.warn(...args);
+	};
+	const error = (...args) => {
+		if (!$.q5play.silent) console.error(...args);
+	};
 
 	const DEGREES = $.DEGREES,
 		DEGTORAD = Math.PI / 180,
 		RADTODEG = 180 / Math.PI;
 
-	// in q5play the default angle mode is degrees
+	// in q5play defaults
 	$.angleMode(DEGREES);
-
-	// in q5play the default color mode is float RGB
-	if (!using_p5) $.colorMode($.RGB, 1);
-
-	// in q5play the default image mode is center
-	if (!using_p5) $.imageMode($.CENTER);
+	if (!using_p5) {
+		// set later in p5 compatibility mode
+		$.colorMode($.RGB, 1);
+		$.imageMode($.CENTER);
+	}
 
 	const ZERO_VEC = new b2Vec2(0, 0),
 		ZERO_ROT = b2MakeRot(0),
@@ -785,7 +792,7 @@ async function q5playPreSetup(q) {
 			}
 			if (args.length >= 2) {
 				if (typeof spriteSheet == 'string') {
-					spriteSheet = $.load(spriteSheet);
+					spriteSheet = $.loadImage(spriteSheet);
 				}
 				this.anis.spriteSheet = spriteSheet;
 			}
@@ -813,7 +820,7 @@ async function q5playPreSetup(q) {
 					ani = v._anis?.[name];
 				}
 				if (ani) ani = ani.clone();
-				else return console.error('Ani not found: ' + name);
+				else return error('Ani not found: ' + name);
 			}
 			// reset to frame 0 of that animation
 			if (this.resetAniOnChange) ani._frame = 0;
@@ -1092,30 +1099,6 @@ async function q5playPreSetup(q) {
 				}
 			});
 
-			if (using_p5) {
-				this._vel.direction = function () {
-					if (!this._directionCached) {
-						const x = this.x,
-							y = this.y;
-						if (x || y) this._direction = $.atan2(this.y, this.x);
-						else this._direction = 0;
-						this._directionCached = this._useCache;
-					}
-					return this._direction;
-				};
-
-				this._vel.setDirection = function (ang) {
-					let mag = this.mag();
-					if (mag) {
-						this.x = mag * $.cos(ang);
-						this.y = mag * $.sin(ang);
-					}
-					this._direction = ang;
-					this._directionCached = this._useCache;
-					return this;
-				};
-			}
-
 			this._heading = 'right';
 
 			if (group._layer) this.layer = group._layer;
@@ -1370,7 +1353,7 @@ async function q5playPreSetup(q) {
 
 		addCollider(offsetX, offsetY, w, h) {
 			if (this._deleted) {
-				console.error("Can't add colliders to a sprite that was deleted.");
+				error("Can't add colliders to a sprite that was deleted.");
 				return;
 			}
 
@@ -1386,7 +1369,7 @@ async function q5playPreSetup(q) {
 
 		addSensor(offsetX, offsetY, w, h) {
 			if (this._deleted) {
-				console.error("Can't add sensors to a sprite that was deleted.");
+				error("Can't add sensors to a sprite that was deleted.");
 				return;
 			}
 
@@ -1409,7 +1392,7 @@ async function q5playPreSetup(q) {
 		_add(isSensor, a0, a1, a2, a3, a4) {
 			if (this._shapes.length >= $.Sprite.maxColliders) {
 				if (!this._warnedMaxColliders) {
-					console.warn(
+					warn(
 						`Sprite has ${this._shapes.length} colliders and sensors, which is greater than Sprite.maxColliders. Increasing the limit may cause performance issues.`
 					);
 					this._warnedMaxColliders = true;
@@ -2324,7 +2307,7 @@ async function q5playPreSetup(q) {
 		set surfaceSpeed(val) {
 			if (this.watch) this.mod[21] = true;
 			if (this._hasCapsuleChain) {
-				return console.error('Can not set surfaceSpeed of a capsule chain.');
+				return error('Can not set surfaceSpeed of a capsule chain.');
 			}
 			if (this._hasChain) this._chain.surfaceSpeed = val;
 			for (let collider of this.colliders) {
@@ -2951,7 +2934,7 @@ async function q5playPreSetup(q) {
 
 		attractTo(x, y, force) {
 			if (this._phys != 0) {
-				console.error('attractTo can only be used on sprites with dynamic physics bodies');
+				error('attractTo can only be used on sprites with dynamic physics bodies');
 				return;
 			}
 			if (typeof x != 'number') {
@@ -2975,7 +2958,7 @@ async function q5playPreSetup(q) {
 
 		repelFrom(x, y, force) {
 			if (this._phys != 0) {
-				console.error('repelFrom can only be used on sprites with dynamic colliders');
+				error('repelFrom can only be used on sprites with dynamic colliders');
 				return;
 			}
 			if (typeof x != 'number') {
@@ -3830,7 +3813,7 @@ async function q5playPreSetup(q) {
 					if (args[i] instanceof Q5.Image) this.push(args[i]);
 					else if (using_p5) {
 						throw new Error(
-							'p5.js v2 does not support preloading or lazy loading images. You need to use `await load(url)`.'
+							'p5.js v2 does not support preloading or lazy loading images. You need to use `await loadImage(url)`.'
 						);
 					} else this.push($.loadImage(args[i]));
 				}
@@ -4372,7 +4355,7 @@ async function q5playPreSetup(q) {
 					}
 				}
 				if (!this.idNum) {
-					console.warn('ERROR: Surpassed the limit of 999 groups in memory. Delete groups to recycle group ids.');
+					warn('ERROR: Surpassed the limit of 999 groups in memory. Delete groups to recycle group ids.');
 					// if there are no empty slots, try to prevent a crash by
 					// finding the first slot that has a group with no sprites in it
 					for (let i = 1; i < $.q5play.groups.length; i++) {
@@ -5158,7 +5141,7 @@ async function q5playPreSetup(q) {
 
 		splice(start, removalCount, ...sprites) {
 			if (this.deleted) {
-				console.warn(
+				warn(
 					'Edited group' +
 						this._uid +
 						" that was deleted. Use `group.deleteAll()` to remove all of a group's sprites without deleting the group itself. Restoring the group to q5play's memory."
@@ -5170,11 +5153,11 @@ async function q5playPreSetup(q) {
 			// filter out non-sprites and log a warning
 			sprites = sprites.filter((s) => {
 				if (!(s instanceof $.Sprite)) {
-					console.warn('Only sprites can be added to a group, skipping:', s);
+					warn('Only sprites can be added to a group, skipping:', s);
 					return false;
 				}
 				if (s.deleted) {
-					console.warn("Can't add a deleted sprite to a group, skipping:", s);
+					warn("Can't add a deleted sprite to a group, skipping:", s);
 					return false;
 				}
 				return true;
@@ -5629,7 +5612,7 @@ async function q5playPreSetup(q) {
 		}
 		set timeScale(val) {
 			if (val < 0 || val > 2) {
-				return console.error('world.timeScale must be between 0 and 2');
+				return error('world.timeScale must be between 0 and 2');
 			}
 			if (this._timeScale == val) return;
 			this._timeScale = val;
@@ -6029,7 +6012,7 @@ async function q5playPreSetup(q) {
 			}
 			speed ??= 1;
 			if (speed <= 0) {
-				console.warn('camera.moveTo: speed should be a positive number');
+				warn('camera.moveTo: speed should be a positive number');
 				return Promise.resolve(false);
 			}
 			let a = y - this.y;
@@ -7032,7 +7015,7 @@ async function q5playPreSetup(q) {
 
 		// same code as img.trim() in q5.js
 		let ctx = g.drawingContext;
-		let pd = g._pixelDensity || 1;
+		let pd = g._pixelDensity || g._renderer?._pixelDensity || 1;
 		let w = g.canvas.width;
 		let h = g.canvas.height;
 		let data = ctx.getImageData(0, 0, w, h).data;
@@ -7141,7 +7124,7 @@ async function q5playPreSetup(q) {
 				}
 			} else $.image(img, dx, dy, dw, dh);
 		} else {
-			console.warn(
+			warn(
 				'q5play: "' +
 					ani.name +
 					'"' +
@@ -7244,60 +7227,19 @@ async function q5playPreSetup(q) {
 		}
 	}
 
-	// let userDisabledP5Errors = p5.disableFriendlyErrors;
-	// p5.disableFriendlyErrors = true;
-
 	let didCreateCanvas = false;
 
-	const _createCanvas = $.createCanvas;
-
-	$.Canvas = $.createCanvas = function (w, h) {
-		let args = [...arguments];
-
-		if (using_p5 && !didCreateCanvas && w == 100 && h == 100) return _createCanvas.call($, ...args);
-
-		// prevent p5 v1 overriding the user's canvas with a new default canvas
-		if (didCreateCanvas && w == 100 && h == 100) return;
-
-		if (typeof args[0] == 'string') {
-			if (args[0].includes(':')) {
-				let ratio = args[0].split(':'),
-					rW = Number(ratio[0]),
-					rH = Number(ratio[1]),
-					w = window.innerWidth,
-					h = window.innerWidth * (rH / rW);
-				if (h > window.innerHeight) {
-					w = window.innerHeight * (rW / rH);
-					h = window.innerHeight;
-				}
-				args[0] = Math.round(w);
-				args.splice(1, 0, Math.round(h));
-			} else {
-				args = [0, 0, ...args];
-			}
-		}
-		if (!args[0]) {
-			args[0] = window.innerWidth;
-			args[1] = window.innerHeight;
-		}
-		args[1] ??= args[0];
-		args[0] = Math.floor(args[0] / 2) * 2;
-		args[1] = Math.floor(args[1] / 2) * 2;
-		let rend = _createCanvas.call($, ...args);
+	const q5playCanvas = (rend, args) => {
 		$.ctx = $.drawingContext;
 		let c = rend.canvas || rend;
+
 		if (using_p5) {
-			window.canvas = c;
-			if (rend.GPU) {
-				c.renderer = 'webgpu';
-				$._webgpu = true;
-			} else if (rend.GL) {
-				c.renderer = 'webgl';
-				$._webgl = true;
-			} else {
-				$._webgpu = $._webgpuFallback = true;
-			}
+			if (rend.device) $._webgpu = true;
+			else if (rend.GL) $._webgl = true;
+			else if ($._specifiedRenderer) $._c2d = true;
+			else $._webgpu = $._webgpuFallback = true;
 		}
+
 		c.tabIndex = 0;
 		c.w = args[0];
 		c.h = args[1];
@@ -7347,7 +7289,6 @@ async function q5playPreSetup(q) {
 				rs.y = -c.hh + 20;
 			}
 		}
-		// p5.disableFriendlyErrors = userDisabledP5Errors;
 
 		let pointer = window.PointerEvent ? 'pointer' : 'mouse';
 		c.addEventListener(pointer + 'down', onpointerdown);
@@ -7357,7 +7298,55 @@ async function q5playPreSetup(q) {
 		}
 
 		didCreateCanvas = true;
+
+		if (using_p5) p5._q5playCompat($);
+
 		return rend;
+	};
+
+	const _createCanvas = $.createCanvas;
+
+	$.Canvas = $.createCanvas = function (w, h) {
+		let args = [...arguments];
+
+		if (using_p5 && !didCreateCanvas && w == 100 && h == 100) return _createCanvas.call($, ...args);
+
+		// prevent p5 v1 overriding the user's canvas with a new default canvas
+		if (didCreateCanvas && w == 100 && h == 100) return;
+
+		if (typeof args[0] == 'string') {
+			if (args[0].includes(':')) {
+				let ratio = args[0].split(':'),
+					rW = Number(ratio[0]),
+					rH = Number(ratio[1]),
+					w = window.innerWidth,
+					h = window.innerWidth * (rH / rW);
+				if (h > window.innerHeight) {
+					w = window.innerHeight * (rW / rH);
+					h = window.innerHeight;
+				}
+				args[0] = Math.round(w);
+				args.splice(1, 0, Math.round(h));
+			} else {
+				args = [0, 0, ...args];
+			}
+		}
+		if (!args[0]) {
+			args[0] = window.innerWidth;
+			args[1] = window.innerHeight;
+		}
+		args[1] ??= args[0];
+		args[0] = Math.floor(args[0] / 2) * 2;
+		args[1] = Math.floor(args[1] / 2) * 2;
+
+		let rend = _createCanvas.call($, ...args);
+
+		if (rend instanceof Promise) {
+			return rend.then((r) => {
+				return q5playCanvas(r, args);
+			});
+		}
+		return q5playCanvas(rend, args);
 	};
 
 	$.canvas = $.canvas; // for brython
@@ -7445,6 +7434,8 @@ async function q5playPreSetup(q) {
 	class FriendlyError extends Error {
 		constructor(func, errorNum, e) {
 			super();
+
+			if ($.q5play.silent) return;
 
 			if (typeof func != 'string') {
 				e = errorNum;
@@ -7620,15 +7611,14 @@ async function q5playPreSetup(q) {
 				mx = $.mouseX,
 				my = $.mouseY;
 
-			if (using_p5) {
-				if ($._webgpuFallback) {
-					mx -= $.halfWidth;
-					my -= $.halfHeight;
-				}
+			if (using_p5 && ($._webgpuFallback || $._webgl)) {
+				mx -= $.halfWidth;
+				my -= $.halfHeight;
 			}
 
-			m.x = mx / cam.zoom + cam.x;
-			m.y = my / cam.zoom + cam.y;
+			// divide by camera zoom and add camera translation
+			m.x = mx / cam.zoom + cam.__pos.x;
+			m.y = my / cam.zoom + cam.__pos.y;
 
 			if (m.scroll < 0) m.scroll = 0;
 			if (m.scrollDelta.x == 0 && m.scrollDelta.y == 0) {
@@ -8433,7 +8423,7 @@ async function q5playPreSetup(q) {
 		 */
 		_update() {
 			for (let c of this) {
-				if (c.connected) c._update();
+				if (c?.connected) c._update();
 			}
 		}
 	};
@@ -8556,24 +8546,14 @@ async function q5playPreSetup(q) {
 		debugYellow = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.9) : '#ff0e',
 		debugYellowFill = $._q5 ? $.color(colorMax, colorMax, 0, colorMax * 0.1) : '#ff02';
 
-	if (using_p5) {
-		$._getFillIdx = () => $._renderer.states.fillColor;
-		$._setFillIdx = (v) => ($._renderer.states.fillColor = v);
-		$._getStrokeIdx = () => $._renderer.states.strokeColor;
-		$._setStrokeIdx = (v) => ($._renderer.states.strokeColor = v);
-		$._getStrokeWeight = () => [$._renderer.states.strokeWeight];
-		$._setStrokeWeight = (v) => $.strokeWeight(...v);
-		$._getImageMode = () => $._renderer.states.imageMode;
-		$._doFill = () => {};
-		$._doStroke = () => {};
-	} else if ($.canvas.c2d) {
-		// polyfill for q5 WebGPU high efficiency functions
+	// polyfills for q5 WebGPU high efficiency style changing functions
+	if ($._c2d || $._webgpuFallback) {
 		$._getFillIdx = () => $._fill;
 		$._setFillIdx = (v) => ($._fill = v);
 		$._getStrokeIdx = () => $._stroke;
 		$._setStrokeIdx = (v) => ($._stroke = v);
 		$._getStrokeWeight = () => [$._strokeWeight];
-		$._setStrokeWeight = (v) => $.strokeWeight(...v);
+		$._setStrokeWeight = (v) => ($.ctx.lineWidth = $._strokeWeight = v[0]);
 	}
 
 	$._q5playDraw = () => {
@@ -8589,8 +8569,12 @@ async function q5playPreSetup(q) {
 
 		let swData = $._getStrokeWeight();
 		let ogSW = [...swData];
-		for (let i = 0; i < swData.length; i++) {
-			swData[i] /= meterSize;
+		// if using q5 or p5's P2D mode
+		// (in p5's WebGL and WebGPU modes, stroke weight doesn't scale)
+		if ($._q5 || $._c2d || $._webgpuFallback) {
+			for (let i = 0; i < swData.length; i++) {
+				swData[i] /= meterSize;
+			}
 		}
 		$._setStrokeWeight(swData);
 
@@ -8751,8 +8735,11 @@ async function q5playPreSetup(q) {
 		if (ta) $.textAlign(ta.horizontal, ta.vertical);
 	};
 
+	// p5 won't run the draw loop unless a draw function is defined
+	if (using_p5) window.draw ??= () => {};
+
 	// prettier-ignore
-	let q5playGlobals = ['q5play','Box2D','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','camera','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
+	let q5playGlobals = ['q5play','Box2D','Canvas','createCanvas','DYN','DYNAMIC','STA','STATIC','KIN','KINEMATIC','Sprite','Group','allSprites','Ani','Anis','Visual','Visuals','Joint','GlueJoint','DistanceJoint','WheelJoint','HingeJoint','SliderJoint','GrabberJoint','world','camera','kb','keyboard','mouse','contro','contros','controllers','pointer','pointers','spriteArt','EmojiImage','getFPS','animation','parseTextureAtlas','delay'];
 
 	// manually propagate q5play stuff to the global window object
 	if ($._isGlobal) {
@@ -8775,24 +8762,6 @@ function q5playPostSetup() {
 
 	if ($._isGlobal && window.update) $.update = window.update;
 
-	if (using_p5) {
-		// p5 won't run the draw loop without a draw function defined
-		window.draw ??= () => {};
-
-		$.loge = $.log;
-		$.log = console.log;
-		$.camera = $._camera;
-
-		if ($._isGlobal) {
-			$.camera3D = window.camera;
-			for (let prop of ['log', 'loge', 'camera', 'camera3D']) {
-				Object.defineProperty(window, prop, {
-					value: $[prop]
-				});
-			}
-		}
-	}
-
 	$.update ??= $.clear;
 
 	$._setupDone = true;
@@ -8801,11 +8770,6 @@ function q5playPostSetup() {
 // called before each draw function call
 function q5playUpdate() {
 	const $ = this;
-
-	if (using_p5) {
-		$.q5play._preDrawFrameTime = performance.now();
-		$.resetMatrix();
-	}
 
 	$.q5play.spritesDrawn = 0;
 
@@ -8949,10 +8913,6 @@ function q5playPostDraw() {
 		else if ($.kb[k] > 0) $.kb[k]++;
 	}
 
-	if (using_p5) {
-		$.q5play._postDrawFrameTime = performance.now();
-		$.q5play._fps = Math.round(1000 / ($.q5play._postDrawFrameTime - $.q5play._preDrawFrameTime)) || 1;
-	}
 	$.q5play._inPostDraw = false;
 }
 
@@ -9158,180 +9118,16 @@ pressure -> es:presión
 };
 q5playClassLangs.Group += q5playClassLangs.Sprite;
 
-if (typeof globalThis.Q5 == 'undefined') {
-	let upgrade = ' Consider upgrading to q5: https://q5js.org';
-	console.warn('p5.js v2 is not fully compatible with q5play.' + upgrade);
+globalThis.Canvas ??= () => {
+	p5._friendlyError(`Visit https://github.com/q5play/p5-compat to learn how to use q5play with p5.js`);
+	throw new Error();
+};
 
-	p5.addHook = (hook, fn) => {
-		p5.registerAddon((p5, proto, lifecycles) => {
-			lifecycles[hook] = fn;
-		});
-	};
-
-	// p5.js v2 compatibility layer
-	globalThis.Canvas = (...args) => {
-		return new Promise((resolve) => {
-			window.setup = async function () {
-				const $ = p5.instance;
-
-				$.Canvas(...args);
-
-				// q5play defaults
-				$.angleMode($.DEGREES);
-				$.colorMode($.RGB, 1);
-				$.imageMode($.CENTER);
-
-				$.halfWidth = width / 2;
-				$.halfHeight = height / 2;
-				$.jit = (v) => $.random(-v, v);
-
-				$._loaders = [];
-				$._colorFormat = 1;
-
-				const imgRegex = /(jpe?g|png|gif|webp|avif|svg)/i,
-					fontRegex = /(ttf|otf|woff2?|eot|json)/i,
-					fontCategoryRegex = /(serif|sans-serif|monospace|cursive|fantasy)/i,
-					audioRegex = /(wav|flac|mp3|ogg|m4a|aac|aiff|weba)/i;
-
-				$.load = function (...urls) {
-					if (Array.isArray(urls[0])) urls = urls[0];
-
-					let promises = [];
-
-					for (let url of urls) {
-						let ext = url.split('.').pop().toLowerCase();
-
-						let obj;
-						if (ext == 'json') {
-							if (url.includes('-msdf.')) {
-								throw new Error('p5.js v2 can not load MSDF fonts.' + upgrade);
-							}
-							obj = $.loadJSON(url);
-						} else if (ext == 'csv') {
-							obj = $.loadCSV(url);
-						} else if (imgRegex.test(ext)) {
-							obj = $.loadImage(url);
-						} else if (fontRegex.test(ext) || fontCategoryRegex.test(url)) {
-							obj = $.loadFont(url);
-						} else if (audioRegex.test(ext)) {
-							obj = $.loadSound(url);
-						} else if (ext == 'xml') {
-							obj = $.loadXML(url);
-						} else {
-							obj = $.loadText(url);
-						}
-						promises.push(obj);
-					}
-
-					if (urls.length == 1) return promises[0];
-					return Promise.all(promises);
-				};
-
-				if ($._webgpuFallback) {
-					$.opacity = function (v) {
-						$.ctx.globalAlpha = v;
-					};
-				}
-
-				$.pushMatrix = $.push;
-				$.popMatrix = $.pop;
-
-				$.loadAll = function () {
-					console.error('p5.js v2 does not have loadAll().' + upgrade);
-				};
-
-				$.displayMode = () => {
-					console.error('p5.js v2 does not have displayMode().' + upgrade);
-				};
-
-				$.MAXED = 'maxed';
-				$.SMOOTH = 'smooth';
-				$.PIXELATED = 'pixelated';
-
-				if ($._isGlobal) {
-					let props = [
-						'halfWidth',
-						'halfHeight',
-						'jit',
-						'load',
-						'opacity',
-						'pushMatrix',
-						'popMatrix',
-						'loadAll',
-						'displayMode',
-						'MAXED',
-						'PIXELATED'
-					];
-					for (let p of props) {
-						window[p] = $[p];
-					}
-				}
-
-				if ($._webgpuFallback) {
-					const _resetMatrix = $.resetMatrix;
-					$.resetMatrix = () => {
-						_resetMatrix.call($);
-						// sets origin to the center of the canvas
-						$.translate($.halfWidth, $.halfHeight);
-					};
-				}
-
-				Object.defineProperty(p5, 'lang', {
-					set() {
-						console.error('p5.js v2 does not support changing language.' + upgrade);
-					},
-					get() {
-						return 'en';
-					},
-					configurable: true
-				});
-
-				const entryPoints = [
-					'setup',
-					'update',
-					'draw',
-					'deviceMoved',
-					'deviceTurned',
-					'deviceShaken',
-					'doubleClicked',
-					'mousePressed',
-					'mouseReleased',
-					'mouseMoved',
-					'mouseDragged',
-					'mouseClicked',
-					'mouseWheel',
-					'touchStarted',
-					'touchMoved',
-					'touchEnded',
-					'keyPressed',
-					'keyReleased',
-					'keyTyped',
-					'windowResized'
-				];
-
-				for (let ep of entryPoints) {
-					Object.defineProperty(p5, ep, {
-						set(fn) {
-							$[ep] = fn;
-							if ($._isGlobal) window[ep] = fn;
-						},
-						get() {
-							return $[ep];
-						},
-						configurable: true
-					});
-				}
-
-				resolve();
-			};
-		});
-	};
-
-	globalThis.Q5 = globalThis.q5 = p5;
-}
-
-Q5.addHook('presetup', q5playPreSetup);
-Q5.addHook('postsetup', q5playPostSetup);
-Q5.addHook('predraw', q5playUpdate);
-Q5.addHook('postdraw', q5playPostDraw);
-Q5.addHook('remove', q5playRemove);
+(p5 || Q5).registerAddon((_, __, l) => {
+	// add lifecycle hooks for q5play
+	l.presetup = q5playPreSetup;
+	l.postsetup = q5playPostSetup;
+	l.predraw = q5playUpdate;
+	l.postdraw = q5playPostDraw;
+	l.remove = q5playRemove;
+});

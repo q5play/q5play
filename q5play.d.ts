@@ -61,6 +61,18 @@ declare global {
 		standardizeKeyboard: boolean;
 
 		/**
+		 * Set to true to disable q5play's console logs, warnings, and error messages.
+		 * Severe errors will still be thrown.
+		 */
+		silent: boolean;
+
+		/**
+		 * Set to true to disable q5play's console logs.
+		 * Warnings and errors will still be shown, and severe errors will still be thrown.
+		 */
+		quiet: boolean;
+
+		/**
 		 * Displays the version of q5play being used,
 		 * the number of sprites being drawn
 		 * and a realtime graphing of the current FPS.
