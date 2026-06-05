@@ -7611,14 +7611,14 @@ async function q5playPreSetup(q) {
 				mx = $.mouseX,
 				my = $.mouseY;
 
-			if (using_p5 && ($._webgpuFallback || $._webgl)) {
+			if ($._c2d || (using_p5 && ($._webgpuFallback || $._webgl))) {
 				mx -= $.halfWidth;
 				my -= $.halfHeight;
 			}
 
 			// divide by camera zoom and add camera translation
-			m.x = mx / cam.zoom + cam.__pos.x;
-			m.y = my / cam.zoom + cam.__pos.y;
+			m.x = mx / cam.zoom + cam._pos.x;
+			m.y = my / cam.zoom + cam._pos.y;
 
 			if (m.scroll < 0) m.scroll = 0;
 			if (m.scrollDelta.x == 0 && m.scrollDelta.y == 0) {
