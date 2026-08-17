@@ -2628,9 +2628,6 @@ async function q5playPreSetup(q) {
 					this._setVel(0, 0);
 					this.rotationSpeed = 0;
 					this.pos = [this._destX ?? this._posX, this._destY ?? this._posY];
-					if (this._destRot !== undefined) {
-						this.rotation = this._destRot;
-					}
 				}
 
 				if (this._destResolve) {
@@ -3458,6 +3455,10 @@ async function q5playPreSetup(q) {
 				shapeDict[id.index1] = shape;
 			}
 			this._hasSensors = true;
+		}
+
+		distTo(o) {
+			return $.dist(this.x, this.y, o.x, o.y);
 		}
 
 		distanceTo(o) {

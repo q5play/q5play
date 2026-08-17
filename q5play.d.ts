@@ -224,6 +224,25 @@ declare global {
 		addAni(spriteSheetURL: string, frameCount: number): Promise<void>;
 
 		/**
+		 * Adds an animation to the Sprite or Visual.
+		 *
+		 * @param spriteSheetURL the URL of the sprite sheet image
+		 * @param frameCount the number of frames in the sprite sheet
+		 * @param frameSize the size of each frame in the sprite sheet in the format "WIDTHxHEIGHT" (example: "32x32")
+		 * @returns A promise that fulfills when the animation is loaded
+		 */
+		addAni(spriteSheetURL: string, frameCount: number, frameSize: string): Promise<void>;
+
+		/**
+		 * Adds an animation to the Sprite or Visual.
+		 *
+		 * @param firstFrameURL the URL of the first animation frame
+		 * @param lastFrameIdx the index of the last animation frame, must be given as a string
+		 * @returns A promise that fulfills when the animation is loaded
+		 */
+		addAni(firstFrameURL: string, lastFrameIdx: string): Promise<void>;
+
+		/**
 		 * Add multiple animations to the Sprite or Visual.
 		 *
 		 * @param atlases an object with animation names as keys and
@@ -1123,9 +1142,9 @@ declare global {
 
 		/**
 		 * Scales the the sprite.
-		 * 
+		 *
 		 * Components can be negative to flip/mirror the sprite on an axis.
-		 * 
+		 *
 		 * @param x horizontal scale factor or uniform scale factor for both axes
 		 * @param y vertical scale factor
 		 */
@@ -1722,6 +1741,23 @@ declare global {
 		 * function is called but the sprite has no overlap sensors.
 		 */
 		addDefaultSensors(): void;
+
+		/**
+		 * Returns the distance to another sprite, the mouse, a touch pointer,
+		 * or any other object with x and y properties. Uses q5's `dist` function.
+		 * @param x
+		 * @param y
+		 * @returns distance
+		 */
+		distTo(x: number, y: number): number;
+
+		/**
+		 * Returns the distance to another sprite, the mouse, a touch pointer,
+		 * or any other object with x and y properties. Uses q5's `dist` function.
+		 * @param pos object with x and y properties
+		 * @returns distance
+		 */
+		distTo(pos: { x: number; y: number }): number;
 
 		/**
 		 * Returns the distance to another sprite, the mouse, a touch pointer,

@@ -246,6 +246,7 @@ class Visual:
         """
         ...
 
+    @overload
     def addAni(self, spriteSheetURL: str, frameCount: float) -> Awaitable[None]:
         """
         Adds an animation to the Sprite or Visual.
@@ -257,6 +258,38 @@ class Visual:
         Returns:
             A promise that fulfills when the animation is loaded
         """
+        ...
+
+    @overload
+    def addAni(self, spriteSheetURL: str, frameCount: float, frameSize: str) -> Awaitable[None]:
+        """
+        Adds an animation to the Sprite or Visual.
+
+        Args:
+            spriteSheetURL: the URL of the sprite sheet image
+            frameCount: the number of frames in the sprite sheet
+            frameSize: the size of each frame in the sprite sheet in the format "WIDTHxHEIGHT" (example: "32x32")
+
+        Returns:
+            A promise that fulfills when the animation is loaded
+        """
+        ...
+
+    @overload
+    def addAni(self, firstFrameURL: str, lastFrameIdx: str) -> Awaitable[None]:
+        """
+        Adds an animation to the Sprite or Visual.
+
+        Args:
+            firstFrameURL: the URL of the first animation frame
+            lastFrameIdx: the index of the last animation frame, must be given as a string
+
+        Returns:
+            A promise that fulfills when the animation is loaded
+        """
+        ...
+
+    def addAni(self, firstFrameURL: str, lastFrameIdx: str) -> Awaitable[None]:
         ...
 
     @overload
@@ -2042,6 +2075,34 @@ class Sprite(Visual):
         Used internally if a sprite overlap detection
         function is called but the sprite has no overlap sensors.
         """
+        ...
+
+    @overload
+    def distTo(self, x: float, y: float) -> float:
+        """
+        Returns the distance to another sprite, the mouse, a touch pointer,
+        or any other object with x and y properties. Uses q5's `dist` function.
+
+        Returns:
+            distance
+        """
+        ...
+
+    @overload
+    def distTo(self, pos: dict) -> float:
+        """
+        Returns the distance to another sprite, the mouse, a touch pointer,
+        or any other object with x and y properties. Uses q5's `dist` function.
+
+        Args:
+            pos: object with x and y properties
+
+        Returns:
+            distance
+        """
+        ...
+
+    def distTo(self, pos: dict) -> float:
         ...
 
     @overload
