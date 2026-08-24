@@ -7790,6 +7790,8 @@ async function q5playPreSetup(q) {
 	);
 
 	$._updatePointer = (e) => {
+		if (e.type == 'wheel') return;
+
 		let id = e.pointerId ?? $.pointers[0]?.id;
 
 		// backwards compatibility for mouse events
