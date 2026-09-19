@@ -48,7 +48,7 @@ class Q5Play:
 
     Setting to false can slightly improve performance.
 
-    Default: `true`
+    Default: `True`
     """
 
     os: dict
@@ -93,7 +93,7 @@ class Q5Play:
     make your game perform better. Also drawing images is faster
     than drawing shapes.
 
-    Default: `false`
+    Default: `False`
     """
 
     def splashScreen(self) -> Awaitable[None]:
@@ -643,7 +643,7 @@ class Sprite(Visual):
         """
         If true, the sprite's physics body is included in the physics simulation.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -691,7 +691,7 @@ class Sprite(Visual):
     properties in its `mod` array. Intended to be used to enable
     online multiplayer.
 
-    Default: `undefined`
+    Default: `None`
     """
 
     mod: dict
@@ -752,7 +752,7 @@ class Sprite(Visual):
     """
     Text displayed at the center of the sprite.
 
-    Default: `undefined`
+    Default: `None`
     """
 
     def addCollider(self, offsetX: float, offsetY: float, w: float = ..., h: float = ..., roundedRadius: float = ...) -> None:
@@ -829,7 +829,7 @@ class Sprite(Visual):
         removing colliders or sensors. Set it to false to allow dynamic center of mass
         recalculation.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -871,7 +871,7 @@ class Sprite(Visual):
         """
         If true, a sprite is updated by q5play before each physics update.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -883,7 +883,7 @@ class Sprite(Visual):
         """
         If true, a sprite is drawn by q5play after each physics update.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -899,7 +899,7 @@ class Sprite(Visual):
         sprite starts "sleeping" when it stops moving and doesn't collide
         with anything that it wasn't already colliding with.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -1008,7 +1008,7 @@ class Sprite(Visual):
         The sprite's text stroke color.
         No stroke by default, does not inherit from the sketch's stroke color.
 
-        Default: `undefined`
+        Default: `None`
         """
         ...
 
@@ -1021,7 +1021,7 @@ class Sprite(Visual):
         The sprite's text stroke weight, the thickness of its outline.
         No stroke by default, does not inherit from the sketch's stroke weight.
 
-        Default: `undefined`
+        Default: `None`
         """
         ...
 
@@ -1056,7 +1056,7 @@ class Sprite(Visual):
         """
         If true, outlines of the sprite's colliders and sensors will be drawn.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -1145,7 +1145,7 @@ class Sprite(Visual):
         The setter's input parser ignores capitalization, spaces,
         underscores, dashes, and cardinal direction word order.
 
-        Default: `undefined`
+        Default: `None`
         """
         ...
 
@@ -1158,7 +1158,7 @@ class Sprite(Visual):
         Set this to true if the sprite goes really fast to prevent
         inaccurate physics simulation.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -1238,7 +1238,7 @@ class Sprite(Visual):
 
         By default q5play draws sprites with subpixel rendering.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -1250,7 +1250,7 @@ class Sprite(Visual):
         """
         If the sprite has been deleted from the world.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -1287,7 +1287,7 @@ class Sprite(Visual):
         """
         If true, the sprite can not rotate.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -1333,7 +1333,7 @@ class Sprite(Visual):
         sprite starts "sleeping" when it stops moving and doesn't collide
         with anything that it wasn't already colliding with.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -1392,7 +1392,7 @@ class Sprite(Visual):
         Note that this is not good for performance, you should probably
         pre-render the effect if you want to use it a lot.
 
-        Default: `undefined`
+        Default: `None`
         """
         ...
 
@@ -1407,7 +1407,7 @@ class Sprite(Visual):
         Becomes null when the sprite is off screen but will be drawn and
         set to true again if it goes back on screen.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -1715,12 +1715,12 @@ class Sprite(Visual):
         at the target position, based on `world.physicsTime`.
 
         Args:
-            x: destination x, or `null` to only move on the y-axis
-            y: destination y, or `null` to only move on the x-axis
+            x: destination x, or `None` to only move on the y-axis
+            y: destination y, or `None` to only move on the x-axis
             speed: movement speed in pixels per frame, defaults to the sprite's current speed or 1
 
         Returns:
-            a lazy thenable that resolves `true` if the sprite reached the destination, or `false` if it didn't.
+            a lazy thenable that resolves `True` if the sprite reached the destination, or `False` if it didn't.
         """
         ...
 
@@ -1735,7 +1735,7 @@ class Sprite(Visual):
             speed: movement speed in pixels per frame, defaults to the sprite's current speed or 1
 
         Returns:
-            a lazy thenable that resolves `true` if the sprite reached the destination, or `false` if it didn't.
+            a lazy thenable that resolves `True` if the sprite reached the destination, or `False` if it didn't.
         """
         ...
 
@@ -1749,8 +1749,8 @@ class Sprite(Visual):
         between itself and the destination.
 
         Args:
-            x: destination x, or `null` to only move on the y-axis
-            y: destination y, or `null` to only move on the x-axis
+            x: destination x, or `None` to only move on the y-axis
+            y: destination y, or `None` to only move on the x-axis
             tracking: percent of the distance to move towards the destination as a 0-1 value, default is 0.1 (10% tracking)
         """
         ...
@@ -1784,7 +1784,7 @@ class Sprite(Visual):
             speed: rotation speed in degrees (or radians) per frame, defaults to the sprite's current rotationSpeed or 1
 
         Returns:
-            a lazy thenable that resolves `true` if the sprite reached the target angle, or `false` if it didn't.
+            a lazy thenable that resolves `True` if the sprite reached the target angle, or `False` if it didn't.
         """
         ...
 
@@ -1800,7 +1800,7 @@ class Sprite(Visual):
             facing: rotation angle the sprite should be at when "facing" the position, default is 0
 
         Returns:
-            a lazy thenable that resolves `true` if the sprite reached the target angle, or `false` if it didn't.
+            a lazy thenable that resolves `True` if the sprite reached the target angle, or `False` if it didn't.
         """
         ...
 
@@ -1818,7 +1818,7 @@ class Sprite(Visual):
             speed: absolute rotation per frame, defaults to the sprite's current rotationSpeed or 1
 
         Returns:
-            a lazy thenable that resolves `true` if the sprite reached the target angle, or `false` if it didn't.
+            a lazy thenable that resolves `True` if the sprite reached the target angle, or `False` if it didn't.
         """
         ...
 
@@ -1834,7 +1834,7 @@ class Sprite(Visual):
             facing: rotation angle the sprite should be at when "facing" the position, default is 0
 
         Returns:
-            a lazy thenable that resolves `true` if the sprite reached the target angle, or `false` if it didn't.
+            a lazy thenable that resolves `True` if the sprite reached the target angle, or `False` if it didn't.
         """
         ...
 
@@ -1983,7 +1983,7 @@ class Sprite(Visual):
         If it has a physics body, it will be deleted from the physics simulation.
 
         There's no way to undo this operation. If you want to hide a
-        sprite use `sprite.visible = false` instead.
+        sprite use `sprite.visible = False` instead.
         """
         ...
 
@@ -1996,7 +1996,7 @@ class Sprite(Visual):
         """
         ...
 
-    def collides(self, target: Sprite | Group, callback: Callable[..., Any] = ...) -> bool:
+    def collides(self, target: Sprite | Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the sprite collides with the
         target sprite or group.
@@ -2006,7 +2006,7 @@ class Sprite(Visual):
         """
         ...
 
-    def colliding(self, target: Sprite | Group, callback: Callable[..., Any] = ...) -> float:
+    def colliding(self, target: Sprite | Group, callback: Callable[..., Any] | None = None) -> float:
         """
         Returns a truthy value while the sprite is colliding with the
         target sprite or group. The value is the number of frames that
@@ -2017,14 +2017,14 @@ class Sprite(Visual):
         """
         ...
 
-    def collided(self, target: Sprite | Group, callback: Callable[..., Any] = ...) -> bool:
+    def collided(self, target: Sprite | Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the sprite no longer overlaps
         with the target sprite or group.
         """
         ...
 
-    def overlaps(self, target: Sprite | Group, callback: Callable[..., Any] = ...) -> bool:
+    def overlaps(self, target: Sprite | Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the sprite overlaps with the
         target sprite or group.
@@ -2034,7 +2034,7 @@ class Sprite(Visual):
         """
         ...
 
-    def overlapping(self, target: Sprite | Group, callback: Callable[..., Any] = ...) -> float:
+    def overlapping(self, target: Sprite | Group, callback: Callable[..., Any] | None = None) -> float:
         """
         Returns a truthy value while the sprite is overlapping with the
         target sprite or group. The value returned is the number of
@@ -2045,7 +2045,7 @@ class Sprite(Visual):
         """
         ...
 
-    def overlapped(self, target: Sprite | Group, callback: Callable[..., Any] = ...) -> bool:
+    def overlapped(self, target: Sprite | Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the sprite no longer overlaps
         with the target sprite or group.
@@ -2163,21 +2163,21 @@ class Ani(list[Image]):
     """
     True if the animation is currently playing.
 
-    Default: `true`
+    Default: `True`
     """
 
     visible: bool
     """
     Animation visibility.
 
-    Default: `true`
+    Default: `True`
     """
 
     looping: bool
     """
     If set to false the animation will stop after reaching the last frame
 
-    Default: `true`
+    Default: `True`
     """
 
     endOnFirstFrame: bool
@@ -2187,7 +2187,7 @@ class Ani(list[Image]):
     For example a walking cycle where the first frame is the
     same as the last frame.
 
-    Default: `false`
+    Default: `False`
     """
 
     frameChanged: bool
@@ -2472,7 +2472,7 @@ class Visuals(list[_T_Visuals], Generic[_T_Visuals]):
     def addAnis(self, spriteSheetURL: str, frameSize: str, atlases: dict) -> Awaitable[None]:
         ...
 
-    def cull(self, top: float = ..., bottom: float = ..., left: float = ..., right: float = ..., cb: Callable[..., Any] = ...) -> float:
+    def cull(self, top: float = ..., bottom: float = ..., left: float = ..., right: float = ..., cb: Callable[..., Any] | None = None) -> float:
         """
         Detects when visuals go outside the given culling boundary,
         relative to the camera.
@@ -2664,12 +2664,17 @@ class Group(Visuals[Sprite]):
     mass: float
     """The mass of the group sprites' physics body."""
 
-    physics: str
+    physics: str | None
     """
     The physics type of the group sprites, which determines how it interacts with
     other sprites in the physics simulation.
 
     It can be set to DYNAMIC/DYN, STATIC/STA, or KINEMATIC/KIN.
+
+    If set to `None`, group sprites are created without a physics body,
+    so they can't have colliders or sensors. If you don't need the
+    sprites to rotate or scale, consider using Visuals for even
+    better performance.
     """
 
     physicsType: str
@@ -2812,9 +2817,6 @@ class Group(Visuals[Sprite]):
     remain false for the rest of the sketch, unless changed.
     """
 
-    visualOnly: bool
-    """New group sprites will not have physics bodies (can't have colliders)."""
-
     add: Callable[..., float]
     """
     Alias for `group.push`.
@@ -2840,7 +2842,7 @@ class Group(Visuals[Sprite]):
     @amount.setter
     def amount(self, val: float) -> None: ...
 
-    def collides(self, target: Group, callback: Callable[..., Any] = ...) -> bool:
+    def collides(self, target: Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the group collides with the
         target group.
@@ -2850,7 +2852,7 @@ class Group(Visuals[Sprite]):
         """
         ...
 
-    def colliding(self, target: Group, callback: Callable[..., Any] = ...) -> float:
+    def colliding(self, target: Group, callback: Callable[..., Any] | None = None) -> float:
         """
         Returns the amount of frames that the group has been colliding
         with the target group for, which is a truthy value. Returns 0 if
@@ -2861,14 +2863,14 @@ class Group(Visuals[Sprite]):
         """
         ...
 
-    def collided(self, target: Group, callback: Callable[..., Any] = ...) -> bool:
+    def collided(self, target: Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the group no longer overlaps
         with the target group.
         """
         ...
 
-    def overlaps(self, target: Group, callback: Callable[..., Any] = ...) -> bool:
+    def overlaps(self, target: Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the group overlaps with the
         target group.
@@ -2878,7 +2880,7 @@ class Group(Visuals[Sprite]):
         """
         ...
 
-    def overlapping(self, target: Group, callback: Callable[..., Any] = ...) -> float:
+    def overlapping(self, target: Group, callback: Callable[..., Any] | None = None) -> float:
         """
         Returns the amount of frames that the group has been overlapping
         with the target group for, which is a truthy value. Returns 0 if
@@ -2889,7 +2891,7 @@ class Group(Visuals[Sprite]):
         """
         ...
 
-    def overlapped(self, target: Group, callback: Callable[..., Any] = ...) -> bool:
+    def overlapped(self, target: Group, callback: Callable[..., Any] | None = None) -> bool:
         """
         Returns true on the first frame that the group no longer overlaps
         with the target group.
@@ -2897,11 +2899,23 @@ class Group(Visuals[Sprite]):
         ...
 
     def pass_(self, target: Group) -> None:
-        """Sets a pass through contact relationship between the group and the target group."""
+        """
+        Sets a pass through contact relationship between the group and the target group.
+
+        If you want the group sprites to never interact with the physics simulation,
+        passing through all other sprites, consider setting `group.physics = None`
+        for better performance.
+        """
         ...
 
     def passes(self, target: Group) -> None:
-        """Sets a pass through contact relationship between the group and the target group."""
+        """
+        Sets a pass through contact relationship between the group and the target group.
+
+        If you want the group sprites to never interact with the physics simulation,
+        passing through all other sprites, consider setting `group.physics = None`
+        for better performance.
+        """
         ...
 
     @overload
@@ -3074,7 +3088,7 @@ class Group(Visuals[Sprite]):
     def repelFrom(self, pos: dict, force: float = ...) -> None:
         ...
 
-    def cull(self, top: float = ..., bottom: float = ..., left: float = ..., right: float = ..., cb: Callable[..., Any] = ...) -> float:
+    def cull(self, top: float = ..., bottom: float = ..., left: float = ..., right: float = ..., cb: Callable[..., Any] | None = None) -> float:
         """
         Detects when sprites go outside the given culling boundary
         relative to the camera.
@@ -3213,7 +3227,7 @@ class World:
     autoStep: bool
     """
 
-    Default: `true`
+    Default: `True`
     """
 
     def physicsUpdate(self, timeStep: float = ...) -> None:
@@ -3350,7 +3364,7 @@ class World:
         This is an important performance optimization that you probably
         shouldn't disable for every sprite in the world.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -3392,7 +3406,7 @@ class World:
         ...
 
     @overload
-    def rayCastAll(self, startPos: list[dict | float], direction: float, maxDistance: float = ..., limiter: Callable[..., Any] = ...) -> list[Sprite]:
+    def rayCastAll(self, startPos: list[dict | float], direction: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
         a ray (line), sorted by distance.
@@ -3409,7 +3423,7 @@ class World:
         ...
 
     @overload
-    def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] = ...) -> list[Sprite]:
+    def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
         a ray from startPos to endPos, sorted by distance.
@@ -3424,7 +3438,7 @@ class World:
         """
         ...
 
-    def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] = ...) -> list[Sprite]:
+    def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         ...
 
     def circleCast(self, startPos: list[dict | float], endPos: list[dict | float], radius: float) -> Sprite:
@@ -3442,7 +3456,7 @@ class World:
         """
         ...
 
-    def circleCastAll(self, startPos: list[dict | float], endPos: list[dict | float], radius: float, limiter: Callable[..., Any] = ...) -> list[Sprite]:
+    def circleCastAll(self, startPos: list[dict | float], endPos: list[dict | float], radius: float, limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
         a swept circle (capsule cast) from startPos to endPos, sorted by distance.
@@ -3524,7 +3538,7 @@ class Camera:
     Read only. True if the camera is active.
     Use camera.on() to activate the camera.
 
-    Default: `false`
+    Default: `False`
     """
 
     @property
@@ -3658,7 +3672,7 @@ class Joint:
     Determines whether to draw the joint if spriteA
     or spriteB is drawn.
 
-    Default: `true`
+    Default: `True`
     """
 
     @property
@@ -3703,7 +3717,7 @@ class Joint:
         Set to true if you want the joint's sprites to collide with
         each other.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -3816,7 +3830,7 @@ class DistanceJoint(Joint):
         Whether the joint's length limits are enabled.
         When enabled a min/max length range constrains the joint.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -3849,7 +3863,7 @@ class DistanceJoint(Joint):
         """
         Whether spring behavior is enabled for the joint.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -3894,7 +3908,7 @@ class DistanceJoint(Joint):
         """
         Whether the joint's motor is enabled.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -3950,7 +3964,7 @@ class WheelJoint(Joint):
         Whether the joint's suspension limits are enabled.
         When enabled a min/max distance from resting constrains the joint.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -3995,7 +4009,7 @@ class WheelJoint(Joint):
         Whether the wheel joint has suspension,
         which can make it ride smoother over bumps.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -4040,7 +4054,7 @@ class WheelJoint(Joint):
         """
         Whether the joint's motor is enabled.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -4082,7 +4096,7 @@ class HingeJoint(Joint):
         Whether the joint's angle limits are enabled.
         When enabled a min/max angle range constrains the joint.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -4120,7 +4134,7 @@ class HingeJoint(Joint):
         """
         Whether spring behavior is enabled.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -4158,7 +4172,7 @@ class HingeJoint(Joint):
         """
         Whether the joint's motor is enabled.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -4204,7 +4218,7 @@ class SliderJoint(Joint):
         """
         Whether the joint's translation limits are enabled.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -4237,7 +4251,7 @@ class SliderJoint(Joint):
         """
         Whether spring behavior is enabled.
 
-        Default: `false`
+        Default: `False`
         """
         ...
 
@@ -4275,7 +4289,7 @@ class SliderJoint(Joint):
         """
         Whether the joint's motor is enabled.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -4493,14 +4507,14 @@ class _Mouse(InputDevice):
     """
     True if the mouse is currently on the canvas.
 
-    Default: `false`
+    Default: `False`
     """
 
     isActive: bool
     """
     True if the mouse has ever interacted with the canvas.
 
-    Default: `false`
+    Default: `False`
     """
 
     @property
@@ -4533,7 +4547,7 @@ class _Mouse(InputDevice):
         """
         Controls whether the mouse is visible or not.
 
-        Default: `true`
+        Default: `True`
         """
         ...
 
@@ -4984,7 +4998,7 @@ class _Contros(list[Contro]):
     def remove(self, index: float) -> None:  # type: ignore[override]
         """
         Removes a controller from this controllers array
-        by setting `contros[index] = null`.
+        by setting `contros[index] = None`.
 
         Newly connected controllers fill the first empty slot.
         """

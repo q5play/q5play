@@ -2295,8 +2295,13 @@ declare global {
 		 * other sprites in the physics simulation.
 		 *
 		 * It can be set to DYNAMIC/DYN, STATIC/STA, or KINEMATIC/KIN.
+		 *
+		 * If set to `null`, group sprites are created without a physics body,
+		 * so they can't have colliders or sensors. If you don't need the
+		 * sprites to rotate or scale, consider using Visuals for even
+		 * better performance.
 		 */
-		physics: string;
+		physics: string | null;
 
 		/**
 		 * The physics type of the group sprites, which determines how it interacts with
@@ -2466,11 +2471,6 @@ declare global {
 		autoCull: boolean;
 
 		/**
-		 * New group sprites will not have physics bodies (can't have colliders).
-		 */
-		visualOnly: boolean;
-
-		/**
 		 * Alias for `group.push`.
 		 *
 		 * Adds a sprite to the end of the group.
@@ -2559,12 +2559,20 @@ declare global {
 
 		/**
 		 * Sets a pass through contact relationship between the group and the target group.
+		 *
+		 * If you want the group sprites to never interact with the physics simulation,
+		 * passing through all other sprites, consider setting `group.physics = null`
+		 * for better performance.
 		 * @param target
 		 */
 		pass(target: Group): void;
 
 		/**
 		 * Sets a pass through contact relationship between the group and the target group.
+		 *
+		 * If you want the group sprites to never interact with the physics simulation,
+		 * passing through all other sprites, consider setting `group.physics = null`
+		 * for better performance.
 		 * @param target
 		 */
 		passes(target: Group): void;

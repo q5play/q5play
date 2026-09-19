@@ -1107,7 +1107,7 @@ async function q5playPreSetup(q) {
 			physicsType ??= group.physics || group.physicsType || 0;
 			this.physics = physicsType;
 
-			if (!group.visualOnly) {
+			if (group.physics !== null) {
 				const def = new b2DefaultBodyDef();
 				def.type = bodyTypes[this._phys];
 				this.bdID = b2CreateBody(wID, def);
@@ -1244,7 +1244,7 @@ async function q5playPreSetup(q) {
 
 			if (forcedBoxShape) h ??= 50;
 
-			if (!group.visualOnly) {
+			if (group.physics !== null) {
 				if (!this._vertexMode) {
 					args[0] = 0;
 					args[1] = 0;
