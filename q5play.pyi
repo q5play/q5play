@@ -1168,9 +1168,14 @@ class Sprite(Visual):
     @property
     def layer(self) -> float:
         """
-        Sprites with the highest layer value get drawn first.
+        Sprites with higher layer values are drawn on top of
+        sprites with lower layer values.
 
-        By default sprites are drawn in the order they were created in.
+        Because canvas rendering overlays new elements onto previous ones,
+        sprites drawn first end up in the background, while
+        sprites drawn later appear in the foreground.
+
+        By default, sprites are drawn in the order they were created.
         """
         ...
 
@@ -2817,19 +2822,21 @@ class Group(Visuals[Sprite]):
     remain false for the rest of the sketch, unless changed.
     """
 
-    add: Callable[..., float]
-    """
-    Alias for `group.push`.
+    def add(self, *sprites: Sprite) -> float:
+        """
+        Alias for `group.push`.
 
-    Adds a sprite to the end of the group.
-    """
+        Adds a sprite to the end of the group.
+        """
+        ...
 
-    contains: Callable[..., bool]
-    """
-    Alias for `group.includes`.
+    def contains(self, searchElement: Sprite, fromIndex: float = ...) -> bool:
+        """
+        Alias for `group.includes`.
 
-    Check if a sprite is in the group.
-    """
+        Check if a sprite is in the group.
+        """
+        ...
 
     @property
     def amount(self) -> float:

@@ -1044,9 +1044,14 @@ declare global {
 		set isSuperFast(val: boolean);
 
 		/**
-		 * Sprites with the highest layer value get drawn first.
+		 * Sprites with higher layer values are drawn on top of
+		 * sprites with lower layer values.
 		 *
-		 * By default sprites are drawn in the order they were created in.
+		 * Because canvas rendering overlays new elements onto previous ones,
+		 * sprites drawn first end up in the background, while
+		 * sprites drawn later appear in the foreground.
+		 *
+		 * By default, sprites are drawn in the order they were created.
 		 */
 		get layer(): number;
 		set layer(val: number);
@@ -2475,14 +2480,14 @@ declare global {
 		 *
 		 * Adds a sprite to the end of the group.
 		 */
-		add: (...sprites: Sprite[]) => number;
+		add(...sprites: Sprite[]): number;
 
 		/**
 		 * Alias for `group.includes`.
 		 *
 		 * Check if a sprite is in the group.
 		 */
-		contains: (searchElement: Sprite, fromIndex?: number) => boolean;
+		contains(searchElement: Sprite, fromIndex?: number): boolean;
 
 		/**
 		 * Depending on the value that the amount property is set to, the group will

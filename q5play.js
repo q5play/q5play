@@ -821,6 +821,7 @@ async function q5playPreSetup(q) {
 				}
 				if (ani) ani = ani.clone();
 				else return error('Ani not found: ' + name);
+				this._hasImagery = true;
 			}
 			// reset to frame 0 of that animation
 			if (this.resetAniOnChange) ani._frame = 0;
@@ -1101,8 +1102,7 @@ async function q5playPreSetup(q) {
 
 			this._heading = 'right';
 
-			if (group._layer) this.layer = group._layer;
-			else this._layer = $.allSprites._topLayer += 1;
+			this.layer = group._layer ?? this.idNum;
 
 			physicsType ??= group.physics || group.physicsType || 0;
 			this.physics = physicsType;
