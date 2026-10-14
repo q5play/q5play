@@ -12,15 +12,15 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.3
+ * @version 4.4
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
-let q5play_version = '4.3';
+let q5play_version = '4.4';
 
 if (typeof globalThis.Q5 == 'undefined' && typeof globalThis.p5 == 'undefined') {
-	throw new Error('q5play requires q5.js to be loaded first. Visit https://q5js.org to learn more.');
+	throw new Error('q5play requires q5 to be loaded first. Visit https://q5js.org to learn more.');
 }
 
 let box2dPromise,
@@ -234,7 +234,7 @@ async function q5playPreSetup(q) {
 
 	let friendlyRounding = true;
 
-	$.Q5Play = class {
+	const Q5Play = class {
 		constructor() {
 			this.version = q5play_version;
 			this.sprites = {};
@@ -365,8 +365,7 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$.q5play = new $.Q5Play();
-	delete $.Q5Play;
+	$.q5play = new Q5Play();
 
 	const log = (...args) => {
 		if (!$.q5play.quiet && !$.q5play.silent) console.log(...args);
@@ -430,6 +429,7 @@ async function q5playPreSetup(q) {
 		usePhysics = true,
 		cameraOn = false,
 		timeScale = 1,
+		castID = 0,
 		shapeDict = {},
 		jointDict = {},
 		tileDict = {};
@@ -5392,7 +5392,7 @@ async function q5playPreSetup(q) {
 		}
 	}
 
-	$.World = class {
+	const World = class {
 		constructor() {
 			this.mod = {};
 
@@ -5810,6 +5810,7 @@ async function q5playPreSetup(q) {
 		}
 
 		rayCastAll(startPos, direction, maxDistance, limiter) {
+			castID++;
 			const startX = startPos.x ?? startPos[0];
 			const startY = startPos.y ?? startPos[1];
 
@@ -5834,6 +5835,8 @@ async function q5playPreSetup(q) {
 				const shape = shapeDict[castResult.shapeId.index1];
 				if (shape?.sprite) {
 					const s = shape.sprite;
+					// if casting from the sprite or the sprite was already hit by this cast
+					if (s._uid === startPos._uid || s._castID == castID) return 1; // continue casting
 
 					s.cast = new CastInfo(
 						s,
@@ -5856,18 +5859,28 @@ async function q5playPreSetup(q) {
 			return results;
 		}
 
-		circleCast(startPos, endPos, radius) {
-			let sprites = this.circleCastAll(startPos, endPos, radius, () => true);
+		circleCast(startPos, direction, radius, maxDistance) {
+			let sprites = this.circleCastAll(startPos, direction, radius, maxDistance, () => true);
 			return sprites[0];
 		}
 
-		circleCastAll(startPos, endPos, radius, limiter) {
+		circleCastAll(startPos, direction, radius, maxDistance, limiter) {
+			castID++;
 			const startX = startPos.x ?? startPos[0];
 			const startY = startPos.y ?? startPos[1];
-			const endX = endPos.x ?? endPos[0];
-			const endY = endPos.y ?? endPos[1];
 
-			const maxDistance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+			let endX, endY;
+			if (typeof direction == 'number') {
+				maxDistance ??= 10000;
+				endX = startX + maxDistance * $.cos(direction);
+				endY = startY + maxDistance * $.sin(direction);
+			} else {
+				const endPos = direction;
+				if (typeof maxDistance == 'function') limiter = maxDistance;
+				endX = endPos.x ?? endPos[0];
+				endY = endPos.y ?? endPos[1];
+				maxDistance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+			}
 
 			const center = scaleTo(startX, startY);
 			const proxy = b2MakeProxy(center, 1, radius / meterSize);
@@ -5879,6 +5892,8 @@ async function q5playPreSetup(q) {
 				const shape = shapeDict[castResult.shapeId.index1];
 				if (shape?.sprite) {
 					const s = shape.sprite;
+					// if casting from the sprite or the sprite was already hit by this cast
+					if (s._uid === startPos._uid || s._castID == castID) return 1; // continue casting
 
 					s.cast = new CastInfo(
 						s,
@@ -5904,7 +5919,7 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$.Camera = class {
+	const Camera = class {
 		constructor() {
 			// camera position
 			this._pos = $.createVector.call($, 0, 0);
@@ -7014,7 +7029,7 @@ async function q5playPreSetup(q) {
 		g.textFont(!$.canvas.webgpu ? $.textFont() : $._g.textFont());
 		g.text(emoji, size / 2, textSize);
 
-		// same code as img.trim() in q5.js
+		// same code as img.trim() in q5
 		let ctx = g.drawingContext;
 		let pd = g._pixelDensity || g._renderer?._pixelDensity || 1;
 		let w = g.canvas.width;
@@ -7210,6 +7225,7 @@ async function q5playPreSetup(q) {
 			case 'jsfiddle.net':
 			case 'codevre.com':
 			case 'preview.codevre.com':
+			case 'preview.codevre.dev':
 				break;
 			default:
 				if (
@@ -7479,8 +7495,8 @@ async function q5playPreSetup(q) {
 	}
 
 	$.allSprites = new $.Group();
-	$.world = new $.World();
-	$.camera = $._camera = new $.Camera();
+	$.world = new World();
+	$.camera = $._camera = new Camera();
 
 	$.InputDevice = class {
 		constructor() {
@@ -7544,7 +7560,7 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$._Mouse = class extends $.InputDevice {
+	const Mouse = class extends $.InputDevice {
 		constructor() {
 			super();
 			this._default = 'left';
@@ -7678,11 +7694,11 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$.mouse = new $._Mouse();
+	$.mouse = new Mouse();
 
 	let pressAmt = 0;
 
-	$._Pointer = class extends $.InputDevice {
+	const Pointer = class extends $.InputDevice {
 		constructor(e) {
 			super();
 			this.x = 0;
@@ -7772,19 +7788,20 @@ async function q5playPreSetup(q) {
 	$.pointers.overlapTracking = true;
 	$.pointers.grabTracking = false;
 
-	let mockPointer = new $._Pointer({ pointerId: Infinity, pointerType: 'mock' });
+	let mockPointer = new Pointer({ pointerId: Infinity, pointerType: 'mock' });
 
 	// pointer is a proxy for a mock pointer or pointers[0]
 	$.pointer = new Proxy(
 		{},
 		{
-			get(target, prop) {
+			get(_, prop) {
 				if ($.pointers.length) return $.pointers[0][prop];
 				else return mockPointer[prop];
 			},
-			set(target, prop, value) {
-				if ($.pointers.length) return ($.pointers[0][prop] = value);
-				else return (mockPointer[prop] = value);
+			set(_, prop, value) {
+				if ($.pointers.length) $.pointers[0][prop] = value;
+				else mockPointer[prop] = value;
+				return true;
 			}
 		}
 	);
@@ -7802,7 +7819,7 @@ async function q5playPreSetup(q) {
 
 		let p = $.pointers.find((p) => p.id === id);
 		if (!p) {
-			p = new $._Pointer(e);
+			p = new Pointer(e);
 			$.pointers.push(p);
 		}
 		p._update(e);
@@ -7860,7 +7877,7 @@ async function q5playPreSetup(q) {
 		if (m.drag[btn] > 0) m.drag[btn] = -1;
 	};
 
-	$._Keyboard = class extends $.InputDevice {
+	const KeyBoard = class extends $.InputDevice {
 		constructor() {
 			super();
 			this._default = ' ';
@@ -7982,8 +7999,7 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$.kb = new $._Keyboard();
-
+	$.kb = new KeyBoard();
 	$.keyboard = $.kb;
 
 	if (typeof navigator == 'object' && navigator.keyboard) {
@@ -8323,7 +8339,7 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$._Contros = class extends Array {
+	const Contros = class extends Array {
 		constructor() {
 			super();
 			if (window) {
@@ -8431,7 +8447,7 @@ async function q5playPreSetup(q) {
 		}
 	};
 
-	$.contros = new $._Contros();
+	$.contros = new Contros();
 	$.controllers = $.contros;
 
 	$.contro = new $.Contro('mock0');
@@ -8756,7 +8772,11 @@ async function q5playPreSetup(q) {
 		}
 	}
 
-	if (Q5.applyLang) Q5.applyLang(q, q5playLibLangs, q5playClassLangs);
+	// used by q5-lang.js
+	if ($._privateClasses) {
+		// prettier-ignore
+		Object.assign($._privateClasses, { Q5Play, Shape, Collider, Sensor, CastInfo, World, Camera, Contros, Mouse, Pointer, KeyBoard });
+	}
 }
 
 // called once after setup
@@ -8923,203 +8943,6 @@ function q5playRemove() {
 	this._removed = true;
 	this.world?.delete();
 }
-
-const q5playLibLangs = `
-allSprites -> es:todosLosSprites
-world -> es:mundo
-camera -> es:cámara
-mouse -> es:ratón
-kb -> es:tec
-keyboard -> es:teclado
-contro -> es:mando
-controllers -> es:mandos
-pointer -> es:puntero
-pointers -> es:punteros
-spriteArt -> es:arteSprite
-delay -> es:esperar
-animation -> es:animación
-renderStats -> es:estadísticasRenderizado
-EmojiImage -> es:ImagenEmoji
-parseTextureAtlas -> es:parsearAtlasTextura
-DYNAMIC -> es:DINÁMICO
-STATIC -> es:ESTÁTICO
-KINEMATIC -> es:CINEMÁTICO
-Group -> es:Grupo
-Joint -> es:Articulación
-`;
-
-const q5playClassLangs = {
-	Sprite: `
-rotation -> es:rotación
-rotationSpeed -> es:velocidadRotación
-rotationDrag -> es:resistenciaRotación
-rotationLock -> es:bloqueoRotación
-speed -> es:velocidad
-direction -> es:dirección
-drag -> es:amortiguación
-mass -> es:masa
-density -> es:densidad
-bounciness -> es:elasticidad
-friction -> es:fricción
-physicsEnabled -> es:físicaActivada
-physicsType -> es:tipoFísica
-physics -> es:física
-sleeping -> es:durmiendo
-allowSleeping -> es:permitirDormir
-layer -> es:capa
-life -> es:vida
-scale -> es:escala
-tint -> es:tinte
-opacity -> es:opacidad
-visible -> es:visible
-debug -> es:depurar
-deleted -> es:eliminado
-bearing -> es:rumbo
-heading -> es:orientación
-isSuperFast -> es:esUltraRápido
-pixelPerfect -> es:perfectoEnPíxeles
-gravityScale -> es:escalaGravedad
-diameter -> es:diámetro
-roundedRadius -> es:radioRedondeado
-centerOfMass -> es:centroMasa
-previousPosition -> es:posiciónAnterior
-previousRotation -> es:rotaciónAnterior
-velocity -> es:vectorVelocidad
-position -> es:posición
-canvasPos -> es:posiciónLienzo
-addCollider -> es:añadirColisionador
-addSensor -> es:añadirSensor
-deleteColliders -> es:eliminarColisionadores
-deleteSensors -> es:eliminarSensores
-collide -> es:colisionar
-collides -> es:colisiona
-colliding -> es:colisionando
-collided -> es:colisionó
-overlap -> es:solapar
-overlaps -> es:solapa
-overlapping -> es:solapando
-overlapped -> es:solapó
-passes -> es:pasa
-addAni -> es:añadirAni
-addAnis -> es:añadirAnis
-changeAni -> es:cambiarAni
-playAni -> es:reproducirAni
-playAnis -> es:reproducirAnis
-moveTo -> es:moverA
-moveTowards -> es:moverHacia
-rotateTo -> es:rotarA
-rotateTowards -> es:rotarHacia
-transformTowards -> es:transformarHacia
-applyForce -> es:aplicarFuerza
-applyForceScaled -> es:aplicarFuerzaEscalada
-attractTo -> es:atraerA
-repelFrom -> es:repelerDe
-applyTorque -> es:aplicarTorque
-applyWind -> es:aplicarViento
-angleTo -> es:ánguloA
-angleDistTo -> es:distÁnguloA
-setSpeedAndDirection -> es:establecerVelocidadYDirección
-scaleBy -> es:escalarPor
-resetMass -> es:reiniciarMasa
-distanceTo -> es:distanciaA
-delete -> es:eliminar
-addDefaultSensors -> es:añadirSensoresDefecto
-autoDraw -> es:autoDibujar
-draw -> es:dibujar
-autoUpdate -> es:autoActualizar
-update -> es:actualizar
-`,
-	Group: `
-Group -> es:Grupo
-amount -> es:cantidad
-autoCull -> es:descartarFueraCampo
-cull -> es:descartar
-contains -> es:contiene
-remove -> es:quitar
-removeAll -> es:quitarTodo
-delete -> es:eliminar
-deleteAll -> es:eliminarTodo
-`,
-	World: `
-gravity -> es:gravedad
-timeScale -> es:escalaVelocidad
-meterSize -> es:tamañoMetro
-allowSleeping -> es:permitirDormir
-awakeBodies -> es:cuerposDespiertos
-bounceThreshold -> es:umbralRebote
-hitThreshold -> es:umbralGolpe
-autoStep -> es:pasoAutomático
-subSteps -> es:subPasos
-explodeAt -> es:explosionEn
-delete -> es:eliminar
-`,
-	Camera: `
-position -> es:posición
-zoom ->
-moveTo -> es:moverA
-zoomTo -> es:acercarA
-on -> es:activar
-off -> es:desactivar
-`,
-	Ani: `
-play -> es:reproducir
-pause -> es:pausar
-stop -> es:parar
-loop -> es:bucle
-noLoop -> es:sinBucle
-rewind -> es:rebobinar
-nextFrame -> es:siguienteFotograma
-previousFrame -> es:fotogramaAnterior
-goToFrame -> es:irAlFotograma
-clone -> es:clonar
-frame -> es:fotograma
-lastFrame -> es:últimoFotograma
-frameImage -> es:imagenFotograma
-playing -> es:reproduciendo
-looping -> es:enBucle
-frameDelay -> es:retardoFotograma
-`,
-	InputDevice: `
-presses -> es:presiona
-pressing -> es:presionando
-holds -> es:mantiene
-holding -> es:manteniendo
-held -> es:mantuvo
-released -> es:soltó
-releases -> es:suelta
-holdThreshold -> es:umbralMantener
-`,
-	_Mouse: `
-position -> es:posición
-visible -> es:visible
-isOnCanvas -> es:estaEnLienzo
-scroll -> es:desplazamiento
-drags -> es:arrastra
-dragging -> es:arrastrando
-dragged -> es:arrastró
-scrolls -> es:desplaza
-scrolling -> es:desplazando
-scrolled -> es:desplazó
-`,
-	_Pointer: `
-prev -> es:previo
-canvasPos -> es:posEnLienzo
-type -> es:tipo
-duration -> es:duración
-holdThreshold -> es:umbralDeSostenido
-drags -> es:arrastra
-dragging -> es:arrastrando
-dragged -> es:arrastró
-grabs -> es:agarra
-grabbing -> es:agarrando
-grabbed -> es:agarró
-overlaps -> es:superpone
-overlapping -> es:superponiendo
-overlapped -> es:superpuso
-pressure -> es:presión
-`
-};
-q5playClassLangs.Group += q5playClassLangs.Sprite;
 
 globalThis.Canvas ??= () => {
 	p5._friendlyError(`Visit https://github.com/q5play/p5-compat to learn how to use q5play with p5.js`);

@@ -2034,6 +2034,11 @@ declare global {
 		get anis(): Anis;
 
 		/**
+		 * Creates a new visual and adds it to the visuals collection.
+		 */
+		Visual: typeof Visual;
+
+		/**
 		 * Adds an animation to the Group or Visuals array.
 		 *
 		 * @param spriteSheetURL the URL of the sprite sheet image
@@ -2275,9 +2280,14 @@ declare global {
 		isSuperFast: boolean;
 
 		/**
-		 * Sprites with the highest layer value get drawn first.
+		 * Sprites with higher layer values are drawn on top of
+		 * sprites with lower layer values.
 		 *
-		 * By default sprites are drawn in the order they were created in.
+		 * Because canvas rendering overlays new elements onto previous ones,
+		 * sprites drawn first end up in the background, while
+		 * sprites drawn later appear in the foreground.
+		 *
+		 * By default, sprites are drawn in the order they were created.
 		 */
 		layer: number;
 
@@ -2976,6 +2986,17 @@ declare global {
 		circleCast(startPos: { x: number; y: number } | number[], endPos: { x: number; y: number } | number[], radius: number): Sprite;
 
 		/**
+		 * Finds the first sprite hit by sweeping a circle in a direction.
+		 *
+		 * @param startPos starting position of the cast
+		 * @param direction direction angle of the cast
+		 * @param radius radius of the circle
+		 * @param maxDistance max distance to check, default 10000
+		 * @returns The first sprite hit or undefined
+		 */
+		circleCast(startPos: { x: number; y: number } | number[], direction: number, radius: number, maxDistance?: number): Sprite;
+
+		/**
 		 * Finds all sprites (with physics bodies) that intersect
 		 * a swept circle (capsule cast) from startPos to endPos, sorted by distance.
 		 *
@@ -2986,6 +3007,18 @@ declare global {
 		 * @returns An array of sprites hit, sorted by distance.
 		 */
 		circleCastAll(startPos: { x: number; y: number } | number[], endPos: { x: number; y: number } | number[], radius: number, limiter?: Function): Sprite[];
+
+		/**
+		 * Finds all sprites hit by sweeping a circle in a direction, sorted by distance.
+		 *
+		 * @param startPos starting position of the cast
+		 * @param direction direction angle of the cast
+		 * @param radius radius of the circle
+		 * @param maxDistance max distance to check, default 10000
+		 * @param limiter callback run each time the cast hits a sprite; return true to stop the cast
+		 * @returns An array of sprites hit, sorted by distance.
+		 */
+		circleCastAll(startPos: { x: number; y: number } | number[], direction: number, radius: number, maxDistance?: number, limiter?: Function): Sprite[];
 
 		/**
 		 * Applies an explosive force to sprites within the radius of the explosion.
@@ -3821,7 +3854,7 @@ declare global {
 		releases(inp?: any): boolean;
 	}
 
-	class _Mouse extends InputDevice {
+	class Mouse extends InputDevice {
 		/**
 		 * The mouse's x position in the world.
 		 */
@@ -3930,7 +3963,7 @@ declare global {
 		scrolled(): boolean;
 	}
 
-	class _Pointer extends InputDevice {
+	class Pointer extends InputDevice {
 		constructor(pointer: any);
 
 		/**
@@ -4006,7 +4039,7 @@ declare global {
 		overlapped(sprite: Sprite): boolean;
 	}
 
-	class _Keyboard extends InputDevice {
+	class KeyBoard extends InputDevice {
 		alt: number;
 		arrowUp: number;
 		arrowDown: number;
@@ -4221,7 +4254,7 @@ declare global {
 		get r3(): number;
 	}
 
-	class _Contros extends Array<Contro> {
+	class Contros extends Array<Contro> {
 		/**
 		 * Used internally to create the `contros` array (aka `controllers`)
 		 * of `Contro` objects, which store the input status of buttons,
@@ -4298,13 +4331,13 @@ declare global {
 	let allSprites: Group;
 	let world: World;
 	let camera: Camera;
-	let mouse: _Mouse;
-	let pointers: _Pointer[];
-	let pointer: _Pointer;
-	let kb: _Keyboard;
-	let keyboard: _Keyboard;
-	let contros: _Contros;
-	let controllers: _Contros;
+	let mouse: Mouse;
+	let pointers: Pointer[];
+	let pointer: Pointer;
+	let kb: KeyBoard;
+	let keyboard: KeyBoard;
+	let contros: Contros;
+	let controllers: Contros;
 	let contro: Contro;
 }
 

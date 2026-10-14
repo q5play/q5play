@@ -2419,6 +2419,9 @@ class Visuals(list[_T_Visuals], Generic[_T_Visuals]):
         """
         ...
 
+    Visual: Type[Visual]
+    """Creates a new visual and adds it to the visuals collection."""
+
     def addAni(self, spriteSheetURL: str, frameCount: float) -> Awaitable[None]:
         """
         Adds an animation to the Group or Visuals array.
@@ -2652,9 +2655,14 @@ class Group(Visuals[Sprite]):
 
     layer: float
     """
-    Sprites with the highest layer value get drawn first.
+    Sprites with higher layer values are drawn on top of
+    sprites with lower layer values.
 
-    By default sprites are drawn in the order they were created in.
+    Because canvas rendering overlays new elements onto previous ones,
+    sprites drawn first end up in the background, while
+    sprites drawn later appear in the foreground.
+
+    By default, sprites are drawn in the order they were created.
     """
 
     life: float
@@ -3448,6 +3456,7 @@ class World:
     def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         ...
 
+    @overload
     def circleCast(self, startPos: list[dict | float], endPos: list[dict | float], radius: float) -> Sprite:
         """
         Finds the first sprite (with a physics body) that
@@ -3463,6 +3472,26 @@ class World:
         """
         ...
 
+    @overload
+    def circleCast(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ...) -> Sprite:
+        """
+        Finds the first sprite hit by sweeping a circle in a direction.
+
+        Args:
+            startPos: starting position of the cast
+            direction: direction angle of the cast
+            radius: radius of the circle
+            maxDistance: max distance to check, default 10000
+
+        Returns:
+            The first sprite hit or undefined
+        """
+        ...
+
+    def circleCast(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ...) -> Sprite:
+        ...
+
+    @overload
     def circleCastAll(self, startPos: list[dict | float], endPos: list[dict | float], radius: float, limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
@@ -3477,6 +3506,26 @@ class World:
         Returns:
             An array of sprites hit, sorted by distance.
         """
+        ...
+
+    @overload
+    def circleCastAll(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+        """
+        Finds all sprites hit by sweeping a circle in a direction, sorted by distance.
+
+        Args:
+            startPos: starting position of the cast
+            direction: direction angle of the cast
+            radius: radius of the circle
+            maxDistance: max distance to check, default 10000
+            limiter: callback run each time the cast hits a sprite; return true to stop the cast
+
+        Returns:
+            An array of sprites hit, sorted by distance.
+        """
+        ...
+
+    def circleCastAll(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         ...
 
     @overload
@@ -4487,7 +4536,7 @@ class InputDevice:
     def releases(self, inp: Any = ...) -> bool:
         ...
 
-class _Mouse(InputDevice):
+class Mouse(InputDevice):
 
     x: float
     """The mouse's x position in the world."""
@@ -4609,10 +4658,10 @@ class _Mouse(InputDevice):
         """
         ...
 
-class _Pointer(InputDevice):
+class Pointer(InputDevice):
 
     @classmethod
-    def new(cls, pointer: Any) -> '_Pointer':
+    def new(cls, pointer: Any) -> 'Pointer':
         ...
 
     def __init__(self, pointer: Any) -> None: ...
@@ -4694,7 +4743,7 @@ class _Pointer(InputDevice):
         """
         ...
 
-class _Keyboard(InputDevice):
+class KeyBoard(InputDevice):
 
     alt: float
 
@@ -4985,10 +5034,10 @@ class Contro(InputDevice):
         """
         ...
 
-class _Contros(list[Contro]):
+class Contros(list[Contro]):
 
     @classmethod
-    def new(cls) -> '_Contros':
+    def new(cls) -> 'Contros':
         """
         Used internally to create the `contros` array (aka `controllers`)
         of `Contro` objects, which store the input status of buttons,
@@ -5083,19 +5132,19 @@ world: World
 
 camera: Camera
 
-mouse: _Mouse
+mouse: Mouse
 
-pointers: list[_Pointer]
+pointers: list[Pointer]
 
-pointer: _Pointer
+pointer: Pointer
 
-kb: _Keyboard
+kb: KeyBoard
 
-keyboard: _Keyboard
+keyboard: KeyBoard
 
-contros: _Contros
+contros: Contros
 
-controllers: _Contros
+controllers: Contros
 
 contro: Contro
 
