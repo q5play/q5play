@@ -5969,6 +5969,17 @@ async function q5playPreSetup(q) {
 			this.bound.max.y = val + mod;
 		}
 
+		_updatePointers() {
+			const m = $.mouse;
+			m._update();
+			if (!$.pointers.length) {
+				mockPointer.x = m.x;
+				mockPointer.y = m.y;
+			} else {
+				for (let p of $.pointers) p._update();
+			}
+		}
+
 		get x() {
 			return this._pos.x;
 		}
@@ -5982,6 +5993,7 @@ async function q5playPreSetup(q) {
 				this.__pos.rounded.x = Math.round(x);
 			}
 			this._calcBoundsX(val);
+			this._updatePointers();
 		}
 
 		get y() {
@@ -5997,6 +6009,7 @@ async function q5playPreSetup(q) {
 				this.__pos.rounded.y = Math.round(y);
 			}
 			this._calcBoundsY(val);
+			this._updatePointers();
 		}
 
 		get zoom() {
@@ -7623,9 +7636,7 @@ async function q5playPreSetup(q) {
 		}
 
 		_update() {
-			let cam = $.camera,
-				m = this,
-				mx = $.mouseX,
+			let mx = $.mouseX,
 				my = $.mouseY;
 
 			if ($._c2d || (using_p5 && ($._webgpuFallback || $._webgl))) {
@@ -7633,14 +7644,9 @@ async function q5playPreSetup(q) {
 				my -= $.halfHeight;
 			}
 
-			// divide by camera zoom and add camera translation
-			m.x = mx / cam.zoom + cam._pos.x;
-			m.y = my / cam.zoom + cam._pos.y;
-
-			if (m.scroll < 0) m.scroll = 0;
-			if (m.scrollDelta.x == 0 && m.scrollDelta.y == 0) {
-				m.scroll = m.scroll == 1 ? -3 : m.scroll > 0 ? -1 : 0;
-			}
+			const cam = $.camera;
+			this.x = mx / cam.zoom + cam._pos.x;
+			this.y = my / cam.zoom + cam._pos.y;
 		}
 
 		get pos() {
@@ -7705,7 +7711,7 @@ async function q5playPreSetup(q) {
 			this.y = 0;
 			this.prev = { x: 0, y: 0 };
 			this.delta = { x: 0, y: 0 };
-			this.canvasPos = {};
+			this.canvasPos = { x: 0, y: 0 };
 			this.id = e.pointerId;
 			this.type = e.pointerType;
 			this.duration = 1;
@@ -7722,27 +7728,34 @@ async function q5playPreSetup(q) {
 			this.prev.x = this.x;
 			this.prev.y = this.y;
 
-			const c = $.canvas,
-				rect = c.getBoundingClientRect(),
-				sx = c.scrollWidth / c.w || 1,
-				sy = c.scrollHeight / c.h || 1;
-			let x = (e.clientX - rect.left) / sx,
+			let x, y;
+			if (e) {
+				this.event = e;
+				this.pressure = e.pressure ?? 0;
+
+				const c = $.canvas,
+					rect = c.getBoundingClientRect(),
+					sx = c.scrollWidth / c.w || 1,
+					sy = c.scrollHeight / c.h || 1;
+
+				x = (e.clientX - rect.left) / sx;
 				y = (e.clientY - rect.top) / sy;
 
-			if ($._webgpu) {
-				x -= c.hw;
-				y -= c.hh;
+				if ($._webgpu) {
+					x -= c.hw;
+					y -= c.hh;
+				}
+				this.canvasPos.x = x;
+				this.canvasPos.y = y;
+			} else {
+				x = this.canvasPos.x;
+				y = this.canvasPos.y;
 			}
-
-			this.canvasPos.x = x;
-			this.canvasPos.y = y;
 
 			// Calculate world position based on camera
 			const cam = $.camera;
 			this.x = x / cam.zoom + cam.x;
 			this.y = y / cam.zoom + cam.y;
-			this.pressure = e.pressure ?? 0;
-			this.event = e;
 
 			this.delta.x = this.x - this.prev.x;
 			this.delta.y = this.y - this.prev.y;
@@ -8799,7 +8812,10 @@ function q5playUpdate() {
 	$.contros._update();
 
 	const m = $.mouse;
-	m._update();
+	if (m.scroll < 0) m.scroll = 0;
+	if (m.scrollDelta.x == 0 && m.scrollDelta.y == 0) {
+		m.scroll = m.scroll == 1 ? -3 : m.scroll > 0 ? -1 : 0;
+	}
 
 	if ($.pointers.overlapTracking) {
 		for (let p of $.pointers) {
