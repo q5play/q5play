@@ -892,7 +892,7 @@ declare global {
 		 * By default sprites get a random color.
 		 */
 		get color(): Q5.Color;
-		set color(val: Q5.Color);
+		set color(val: string | Q5.Color);
 
 		/**
 		 * The sprite's current fill colour.
@@ -900,7 +900,7 @@ declare global {
 		 * By default sprites get a random color.
 		 */
 		get colour(): Q5.Color;
-		set colour(val: Q5.Color);
+		set colour(val: string | Q5.Color);
 
 		/**
 		 * The sprite's current fill color.
@@ -908,13 +908,13 @@ declare global {
 		 * By default sprites get a random color.
 		 */
 		get fill(): Q5.Color;
-		set fill(val: Q5.Color);
+		set fill(val: string | Q5.Color);
 
 		/**
 		 * The sprite's stroke color.
 		 */
 		get stroke(): Q5.Color;
-		set stroke(val: Q5.Color);
+		set stroke(val: string | Q5.Color);
 
 		/**
 		 * The sprite's stroke weight, the thickness of its outline.
@@ -941,7 +941,7 @@ declare global {
 		 * @default undefined
 		 */
 		get textStroke(): Q5.Color;
-		set textStroke(val: Q5.Color);
+		set textStroke(val: string | Q5.Color);
 
 		/**
 		 * The sprite's text stroke weight, the thickness of its outline.

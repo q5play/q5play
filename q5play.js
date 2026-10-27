@@ -12,12 +12,12 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.4
+ * @version 4.5
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
-let q5play_version = '4.4';
+let q5play_version = '4.5';
 
 if (typeof globalThis.Q5 == 'undefined' && typeof globalThis.p5 == 'undefined') {
 	throw new Error('q5play requires q5 to be loaded first. Visit https://q5js.org to learn more.');
@@ -59,6 +59,7 @@ async function q5playPreSetup(q) {
 		b2ComputeHull,
 		DebugDrawCommandBuffer,
 
+		b2Pos_zero,
 		b2Rot_identity,
 		b2InvMulRot,
 
@@ -87,9 +88,11 @@ async function q5playPreSetup(q) {
 		b2World_CastShape,
 		b2World_SetCustomFilterCallback,
 		b2World_SetPreSolveCallback,
+		b2World_DeleteCallback,
 		b2World_GetGravity,
 		b2World_SetGravity,
 		b2World_Explode,
+		b2World_SetContactRecycleDistance,
 
 		/* Explosion */
 		b2DefaultExplosionDef,
@@ -104,6 +107,7 @@ async function q5playPreSetup(q) {
 		b2MakeOffsetRoundedPolygon,
 		b2MakeProxy,
 		b2Circle,
+		b2Polygon,
 		b2Capsule,
 		b2Segment,
 
@@ -116,7 +120,7 @@ async function q5playPreSetup(q) {
 		b2Shape_IsValid,
 		b2Shape_TestPoint,
 		b2Shape_GetBody,
-		b2Shape_RayCast,
+		b2Shape_CastRay,
 		b2Shape_SetDensity,
 		b2Shape_SetFriction,
 		b2Shape_SetRestitution,
@@ -137,7 +141,7 @@ async function q5playPreSetup(q) {
 		b2Shape_SetSegment,
 		b2Shape_GetChainSegment,
 		b2Shape_GetParentChain,
-		b2Shape_GetAABB,
+		b2Shape_GetBounds,
 		b2Shape_GetContactCapacity,
 		b2Shape_GetContactData,
 
@@ -167,10 +171,10 @@ async function q5playPreSetup(q) {
 		b2Body_GetLocalVector,
 		b2Body_GetWorldVector,
 		b2Body_GetMass,
-		b2Body_GetLocalCenterOfMass,
 		b2Body_SetMassData,
 		b2Body_GetMassData,
-		b2Body_ApplyMassFromShapes,
+		b2Body_GetLocalCenter,
+		b2Body_UpdateMassFromShapes,
 		b2Body_GetLinearVelocity,
 		b2Body_SetLinearVelocity,
 		b2Body_GetAngularVelocity,
@@ -189,13 +193,13 @@ async function q5playPreSetup(q) {
 		b2Body_SetAwake,
 		b2Body_Enable,
 		b2Body_Disable,
-		b2Body_IsSleepEnabled,
-		b2Body_EnableSleep,
+		b2Body_IsSleepingEnabled,
+		b2Body_EnableSleeping,
 		b2Body_GetSleepThreshold,
 		b2Body_SetSleepThreshold,
 		b2Body_IsBullet,
 		b2Body_SetBullet,
-		b2Body_ComputeAABB,
+		b2Body_ComputeBounds,
 		b2Body_GetWorld,
 		b2Body_SetMotionLocks,
 
@@ -217,6 +221,8 @@ async function q5playPreSetup(q) {
 
 		b2Joint_IsValid,
 		b2Joint_WakeBodies,
+		b2Joint_GetLocalFrameA,
+		b2Joint_GetLocalFrameB,
 		b2Joint_SetLocalFrameA,
 		b2Joint_SetLocalFrameB,
 		b2Joint_GetCollideConnected,
@@ -391,14 +397,24 @@ async function q5playPreSetup(q) {
 
 	const ZERO_VEC = new b2Vec2(0, 0),
 		ZERO_ROT = b2MakeRot(0),
-		NULL_FILTER = new b2QueryFilter();
+		NULL_FILTER = new b2QueryFilter(),
+		SCALE_VEC = new b2Vec2(0, 0),
+		TEMP_VEC = new b2Vec2(0, 0),
+		FORCE_VEC = new b2Vec2(0, 0),
+		WIND_VEC = new b2Vec2(0, 0),
+		CAST_TRANSLATION = new b2Vec2(0, 0),
+		TEMP_ROT = new b2Rot();
 	NULL_FILTER.categoryBits = 0xffffffff;
 	NULL_FILTER.maskBits = 0xffffffff;
 
 	let meterSize = 60;
 
 	// scale to box2d coordinates from q5 coordinates
-	const scaleTo = (x, y) => new b2Vec2(x / meterSize, y / meterSize);
+	const scaleTo = (x, y) => SCALE_VEC.Set(x / meterSize, y / meterSize);
+	const rotationTo = (angle) => {
+		TEMP_ROT.SetAngle(angle);
+		return TEMP_ROT;
+	};
 
 	// scale from box2d coordinates to q5 coordinates
 	const scaleFrom = (x, y) => ({ x: x * meterSize, y: y * meterSize });
@@ -409,6 +425,31 @@ async function q5playPreSetup(q) {
 	let visualSlop = 0.5;
 
 	const isSlop = (val) => Math.abs(val) <= linearSlop;
+	const setChainPoints = (chainDef, points, isLoop) => {
+		let chainPoints = points;
+		if (isLoop && points.length > 2 && points[0].x === points.at(-1).x && points[0].y === points.at(-1).y) {
+			chainPoints = points.slice(0, -1);
+		}
+
+		chainDef.SetPoints(chainPoints);
+		chainDef.isLoop = isLoop;
+		if (isLoop) return;
+
+		const setGhostPoint = (ghost, endpoint, neighbor) => {
+			const dx = endpoint.x - neighbor.x;
+			const dy = endpoint.y - neighbor.y;
+			const length = Math.hypot(dx, dy);
+			if (!length) {
+				throw new Error('Open Box2D chains cannot have duplicate endpoint vertices.');
+			}
+			const distance = Math.max(length, linearSlop * 2);
+			ghost.x = endpoint.x + (dx / length) * distance;
+			ghost.y = endpoint.y + (dy / length) * distance;
+		};
+
+		setGhostPoint(chainDef.ghost1, chainPoints[0], chainPoints[1]);
+		setGhostPoint(chainDef.ghost2, chainPoints.at(-1), chainPoints.at(-2));
+	};
 	const fixRound = (val) => {
 		const v = Math.round(val);
 		return Math.abs(val - v) <= linearSlop ? v : val;
@@ -479,8 +520,24 @@ async function q5playPreSetup(q) {
 			this.def.material.customColor = packedData;
 		}
 
+		dispose() {
+			const def = this.def,
+				geom = this.geom;
+			this.def = null;
+			this.geom = null;
+			try {
+				def?.delete();
+			} finally {
+				geom?.delete();
+			}
+		}
+
 		delete() {
-			b2DestroyShape(this.id);
+			try {
+				b2DestroyShape(this.id);
+			} finally {
+				this.dispose();
+			}
 			const s = this.sprite;
 			s._shapes.splice(s._shapes.indexOf(this), 1);
 			if (this._isSensor) {
@@ -490,7 +547,7 @@ async function q5playPreSetup(q) {
 			}
 			delete shapeDict[this.id.index1];
 
-			if (s._massUndef && s.colliders.length) b2Body_ApplyMassFromShapes(s.bdID);
+			if (s._massUndef && s.colliders.length) b2Body_UpdateMassFromShapes(s.bdID);
 		}
 
 		scaleBy(scaleX, scaleY) {
@@ -514,45 +571,56 @@ async function q5playPreSetup(q) {
 				geom._hw = hw;
 				geom._hh = hh;
 				geom._rr = rr;
-				this.geom = geom;
+				this._replaceGeom(geom);
 			} else if (type == 1) {
 				// convex polygon
-				geom = b2Shape_GetPolygon(id);
 				let verts = [];
 				for (let i = 0; i < geom.count; i++) {
 					const v = geom.GetVertex(i);
-					verts.push({ x: v.x * scaleX, y: v.y * scaleY });
+					try {
+						verts.push({ x: v.x * scaleX, y: v.y * scaleY });
+					} finally {
+						v.delete();
+					}
 				}
 				let hull = b2ComputeHull(verts);
-				let rr = geom.radius * Math.min(scaleX, scaleY);
-				geom = rr ? b2MakeOffsetRoundedPolygon(hull, ZERO_VEC, ZERO_ROT, rr) : b2MakePolygon(hull, 0);
-				b2Shape_SetPolygon(id, geom);
-				this.geom = geom;
+				const rr = geom.radius * Math.min(scaleX, scaleY);
+				let updatedGeom;
+				try {
+					updatedGeom = rr ? b2MakeOffsetRoundedPolygon(hull, ZERO_VEC, ZERO_ROT, rr) : b2MakePolygon(hull, 0);
+					b2Shape_SetPolygon(id, updatedGeom);
+					this._replaceGeom(updatedGeom);
+					updatedGeom = null;
+				} finally {
+					hull.delete();
+					updatedGeom?.delete();
+				}
 			} else if (type == 3) {
 				geom.radius *= Math.abs(scaleX);
 				b2Shape_SetCircle(id, geom);
-				this.geom = geom;
 			} else if (type == 4 || type == 7) {
 				// capsule (single or capsule chain segment)
-				geom = b2Shape_GetCapsule(id);
 				geom.center1.x *= scaleX;
 				geom.center1.y *= scaleY;
 				geom.center2.x *= scaleX;
 				geom.center2.y *= scaleY;
 				geom.radius *= Math.min(scaleX, scaleY);
 				b2Shape_SetCapsule(id, geom);
-				this.geom = geom;
 			} else if (type == 5) {
 				// segment
-				geom = b2Shape_GetSegment(id);
 				geom.point1.x *= scaleX;
 				geom.point1.y *= scaleY;
 				geom.point2.x *= scaleX;
 				geom.point2.y *= scaleY;
 				b2Shape_SetSegment(id, geom);
-				this.geom = geom;
 			}
 			// type 6 (chain) - handled by sprite's scaleBy, which rescales and sets all segments
+		}
+
+		_replaceGeom(geom) {
+			const previous = this.geom;
+			this.geom = geom;
+			if (previous && previous !== geom) previous.delete();
 		}
 
 		_enableContactEvents(val = true) {
@@ -585,9 +653,8 @@ async function q5playPreSetup(q) {
 		}
 
 		applyWind(strength, angle, drag = 0, lift = 0) {
-			const wind = new b2Vec2(strength * $.cos(angle), strength * $.sin(angle));
+			const wind = WIND_VEC.Set(strength * $.cos(angle), strength * $.sin(angle));
 			b2Shape_ApplyWind(this.id, wind, drag, lift, true);
-			wind.delete();
 		}
 	};
 
@@ -642,8 +709,12 @@ async function q5playPreSetup(q) {
 		}
 		set rollingResistance(val) {
 			const material = b2Shape_GetSurfaceMaterial(this.id);
-			material.rollingResistance = this._rollingResistance = val;
-			b2Shape_SetSurfaceMaterial(this.id, material);
+			try {
+				material.rollingResistance = this._rollingResistance = val;
+				b2Shape_SetSurfaceMaterial(this.id, material);
+			} finally {
+				material.delete();
+			}
 		}
 
 		get surfaceSpeed() {
@@ -651,8 +722,12 @@ async function q5playPreSetup(q) {
 		}
 		set surfaceSpeed(val) {
 			const material = b2Shape_GetSurfaceMaterial(this.id);
-			material.tangentSpeed = this._tangentSpeed = val;
-			b2Shape_SetSurfaceMaterial(this.id, material);
+			try {
+				material.tangentSpeed = this._tangentSpeed = val;
+				b2Shape_SetSurfaceMaterial(this.id, material);
+			} finally {
+				material.delete();
+			}
 		}
 	};
 
@@ -1062,9 +1137,13 @@ async function q5playPreSetup(q) {
 
 			this._syncVel = () => {
 				let v = b2Body_GetLinearVelocity(this.bdID);
-				this.vx = v.x;
-				this.vy = v.y;
-				this._velSynced = true;
+				try {
+					this.vx = v.x;
+					this.vy = v.y;
+					this._velSynced = true;
+				} finally {
+					v.delete();
+				}
 			};
 
 			Object.defineProperties(this._vel, {
@@ -1077,7 +1156,7 @@ async function q5playPreSetup(q) {
 					},
 					set(val) {
 						if (_this._physicsEnabled) {
-							b2Body_SetLinearVelocity(_this.bdID, new b2Vec2(val, this.y));
+							b2Body_SetLinearVelocity(_this.bdID, TEMP_VEC.Set(val, this.y));
 						}
 						_this.vx = val;
 						this._magCached = this._directionCached = false;
@@ -1092,7 +1171,7 @@ async function q5playPreSetup(q) {
 					},
 					set(val) {
 						if (_this._physicsEnabled) {
-							b2Body_SetLinearVelocity(_this.bdID, new b2Vec2(this.x, val));
+							b2Body_SetLinearVelocity(_this.bdID, TEMP_VEC.Set(this.x, val));
 						}
 						_this.vy = val;
 						this._magCached = this._directionCached = false;
@@ -1109,8 +1188,12 @@ async function q5playPreSetup(q) {
 
 			if (group.physics !== null) {
 				const def = new b2DefaultBodyDef();
-				def.type = bodyTypes[this._phys];
-				this.bdID = b2CreateBody(wID, def);
+				try {
+					def.type = bodyTypes[this._phys];
+					this.bdID = b2CreateBody(wID, def);
+				} finally {
+					def.delete();
+				}
 				this._physicsEnabled = true;
 
 				this._shapes = [];
@@ -1359,12 +1442,13 @@ async function q5playPreSetup(q) {
 
 			if (this.watch) this.mod[19] = true;
 
-			let center;
-			if (this.fixedCenterOfMass) center = b2Body_GetLocalCenterOfMass(this.bdID);
-
-			this._add(false, ...arguments);
-
-			if (this.fixedCenterOfMass) this._fixCenterOfMass(center);
+			const center = this.fixedCenterOfMass ? b2Body_GetLocalCenter(this.bdID) : null;
+			try {
+				this._add(false, ...arguments);
+				if (center) this._fixCenterOfMass(center);
+			} finally {
+				center?.delete();
+			}
 		}
 
 		addSensor(offsetX, offsetY, w, h) {
@@ -1373,18 +1457,23 @@ async function q5playPreSetup(q) {
 				return;
 			}
 
-			let center;
-			if (this.fixedCenterOfMass) center = b2Body_GetLocalCenterOfMass(this.bdID);
-
-			this._add(true, ...arguments);
-
-			if (this.fixedCenterOfMass) this._fixCenterOfMass(center);
+			const center = this.fixedCenterOfMass ? b2Body_GetLocalCenter(this.bdID) : null;
+			try {
+				this._add(true, ...arguments);
+				if (center) this._fixCenterOfMass(center);
+			} finally {
+				center?.delete();
+			}
 		}
 
 		_fixCenterOfMass(center) {
 			const data = b2Body_GetMassData(this.bdID);
-			data.center = center;
-			b2Body_SetMassData(this.bdID, data);
+			try {
+				data.center = center;
+				b2Body_SetMassData(this.bdID, data);
+			} finally {
+				data.delete();
+			}
 		}
 
 		// adds a collider or sensor to the sprite
@@ -1524,7 +1613,10 @@ async function q5playPreSetup(q) {
 
 					for (let i = 0; i < vecs.length; i++) {
 						let vec = vecs[i];
-						vecs[i] = scaleTo(vec.x + offsetX - recenterX, vec.y + offsetY - recenterY);
+						vecs[i] = {
+							x: (vec.x + offsetX - recenterX) / meterSize,
+							y: (vec.y + offsetY - recenterY) / meterSize
+						};
 					}
 
 					if (absVerts) {
@@ -1533,30 +1625,37 @@ async function q5playPreSetup(q) {
 				} else {
 					for (let i = 0; i < vecs.length; i++) {
 						let vec = vecs[i];
-						vecs[i] = scaleTo(vec.x + offsetX, vec.y + offsetY);
+						vecs[i] = {
+							x: (vec.x + offsetX) / meterSize,
+							y: (vec.y + offsetY) / meterSize
+						};
 					}
 				}
 
 				if (isLoop && isConvex && vecs.length - 1 <= 8) {
 					let hull = b2ComputeHull(vecs.slice(0, -1));
-					if (rr) {
-						geom = b2MakeOffsetRoundedPolygon(hull, ZERO_VEC, ZERO_ROT, rr / meterSize);
-					} else geom = b2MakePolygon(hull, 0);
-					id = b2CreatePolygonShape(bdID, shape.def, geom);
-					shape._init(id, 1, geom);
+					try {
+						if (rr) {
+							geom = b2MakeOffsetRoundedPolygon(hull, ZERO_VEC, ZERO_ROT, rr / meterSize);
+						} else geom = b2MakePolygon(hull, 0);
+						id = b2CreatePolygonShape(bdID, shape.def, geom);
+						shape._init(id, 1, geom);
+					} finally {
+						hull.delete();
+					}
 				} else {
 					if (vecs.length == 2) {
 						if (!rr) {
 							if (this._phys == 0) this.physics = 1;
 							geom = new b2Segment();
-							geom.point1 = vecs[0];
-							geom.point2 = vecs[1];
+							geom.point1 = TEMP_VEC.Set(vecs[0].x, vecs[0].y);
+							geom.point2 = TEMP_VEC.Set(vecs[1].x, vecs[1].y);
 							id = b2CreateSegmentShape(bdID, shape.def, geom);
 							shape._init(id, 5, geom);
 						} else {
 							geom = new b2Capsule();
-							geom.center1 = vecs[0];
-							geom.center2 = vecs[1];
+							geom.center1 = TEMP_VEC.Set(vecs[0].x, vecs[0].y);
+							geom.center2 = TEMP_VEC.Set(vecs[1].x, vecs[1].y);
 							geom.radius = rr / meterSize;
 							id = b2CreateCapsuleShape(bdID, shape.def, geom);
 							shape._init(id, 4, geom);
@@ -1565,8 +1664,8 @@ async function q5playPreSetup(q) {
 						// make a capsule chain
 						for (let i = 1; i < vecs.length; i++) {
 							geom = new b2Capsule();
-							geom.center1 = vecs[i - 1];
-							geom.center2 = vecs[i];
+							geom.center1 = TEMP_VEC.Set(vecs[i - 1].x, vecs[i - 1].y);
+							geom.center2 = TEMP_VEC.Set(vecs[i].x, vecs[i].y);
 							geom.radius = rr ? rr / meterSize : 0.02;
 							id = b2CreateCapsuleShape(bdID, shape.def, geom);
 							let sh = new Collider(this);
@@ -1583,9 +1682,9 @@ async function q5playPreSetup(q) {
 						if (!isLoop && this._phys == 0) this.physics = 1;
 						let packedData = shape.def.material.customColor;
 
+						shape.def.delete();
 						shape.def = new b2DefaultChainDef();
-						shape.def.SetPoints([vecs[0], ...vecs, vecs.at(-1)]);
-						shape.def.isLoop = vecs.isLoop;
+						setChainPoints(shape.def, vecs, vecs.isLoop);
 						shape.def.SetMaterials([{ customColor: packedData }]);
 
 						id = b2CreateChain(bdID, shape.def);
@@ -1729,11 +1828,11 @@ async function q5playPreSetup(q) {
 		}
 
 		get allowSleeping() {
-			return b2Body_IsSleepEnabled(this.bdID);
+			return b2Body_IsSleepingEnabled(this.bdID);
 		}
 		set allowSleeping(val) {
 			if (this.watch) this.mod[5] = true;
-			b2Body_EnableSleep(this.bdID, val);
+			b2Body_EnableSleeping(this.bdID, val);
 		}
 
 		get bounciness() {
@@ -2028,29 +2127,49 @@ async function q5playPreSetup(q) {
 		set mass(val) {
 			if (this.watch) this.mod[19] = true;
 			const data = b2Body_GetMassData(this.bdID);
-			data.mass = val > 0 ? val : 0.00000001;
-			b2Body_SetMassData(this.bdID, data);
-			delete this._massUndef;
+			try {
+				data.mass = val > 0 ? val : 0.00000001;
+				b2Body_SetMassData(this.bdID, data);
+				delete this._massUndef;
+			} finally {
+				data.delete();
+			}
 		}
 
 		resetMass() {
 			if (this.watch) this.mod[19] = true;
-			const center = b2Body_GetLocalCenterOfMass(this.bdID);
-			b2Body_ApplyMassFromShapes(this.bdID);
+			const center = b2Body_GetLocalCenter(this.bdID);
+			try {
+				b2Body_UpdateMassFromShapes(this.bdID);
 
-			const data = b2Body_GetMassData(this.bdID);
-			data.center = center;
-			b2Body_SetMassData(this.bdID, data);
+				const data = b2Body_GetMassData(this.bdID);
+				try {
+					data.center = center;
+					b2Body_SetMassData(this.bdID, data);
+				} finally {
+					data.delete();
+				}
+			} finally {
+				center.delete();
+			}
 		}
 
 		get centerOfMass() {
 			const data = b2Body_GetMassData(this.bdID);
-			return data.center;
+			try {
+				return { x: data.center.x, y: data.center.y };
+			} finally {
+				data.delete();
+			}
 		}
 		set centerOfMass(val) {
 			const data = b2Body_GetMassData(this.bdID);
-			data.center = scaleTo(val[0] ?? val.x, val[1] ?? val.y);
-			b2Body_SetMassData(this.bdID, data);
+			try {
+				data.center = scaleTo(val[0] ?? val.x, val[1] ?? val.y);
+				b2Body_SetMassData(this.bdID, data);
+			} finally {
+				data.delete();
+			}
 		}
 
 		get opacity() {
@@ -2094,17 +2213,27 @@ async function q5playPreSetup(q) {
 
 		get rotation() {
 			if (!this._physicsEnabled || !usePhysics) return this._rotation || 0;
-			let val = b2Body_GetRotation(this.bdID).GetAngle();
-			if ($._angleMode == DEGREES) val = $.degrees(val);
-			if (friendlyRounding) val = fixRoundAngular(val);
-			return (this._rotation = val);
+			const rotation = b2Body_GetRotation(this.bdID);
+			try {
+				let val = rotation.GetAngle();
+				if ($._angleMode == DEGREES) val = $.degrees(val);
+				if (friendlyRounding) val = fixRoundAngular(val);
+				return (this._rotation = val);
+			} finally {
+				rotation.delete();
+			}
 		}
 		set rotation(val) {
 			this._rotation = val;
 
 			if (this._physicsEnabled) {
 				if ($._angleMode == DEGREES) val = (val % 360) * DEGTORAD;
-				b2Body_SetTransform(this.bdID, b2Body_GetPosition(this.bdID), b2MakeRot(val));
+				const position = b2Body_GetPosition(this.bdID);
+				try {
+					b2Body_SetTransform(this.bdID, position, rotationTo(val));
+				} finally {
+					position.delete();
+				}
 			}
 		}
 
@@ -2125,11 +2254,14 @@ async function q5playPreSetup(q) {
 			if (!this._physicsEnabled) return;
 
 			const locks = new b2MotionLocks();
-			locks.linearX = false;
-			locks.linearY = false;
-			locks.angularZ = val;
-			b2Body_SetMotionLocks(this.bdID, locks);
-			locks.delete();
+			try {
+				locks.linearX = false;
+				locks.linearY = false;
+				locks.angularZ = val;
+				b2Body_SetMotionLocks(this.bdID, locks);
+			} finally {
+				locks.delete();
+			}
 		}
 
 		get rotationSpeed() {
@@ -2195,6 +2327,7 @@ async function q5playPreSetup(q) {
 			for (let i = shapes.length - 1; i >= 0; i--) {
 				if (shapes[i].type === 6) {
 					delete shapeDict[shapes[i].id.index1];
+					shapes[i].dispose();
 					this.colliders.splice(this.colliders.indexOf(shapes[i]), 1);
 					shapes.splice(i, 1);
 				}
@@ -2208,11 +2341,14 @@ async function q5playPreSetup(q) {
 
 			// create new chain with scaled points
 			const chainDef = new b2DefaultChainDef();
-			chainDef.SetPoints([chain._points[0], ...chain._points, chain._points.at(-1)]);
-			chainDef.isLoop = chain._isLoopChain;
-			chainDef.SetMaterials([{ customColor: packedData }]);
-
-			const newId = b2CreateChain(this.bdID, chainDef);
+			let newId;
+			try {
+				setChainPoints(chainDef, chain._points, chain._isLoopChain);
+				chainDef.SetMaterials([{ customColor: packedData }]);
+				newId = b2CreateChain(this.bdID, chainDef);
+			} finally {
+				chainDef.delete();
+			}
 			chain._init(newId, 6);
 			chain.friction = savedFriction;
 			chain._tangentSpeed = newSurfaceSpeed;
@@ -2332,7 +2468,15 @@ async function q5playPreSetup(q) {
 		}
 
 		get x() {
-			let val = !this._hasCapsuleChain ? this._posX : b2Body_GetPosition(this.bdID).x * meterSize;
+			let val = this._posX;
+			if (this._hasCapsuleChain) {
+				const position = b2Body_GetPosition(this.bdID);
+				try {
+					val = position.x * meterSize;
+				} finally {
+					position.delete();
+				}
+			}
 			return friendlyRounding ? fixRound(val) : val;
 		}
 		set x(val) {
@@ -2341,12 +2485,25 @@ async function q5playPreSetup(q) {
 			if (this._physicsEnabled) {
 				b2Body_SetAwake(this.bdID, true);
 				let pos = scaleTo(val, this.y);
-				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
+				const rotation = b2Body_GetRotation(this.bdID);
+				try {
+					b2Body_SetTransform(this.bdID, pos, rotation);
+				} finally {
+					rotation.delete();
+				}
 			}
 		}
 
 		get y() {
-			let val = !this._hasCapsuleChain ? this._posY : b2Body_GetPosition(this.bdID).y * meterSize;
+			let val = this._posY;
+			if (this._hasCapsuleChain) {
+				const position = b2Body_GetPosition(this.bdID);
+				try {
+					val = position.y * meterSize;
+				} finally {
+					position.delete();
+				}
+			}
 			return friendlyRounding ? fixRound(val) : val;
 		}
 		set y(val) {
@@ -2355,7 +2512,12 @@ async function q5playPreSetup(q) {
 			if (this._physicsEnabled) {
 				b2Body_SetAwake(this.bdID, true);
 				let pos = scaleTo(this.x, val);
-				b2Body_SetTransform(this.bdID, pos, b2Body_GetRotation(this.bdID));
+				const rotation = b2Body_GetRotation(this.bdID);
+				try {
+					b2Body_SetTransform(this.bdID, pos, rotation);
+				} finally {
+					rotation.delete();
+				}
 			}
 		}
 
@@ -2368,7 +2530,12 @@ async function q5playPreSetup(q) {
 			let y = val[1] ?? val.y;
 			if (this._physicsEnabled) {
 				b2Body_SetAwake(this.bdID, true);
-				b2Body_SetTransform(this.bdID, scaleTo(x, y), b2Body_GetRotation(this.bdID));
+				const rotation = b2Body_GetRotation(this.bdID);
+				try {
+					b2Body_SetTransform(this.bdID, scaleTo(x, y), rotation);
+				} finally {
+					rotation.delete();
+				}
 			}
 			this._posX = x;
 			this._posY = y;
@@ -2550,7 +2717,7 @@ async function q5playPreSetup(q) {
 
 		_setVel(x, y) {
 			if (this._physicsEnabled) {
-				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
+				b2Body_SetLinearVelocity(this.bdID, TEMP_VEC.Set(x, y));
 			}
 			this.vx = x;
 			this.vy = y;
@@ -2560,7 +2727,7 @@ async function q5playPreSetup(q) {
 
 		__setVel(x, y) {
 			if (this._physicsEnabled) {
-				b2Body_SetLinearVelocity(this.bdID, new b2Vec2(x, y));
+				b2Body_SetLinearVelocity(this.bdID, TEMP_VEC.Set(x, y));
 			}
 			this.vx = x;
 			this.vy = y;
@@ -2588,7 +2755,7 @@ async function q5playPreSetup(q) {
 			if (this._customUpdate) this._customUpdate();
 			this.prevX = this._posX;
 			this.prevY = this._posY;
-			this.prevRotation = this.rotation;
+			this.prevRotation = this._rotation;
 			if (this.autoUpdate) this.autoUpdate = null;
 		}
 
@@ -2605,7 +2772,7 @@ async function q5playPreSetup(q) {
 			if (this.watch) {
 				if (this._posX != this.prevX) this.mod[0] = this.mod[2] = true;
 				if (this._posY != this.prevY) this.mod[1] = this.mod[2] = true;
-				if (this.rotation != this.prevRotation) {
+				if (this._rotation != this.prevRotation) {
 					this.mod[3] = this.mod[4] = true;
 				}
 			}
@@ -2904,7 +3071,7 @@ async function q5playPreSetup(q) {
 			}
 			const v = this._args2Vec(args[0], args[1]),
 				o = {};
-			o.forceVector = new b2Vec2(v.x, v.y);
+			o.forceVector = FORCE_VEC.Set(v.x, v.y);
 			if (args[2] !== undefined) {
 				o.poa = this._args2Vec(args[2], args[3]);
 				o.poa = scaleTo(o.poa.x, o.poa.y);
@@ -2949,7 +3116,7 @@ async function q5playPreSetup(q) {
 
 			let percent = force / c;
 
-			let forceVector = new b2Vec2(b * percent, a * percent);
+			let forceVector = FORCE_VEC.Set(b * percent, a * percent);
 			b2Body_ApplyForceToCenter(this.bdID, forceVector, true);
 		}
 
@@ -2973,11 +3140,10 @@ async function q5playPreSetup(q) {
 		}
 
 		applyWind(strength, angle, drag = 0, lift = 0) {
-			const wind = new b2Vec2(strength * $.cos(angle), strength * $.sin(angle));
+			const wind = WIND_VEC.Set(strength * $.cos(angle), strength * $.sin(angle));
 			for (let shape of this._shapes) {
 				b2Shape_ApplyWind(shape.id, wind, drag, lift, true);
 			}
-			wind.delete();
 		}
 
 		move(distance, direction, speed) {
@@ -3211,11 +3377,16 @@ async function q5playPreSetup(q) {
 			}
 
 			const t = new b2Transform();
-			t.p = scaleTo(x ?? this._posX, y ?? this._posY);
-			rotation ??= this._rotation;
-			if ($._angleMode == DEGREES) rotation = (rotation % 360) * DEGTORAD;
-			t.q = b2MakeRot(rotation);
-			b2Body_SetTargetTransform(this.bdID, t, $.world._timeStep / tracking);
+			try {
+				const position = t.p;
+				position.Set((x ?? this._posX) / meterSize, (y ?? this._posY) / meterSize);
+				rotation ??= this._rotation;
+				if ($._angleMode == DEGREES) rotation = (rotation % 360) * DEGTORAD;
+				t.q.SetAngle(rotation);
+				b2Body_SetTargetTransform(this.bdID, t, $.world._timeStep / tracking, true);
+			} finally {
+				t.delete();
+			}
 		}
 
 		delete() {
@@ -3224,6 +3395,12 @@ async function q5playPreSetup(q) {
 			if (this.watch) this.mod[23] = true;
 
 			this.joints.deleteAll();
+
+			for (const shape of this._shapes ?? []) {
+				delete shapeDict[shape.id.index1];
+				shape.dispose();
+			}
+			this._chain?.dispose();
 
 			if (this.bdID != undefined) b2DestroyBody(this.bdID);
 
@@ -3440,12 +3617,35 @@ async function q5playPreSetup(q) {
 				shape._packData();
 
 				let type = collider.type,
-					geom = collider.geom,
+					geom,
 					id;
 				if (type == 0) {
+					const source = collider.geom;
+					geom = new b2Polygon();
+					geom.count = source.count;
+					geom.radius = source.radius;
+					geom.centroid.Set(source.centroid.x, source.centroid.y);
+					geom._hw = source._hw;
+					geom._hh = source._hh;
+					geom._rr = source._rr;
+					for (let i = 0; i < source.count; i++) {
+						const vertex = source.GetVertex(i),
+							normal = source.GetNormal(i);
+						try {
+							geom.SetVertex(i, vertex);
+							geom.SetNormal(i, normal);
+						} finally {
+							vertex.delete();
+							normal.delete();
+						}
+					}
 					id = b2CreatePolygonShape(bdID, shape.def, geom);
 					shape._init(id, 0, geom);
 				} else if (type == 3) {
+					const source = collider.geom;
+					geom = new b2Circle();
+					geom.center.Set(source.center.x, source.center.y);
+					geom.radius = source.radius;
 					id = b2CreateCircleShape(bdID, shape.def, geom);
 					shape._init(id, 3, geom);
 				}
@@ -4855,13 +5055,12 @@ async function q5playPreSetup(q) {
 		}
 
 		applyWind(strength, angle, drag = 0, lift = 0) {
-			const wind = new b2Vec2(strength * $.cos(angle), strength * $.sin(angle));
+			const wind = WIND_VEC.Set(strength * $.cos(angle), strength * $.sin(angle));
 			for (let s of this) {
 				for (let shape of s._shapes) {
 					b2Shape_ApplyWind(shape.id, wind, drag, lift, true);
 				}
 			}
-			wind.delete();
 		}
 
 		_resetCentroid() {
@@ -5397,29 +5596,43 @@ async function q5playPreSetup(q) {
 			this.mod = {};
 
 			const def = b2DefaultWorldDef();
-			def.gravity.Set(0, 0);
-
-			this.wID = wID = b2CreateWorld(def);
+			try {
+				def.gravity.Set(0, 0);
+				this.wID = wID = b2CreateWorld(def);
+				b2World_SetContactRecycleDistance(wID, 0);
+			} finally {
+				def.delete();
+			}
 
 			let _this = this;
 			this._gravity = {
 				get x() {
-					return b2World_GetGravity(wID).x;
+					const gravity = b2World_GetGravity(wID);
+					try {
+						return gravity.x;
+					} finally {
+						gravity.delete();
+					}
 				},
 				set x(val) {
 					val = Math.round(val || 0);
 					_this.mod[0] = true;
 					for (let s of $.allSprites) s.sleeping = false;
-					b2World_SetGravity(wID, new b2Vec2(val, this.y));
+					b2World_SetGravity(wID, TEMP_VEC.Set(val, this.y));
 				},
 				get y() {
-					return b2World_GetGravity(wID).y;
+					const gravity = b2World_GetGravity(wID);
+					try {
+						return gravity.y;
+					} finally {
+						gravity.delete();
+					}
 				},
 				set y(val) {
 					val = Math.round(val || 0);
 					_this.mod[0] = true;
 					for (let s of $.allSprites) s.sleeping = false;
-					b2World_SetGravity(wID, new b2Vec2(this.x, val));
+					b2World_SetGravity(wID, TEMP_VEC.Set(this.x, val));
 				}
 			};
 
@@ -5432,120 +5645,156 @@ async function q5playPreSetup(q) {
 			this.physicsTime = 0;
 			this.autoStep = true;
 			this.subSteps = 4;
+			this._pendingCollisionEnds = [];
 
 			this.step = this.physicsUpdate;
 
-			b2World_SetPreSolveCallback(wID, (shapeIdA, shapeIdB, point, normal) => {
-				const shapeA = shapeDict[shapeIdA.index1];
-				const shapeB = shapeDict[shapeIdB.index1];
-				if (!shapeA || !shapeB) return true;
+			this._callbackHandles = [];
+			this._callbackHandles.push(
+				b2World_SetPreSolveCallback(
+					wID,
+					(shapeIdA, shapeIdB, manifold) => {
+						const shapeA = shapeDict[shapeIdA.index1];
+						const shapeB = shapeDict[shapeIdB.index1];
+						if (!shapeA || !shapeB) return;
 
-				const spriteA = shapeA.sprite;
-				const spriteB = shapeB.sprite;
-				if (!spriteA || !spriteB) return true;
+						const spriteA = shapeA.sprite;
+						const spriteB = shapeB.sprite;
+						if (!spriteA || !spriteB) return;
 
-				if (spriteA._relation[spriteB._uid] === 1) return false;
-				if (spriteB._relation[spriteA._uid] === 1) return false;
+						if (spriteA._relation[spriteB._uid] === 1 || spriteB._relation[spriteA._uid] === 1) {
+							manifold.pointCount = 0;
+						}
+					},
+					null
+				)
+			);
 
-				return true;
-			});
+			this._callbackHandles.push(
+				b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
+					const shapeA = shapeDict[shapeIdA.index1],
+						shapeB = shapeDict[shapeIdB.index1],
+						isSensorA = shapeA._isSensor,
+						isSensorB = shapeB._isSensor,
+						spriteA = shapeA.sprite,
+						spriteB = shapeB.sprite;
 
-			b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
-				const shapeA = shapeDict[shapeIdA.index1],
-					shapeB = shapeDict[shapeIdB.index1],
-					isSensorA = shapeA._isSensor,
-					isSensorB = shapeB._isSensor,
-					spriteA = shapeA.sprite,
-					spriteB = shapeB.sprite;
-
-				// If both shapes are sensors, generate overlap events,
-				// or if both are colliders that shouldn't overlap,
-				// generate collision events.
-				// Otherwise, this returns false to ignore
-				// contact between sensors and colliders, also
-				// to let colliders pass through each other.
-				return (
-					(isSensorA && isSensorB) ||
-					(!isSensorA && !isSensorB && !(spriteA._relation[spriteB._uid] ?? spriteB._relation[spriteA._uid]))
-				);
-			});
+					// If both shapes are sensors, generate overlap events,
+					// or if both are colliders that shouldn't overlap,
+					// generate collision events.
+					// Otherwise, this returns false to ignore
+					// contact between sensors and colliders, also
+					// to let colliders pass through each other.
+					return (
+						(isSensorA && isSensorB) ||
+						(!isSensorA && !isSensorB && !(spriteA._relation[spriteB._uid] ?? spriteB._relation[spriteA._uid]))
+					);
+				})
+			);
 		}
 
 		_processContacts(events, t, idA, idB) {
-			for (let i = 0; i < events.beginCount; i++) {
-				const evt = events.GetBeginEvent(i),
-					shapeA = shapeDict[evt[idA].index1],
-					shapeB = shapeDict[evt[idB].index1],
-					a = shapeA.sprite,
-					b = shapeB.sprite,
-					ledgerA = a[t],
-					ledgerB = b[t];
-
-				ledgerA[b._uid] = 0;
-				ledgerB[a._uid] = 0;
-
-				for (const g of b.groups) {
-					if (!ledgerA[g._uid] || ledgerA[g._uid] < 0) {
-						ledgerA[g._uid] = 0;
-						g[t][a._uid] = 0;
+			if (t == '_collisions' && this._pendingCollisionEnds.length) {
+				for (const [shapeA, shapeB] of this._pendingCollisionEnds) {
+					if (!shapeA?.sprite || !shapeB?.sprite || shapeA.sprite._deleted || shapeB.sprite._deleted) {
+						continue;
 					}
+					this._processContactEnd(shapeA, shapeB, t);
 				}
+				this._pendingCollisionEnds = [];
+			}
 
-				for (const g of a.groups) {
-					if (!ledgerB[g._uid] || ledgerB[g._uid] < 0) {
-						ledgerB[g._uid] = 0;
-						g[t][b._uid] = 0;
-					}
-					for (const g2 of b.groups) {
-						if (!g[t][g2._uid] || g[t][g2._uid] < 0) {
-							g[t][g2._uid] = 0;
-							g2[t][g._uid] = 0;
+			for (let i = 0; i < events.beginCount; i++) {
+				const evt = events.GetBeginEvent(i);
+				try {
+					const shapeA = shapeDict[evt[idA].index1],
+						shapeB = shapeDict[evt[idB].index1],
+						a = shapeA.sprite,
+						b = shapeB.sprite,
+						ledgerA = a[t],
+						ledgerB = b[t];
+
+					ledgerA[b._uid] = 0;
+					ledgerB[a._uid] = 0;
+
+					for (const g of b.groups) {
+						if (!ledgerA[g._uid] || ledgerA[g._uid] < 0) {
+							ledgerA[g._uid] = 0;
+							g[t][a._uid] = 0;
 						}
 					}
+
+					for (const g of a.groups) {
+						if (!ledgerB[g._uid] || ledgerB[g._uid] < 0) {
+							ledgerB[g._uid] = 0;
+							g[t][b._uid] = 0;
+						}
+						for (const g2 of b.groups) {
+							if (!g[t][g2._uid] || g[t][g2._uid] < 0) {
+								g[t][g2._uid] = 0;
+								g2[t][g._uid] = 0;
+							}
+						}
+					}
+				} finally {
+					evt.delete?.();
 				}
 			}
 
 			for (let i = 0; i < events.endCount; i++) {
 				const evt = events.GetEndEvent(i),
 					shapeA = shapeDict[evt[idA].index1],
-					shapeB = shapeDict[evt[idB].index1],
-					a = shapeA.sprite,
-					b = shapeB.sprite,
-					ledgerA = a[t],
-					ledgerB = b[t];
+					shapeB = shapeDict[evt[idB].index1];
 
-				ledgerA[b._uid] = ledgerA[b._uid] != 0 ? -2 : -4;
-				ledgerB[a._uid] = ledgerB[a._uid] != 0 ? -2 : -4;
-
-				for (const g of b.groups) {
-					let inContact = false;
-					for (const s of g) {
-						if (s[t][a._uid] >= 0) {
-							inContact = true;
-							break;
-						}
-					}
-					if (!inContact) {
-						g[t][a._uid] = g[t][a._uid] != 0 ? -2 : -4;
-						ledgerA[g._uid] = ledgerA[g._uid] != 0 ? -2 : -4;
-					}
+				if (!shapeA?.sprite || !shapeB?.sprite || shapeA.sprite._deleted || shapeB.sprite._deleted) {
+					continue;
 				}
 
-				for (const g of a.groups) {
-					let inContact = false;
-					for (const s of g) {
-						if (s[t][b._uid] >= 0) {
-							inContact = true;
-							break;
-						}
+				if (t == '_collisions' && shapeA.sprite._phys == 0 && shapeB.sprite._phys == 0) {
+					this._pendingCollisionEnds.push([shapeA, shapeB]);
+				} else {
+					this._processContactEnd(shapeA, shapeB, t);
+				}
+			}
+		}
+
+		_processContactEnd(shapeA, shapeB, t) {
+			const a = shapeA.sprite,
+				b = shapeB.sprite,
+				ledgerA = a[t],
+				ledgerB = b[t];
+
+			ledgerA[b._uid] = ledgerA[b._uid] != 0 ? -2 : -4;
+			ledgerB[a._uid] = ledgerB[a._uid] != 0 ? -2 : -4;
+
+			for (const g of b.groups) {
+				let inContact = false;
+				for (const s of g) {
+					if (s[t][a._uid] >= 0) {
+						inContact = true;
+						break;
 					}
-					if (!inContact) {
-						g[t][b._uid] = g[t][b._uid] != 0 ? -2 : -4;
-						ledgerB[g._uid] = ledgerB[g._uid] != 0 ? -2 : -4;
-						for (const g2 of b.groups) {
-							g[t][g2._uid] = g[t][g2._uid] != 0 ? -2 : -4;
-							g2[t][g._uid] = g2[t][g._uid] != 0 ? -2 : -4;
-						}
+				}
+				if (!inContact) {
+					g[t][a._uid] = g[t][a._uid] != 0 ? -2 : -4;
+					ledgerA[g._uid] = ledgerA[g._uid] != 0 ? -2 : -4;
+				}
+			}
+
+			for (const g of a.groups) {
+				let inContact = false;
+				for (const s of g) {
+					if (s[t][b._uid] >= 0) {
+						inContact = true;
+						break;
+					}
+				}
+				if (!inContact) {
+					g[t][b._uid] = g[t][b._uid] != 0 ? -2 : -4;
+					ledgerB[g._uid] = ledgerB[g._uid] != 0 ? -2 : -4;
+					for (const g2 of b.groups) {
+						g[t][g2._uid] = g[t][g2._uid] != 0 ? -2 : -4;
+						g2[t][g._uid] = g2[t][g._uid] != 0 ? -2 : -4;
 					}
 				}
 			}
@@ -5553,10 +5802,13 @@ async function q5playPreSetup(q) {
 
 		_processJoints(events) {
 			for (let i = 0; i < events.count; i++) {
-				const evt = events.GetJointEvent(i),
-					j = jointDict[evt.jointId.index1];
-
-				j.onStrain();
+				const evt = events.GetJointEvent(i);
+				try {
+					const j = jointDict[evt.jointId.index1];
+					j.onStrain();
+				} finally {
+					evt.delete?.();
+				}
 			}
 		}
 
@@ -5579,14 +5831,35 @@ async function q5playPreSetup(q) {
 		}
 
 		get debugInfo() {
-			return b2World_GetCounters(wID);
+			const counters = b2World_GetCounters(wID);
+			try {
+				const colorCounts = Array.from({ length: Box2D.B2_GRAPH_COLOR_COUNT }, (_, i) => counters.GetColorCount(i));
+				return {
+					bodyCount: counters.bodyCount,
+					shapeCount: counters.shapeCount,
+					contactCount: counters.contactCount,
+					jointCount: counters.jointCount,
+					islandCount: counters.islandCount,
+					stackUsed: counters.stackUsed,
+					staticTreeHeight: counters.staticTreeHeight,
+					treeHeight: counters.treeHeight,
+					byteCount: counters.byteCount,
+					taskCount: counters.taskCount,
+					awakeContactCount: counters.awakeContactCount,
+					recycledContactCount: counters.recycledContactCount,
+					colorCounts,
+					GetColorCount: (index) => colorCounts[index] ?? 0
+				};
+			} finally {
+				counters.delete();
+			}
 		}
 
 		get gravity() {
 			return this._gravity;
 		}
 		set gravity(val) {
-			b2World_SetGravity(wID, new b2Vec2(val[0] ?? val.x, val[1] ?? val.y));
+			b2World_SetGravity(wID, TEMP_VEC.Set(val[0] ?? val.x, val[1] ?? val.y));
 		}
 
 		get hitThreshold() {
@@ -5605,7 +5878,36 @@ async function q5playPreSetup(q) {
 		}
 
 		get profile() {
-			return b2World_GetProfile();
+			const profile = b2World_GetProfile();
+			try {
+				return {
+					step: profile.step,
+					pairs: profile.pairs,
+					collide: profile.collide,
+					solve: profile.solve,
+					solverSetup: profile.solverSetup,
+					constraints: profile.constraints,
+					prepareConstraints: profile.prepareConstraints,
+					integrateVelocities: profile.integrateVelocities,
+					warmStart: profile.warmStart,
+					solveImpulses: profile.solveImpulses,
+					integratePositions: profile.integratePositions,
+					relaxImpulses: profile.relaxImpulses,
+					restitution: profile.restitution,
+					storeImpulses: profile.storeImpulses,
+					splitIslands: profile.splitIslands,
+					transforms: profile.transforms,
+					sensorHits: profile.sensorHits,
+					jointEvents: profile.jointEvents,
+					hitEvents: profile.hitEvents,
+					refit: profile.refit,
+					bullets: profile.bullets,
+					sleepIslands: profile.sleepIslands,
+					sensors: profile.sensors
+				};
+			} finally {
+				profile.delete();
+			}
 		}
 
 		get timeScale() {
@@ -5634,20 +5936,48 @@ async function q5playPreSetup(q) {
 		}
 
 		delete() {
-			b2DestroyWorld(wID);
+			if (this._deleted) return;
+			this._deleted = true;
+			try {
+				b2DestroyWorld(wID);
+			} finally {
+				for (const handle of this._callbackHandles ?? []) b2World_DeleteCallback(handle);
+				this._callbackHandles = [];
+				this._drawCmds?.delete();
+				this._drawCmds = null;
+				for (const sprite of $.allSprites) {
+					for (const shape of sprite._shapes ?? []) shape.dispose();
+					sprite._chain?.dispose();
+				}
+				shapeDict = {};
+				jointDict = {};
+				ZERO_VEC.delete();
+				ZERO_ROT.delete();
+				NULL_FILTER.delete();
+				SCALE_VEC.delete();
+				TEMP_VEC.delete();
+				FORCE_VEC.delete();
+				WIND_VEC.delete();
+				CAST_TRANSLATION.delete();
+				TEMP_ROT.delete();
+			}
 		}
 
 		explodeAt(x, y, radius, magnitude, falloff) {
-			if (x.x) {
-				let args = [x.x, x.y, y, radius, magnitude, falloff];
+			if (x !== null && typeof x == 'object') {
+				let args = [x.x ?? x[0], x.y ?? x[1], y, radius, magnitude, falloff];
 				[x, y, radius, magnitude, falloff] = args;
 			}
 			let e = b2DefaultExplosionDef();
-			e.position = scaleTo(x, y);
-			e.radius = radius / meterSize;
-			e.impulsePerLength = magnitude || 1;
-			e.falloff = falloff || 0.1;
-			b2World_Explode(wID, e);
+			try {
+				e.position = scaleTo(x, y);
+				e.radius = radius / meterSize;
+				e.impulsePerLength = magnitude || 1;
+				e.falloff = falloff || 0.1;
+				b2World_Explode(wID, e);
+			} finally {
+				e.delete();
+			}
 		}
 
 		getSpritesAt(x, y, radius, group, cameraActiveWhenDrawn) {
@@ -5661,19 +5991,20 @@ async function q5playPreSetup(q) {
 			radius ??= 0;
 			cameraActiveWhenDrawn ??= true;
 
-			const point = scaleTo(x, y),
-				proxy = b2MakeProxy(point, 1, radius / meterSize),
-				shapes = [];
-
-			b2World_OverlapShape(wID, proxy, NULL_FILTER, (overlapResult) => {
-				const { shapeId } = overlapResult;
-				if (shapeId) {
-					shapes.push(shapeDict[shapeId.index1]);
-				}
-				return true; // continue searching
-			});
-
-			proxy.delete();
+			const point = scaleTo(x, y);
+			const proxy = b2MakeProxy(point, 1, radius / meterSize);
+			const shapes = [];
+			try {
+				b2World_OverlapShape(wID, b2Pos_zero, proxy, NULL_FILTER, (overlapResult) => {
+					const { shapeId } = overlapResult;
+					if (shapeId) {
+						shapes.push(shapeDict[shapeId.index1]);
+					}
+					return true; // continue searching
+				});
+			} finally {
+				proxy.delete();
+			}
 
 			if (!shapes.length) return [];
 
@@ -5710,10 +6041,15 @@ async function q5playPreSetup(q) {
 			const collideEvents = b2World_GetContactEvents(wID),
 				overlapEvents = b2World_GetSensorEvents(wID),
 				jointEvents = b2World_GetJointEvents(wID);
-
-			this._processContacts(collideEvents, '_collisions', 'shapeIdA', 'shapeIdB');
-			this._processContacts(overlapEvents, '_overlappers', 'sensorShapeId', 'visitorShapeId');
-			this._processJoints(jointEvents);
+			try {
+				this._processContacts(collideEvents, '_collisions', 'shapeIdA', 'shapeIdB');
+				this._processContacts(overlapEvents, '_overlappers', 'sensorShapeId', 'visitorShapeId');
+				this._processJoints(jointEvents);
+			} finally {
+				collideEvents.delete();
+				overlapEvents.delete();
+				jointEvents.delete();
+			}
 
 			this.physicsTime += timeStep;
 
@@ -5827,7 +6163,7 @@ async function q5playPreSetup(q) {
 			}
 
 			const origin = scaleTo(startX, startY);
-			const translation = scaleTo(endX - startX, endY - startY);
+			const translation = CAST_TRANSLATION.Set((endX - startX) / meterSize, (endY - startY) / meterSize);
 
 			const results = [];
 
@@ -5884,34 +6220,36 @@ async function q5playPreSetup(q) {
 
 			const center = scaleTo(startX, startY);
 			const proxy = b2MakeProxy(center, 1, radius / meterSize);
-			const translation = scaleTo(endX - startX, endY - startY);
+			const translation = CAST_TRANSLATION.Set((endX - startX) / meterSize, (endY - startY) / meterSize);
 
 			const results = [];
 
-			b2World_CastShape(wID, proxy, translation, NULL_FILTER, (castResult) => {
-				const shape = shapeDict[castResult.shapeId.index1];
-				if (shape?.sprite) {
-					const s = shape.sprite;
-					// if casting from the sprite or the sprite was already hit by this cast
-					if (s._uid === startPos._uid || s._castID == castID) return 1; // continue casting
+			try {
+				b2World_CastShape(wID, b2Pos_zero, proxy, translation, NULL_FILTER, (castResult) => {
+					const shape = shapeDict[castResult.shapeId.index1];
+					if (shape?.sprite) {
+						const s = shape.sprite;
+						// if casting from the sprite or the sprite was already hit by this cast
+						if (s._uid === startPos._uid || s._castID == castID) return 1; // continue casting
 
-					s.cast = new CastInfo(
-						s,
-						castResult.point.x,
-						castResult.point.y,
-						castResult.normal.x,
-						castResult.normal.y,
-						castResult.fraction,
-						maxDistance
-					);
-					results.push(s);
+						s.cast = new CastInfo(
+							s,
+							castResult.point.x,
+							castResult.point.y,
+							castResult.normal.x,
+							castResult.normal.y,
+							castResult.fraction,
+							maxDistance
+						);
+						results.push(s);
 
-					if (limiter && limiter(s)) return 0; // stop cast
-				}
-				return 1; // continue to collect all hits
-			});
-
-			proxy.delete();
+						if (limiter && limiter(s)) return 0; // stop cast
+					}
+					return 1; // continue to collect all hits
+				});
+			} finally {
+				proxy.delete();
+			}
 
 			// sort results by distance from start
 			results.sort((a, b) => a.cast.distance - b.cast.distance);
@@ -6189,8 +6527,13 @@ async function q5playPreSetup(q) {
 
 			if (type != 'glue') return;
 
-			let j = this._init(b2DefaultWeldJointDef());
-			this.jID = b2CreateWeldJoint(wID, j);
+			const j = b2DefaultWeldJointDef();
+			try {
+				this._init(j);
+				this.jID = b2CreateWeldJoint(wID, j);
+			} finally {
+				j.delete();
+			}
 			jointDict[this.jID.index1] = this;
 
 			this.forceThreshold = 500;
@@ -6204,11 +6547,21 @@ async function q5playPreSetup(q) {
 			j.base.bodyIdA = a.bdID;
 			j.base.bodyIdB = b.bdID;
 
-			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+			const localPoint = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+			try {
+				j.base.localFrameB.p = localPoint;
+			} finally {
+				localPoint.delete();
+			}
 
-			let qA = b2Body_GetRotation(a.bdID);
-			let qB = b2Body_GetRotation(b.bdID);
-			j.base.localFrameA.q = b2InvMulRot(qA, qB);
+			const qA = b2Body_GetRotation(a.bdID);
+			const qB = b2Body_GetRotation(b.bdID);
+			try {
+				j.base.localFrameA.q.SetAngle(qB.GetAngle() - qA.GetAngle());
+			} finally {
+				qA.delete();
+				qB.delete();
+			}
 
 			return j;
 		}
@@ -6243,7 +6596,12 @@ async function q5playPreSetup(q) {
 		}
 
 		get reactionForce() {
-			return b2Joint_GetConstraintForce(this.jID);
+			const force = b2Joint_GetConstraintForce(this.jID);
+			try {
+				return { x: force.x, y: force.y };
+			} finally {
+				force.delete();
+			}
 		}
 
 		get reactionTorque() {
@@ -6275,23 +6633,31 @@ async function q5playPreSetup(q) {
 		}
 
 		_setOffsetA(x, y) {
-			const t = new b2Transform();
-			t.p = scaleTo(x, y);
-			b2Joint_SetLocalFrameA(this.jID, t);
-			b2Joint_WakeBodies(this.jID);
+			const t = b2Joint_GetLocalFrameA(this.jID);
+			try {
+				t.p = scaleTo(x, y);
+				b2Joint_SetLocalFrameA(this.jID, t);
+				b2Joint_WakeBodies(this.jID);
 
-			this._oAx = x;
-			this._oAy = y;
+				this._oAx = x;
+				this._oAy = y;
+			} finally {
+				t.delete();
+			}
 		}
 
 		_setOffsetB(x, y) {
-			const t = new b2Transform();
-			t.p = scaleTo(x, y);
-			b2Joint_SetLocalFrameB(this.jID, t);
-			b2Joint_WakeBodies(this.jID);
+			const t = b2Joint_GetLocalFrameB(this.jID);
+			try {
+				t.p = scaleTo(x, y);
+				b2Joint_SetLocalFrameB(this.jID, t);
+				b2Joint_WakeBodies(this.jID);
 
-			this._oBx = x;
-			this._oBy = y;
+				this._oBx = x;
+				this._oBy = y;
+			} finally {
+				t.delete();
+			}
 		}
 
 		get offsetA() {
@@ -6341,9 +6707,12 @@ async function q5playPreSetup(q) {
 			a.joints.splice(a.joints.indexOf(this), 1);
 			b.joints.splice(b.joints.indexOf(this), 1);
 
-			b2DestroyJoint(this.jID, true);
-
-			this.deleted = true;
+			try {
+				b2DestroyJoint(this.jID);
+			} finally {
+				delete jointDict[this.jID.index1];
+				this.deleted = true;
+			}
 		}
 	};
 
@@ -6374,11 +6743,15 @@ async function q5playPreSetup(q) {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'distance');
 
-			let j = this._init(b2DefaultDistanceJointDef());
-			j.length = $.dist(spriteA.x, spriteA.y, spriteB.x, spriteB.y) / meterSize;
-			j.enableSpring = true;
-
-			this.jID = b2CreateDistanceJoint(wID, j);
+			const j = b2DefaultDistanceJointDef();
+			try {
+				this._init(j);
+				j.length = $.dist(spriteA.x, spriteA.y, spriteB.x, spriteB.y) / meterSize;
+				j.enableSpring = true;
+				this.jID = b2CreateDistanceJoint(wID, j);
+			} finally {
+				j.delete();
+			}
 			jointDict[this.jID.index1] = this;
 		}
 
@@ -6387,10 +6760,10 @@ async function q5playPreSetup(q) {
 		}
 
 		get length() {
-			return Box2D.b2DistanceJoint_GetLength(this.jID) * meterSize;
+			return Box2D.b2DistanceJoint_GetRestLength(this.jID) * meterSize;
 		}
 		set length(val) {
-			Box2D.b2DistanceJoint_SetLength(this.jID, val / meterSize);
+			Box2D.b2DistanceJoint_SetRestLength(this.jID, val / meterSize);
 		}
 
 		get limitsEnabled() {
@@ -6400,12 +6773,20 @@ async function q5playPreSetup(q) {
 			return Box2D.b2DistanceJoint_EnableLimit(this.jID, val);
 		}
 
+		get lowerLimit() {
+			return Box2D.b2DistanceJoint_GetLowerLimit(this.jID) * meterSize;
+		}
+
+		get upperLimit() {
+			return Box2D.b2DistanceJoint_GetUpperLimit(this.jID) * meterSize;
+		}
+
 		get minLength() {
-			return Box2D.b2DistanceJoint_GetMinLength(this.jID) * meterSize;
+			return Box2D.b2DistanceJoint_GetLowerLimit(this.jID) * meterSize;
 		}
 
 		get maxLength() {
-			return Box2D.b2DistanceJoint_GetMaxLength(this.jID) * meterSize;
+			return Box2D.b2DistanceJoint_GetUpperLimit(this.jID) * meterSize;
 		}
 
 		set range(val) {
@@ -6418,7 +6799,7 @@ async function q5playPreSetup(q) {
 				min = val[0];
 				max = val[1];
 			}
-			Box2D.b2DistanceJoint_SetLengthRange(this.jID, min / meterSize, max / meterSize);
+			Box2D.b2DistanceJoint_SetLimits(this.jID, min / meterSize, max / meterSize);
 		}
 
 		get springEnabled() {
@@ -6451,10 +6832,10 @@ async function q5playPreSetup(q) {
 		}
 
 		get speed() {
-			return Box2D.b2DistanceJoint_GetMotorSpeed(this.jID);
+			return Box2D.b2DistanceJoint_GetTargetMotorSpeed(this.jID);
 		}
 		set speed(val) {
-			Box2D.b2DistanceJoint_SetMotorSpeed(this.jID, val);
+			Box2D.b2DistanceJoint_SetTargetMotorSpeed(this.jID, val);
 		}
 
 		get maxPower() {
@@ -6465,7 +6846,7 @@ async function q5playPreSetup(q) {
 		}
 
 		get power() {
-			return Box2D.b2DistanceJoint_GetMotorForce(this.jID);
+			return Box2D.b2DistanceJoint_GetCurrentMotorForce(this.jID);
 		}
 	};
 
@@ -6476,14 +6857,18 @@ async function q5playPreSetup(q) {
 			this._angle = $._angleMode == DEGREES ? 90 : Math.PI / 2;
 			this._motorEnabled = false;
 
-			let j = this._init(b2DefaultWheelJointDef(wID));
-			j.enableSpring = true;
-			j.hertz = 4;
-			j.dampingRatio = 0.7;
-			j.enableMotor = false; // neutral by default
-			j.maxMotorTorque = 1000;
-
-			this.jID = b2CreateWheelJoint(wID, j);
+			const j = b2DefaultWheelJointDef(wID);
+			try {
+				this._init(j);
+				j.enableSpring = true;
+				j.hertz = 4;
+				j.dampingRatio = 0.7;
+				j.enableMotor = false; // neutral by default
+				j.maxMotorTorque = 1000;
+				this.jID = b2CreateWheelJoint(wID, j);
+			} finally {
+				j.delete();
+			}
 			jointDict[this.jID.index1] = this;
 
 			this._springiness = 0.1;
@@ -6501,7 +6886,12 @@ async function q5playPreSetup(q) {
 			j.base.localFrameA.q.SetAngle(rad);
 
 			let pivot = scaleTo(b.x, b.y);
-			j.base.localFrameA.p = b2Body_GetLocalPoint(a.bdID, pivot);
+			const localPoint = b2Body_GetLocalPoint(a.bdID, pivot);
+			try {
+				j.base.localFrameA.p = localPoint;
+			} finally {
+				localPoint.delete();
+			}
 
 			return j;
 		}
@@ -6517,9 +6907,13 @@ async function q5playPreSetup(q) {
 			let rad = $._angleMode == DEGREES ? val * DEGTORAD : val;
 
 			let t = b2Joint_GetLocalFrameA(this.jID);
-			t.q.SetAngle(rad);
-			b2Joint_SetLocalFrameA(this.jID, t);
-			b2Joint_WakeBodies(this.jID);
+			try {
+				t.q.SetAngle(rad);
+				b2Joint_SetLocalFrameA(this.jID, t);
+				b2Joint_WakeBodies(this.jID);
+			} finally {
+				t.delete();
+			}
 		}
 
 		get springEnabled() {
@@ -6590,17 +6984,17 @@ async function q5playPreSetup(q) {
 		}
 
 		get power() {
-			return Box2D.b2WheelJoint_GetMotorTorque(this.jID);
+			return Box2D.b2WheelJoint_GetCurrentMotorTorque(this.jID);
 		}
 
 		get speed() {
 			// if in neutral, return the wheel's angular velocity
 			if (!this._motorEnabled) return this.spriteB.rotationSpeed;
-			return Box2D.b2WheelJoint_GetMotorSpeed(this.jID);
+			return Box2D.b2WheelJoint_GetTargetMotorSpeed(this.jID);
 		}
 		set speed(val) {
 			if (!this._motorEnabled) this.motorEnabled = true;
-			Box2D.b2WheelJoint_SetMotorSpeed(this.jID, val);
+			Box2D.b2WheelJoint_SetTargetMotorSpeed(this.jID, val);
 			b2Joint_WakeBodies(this.jID);
 		}
 	};
@@ -6609,14 +7003,18 @@ async function q5playPreSetup(q) {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'hinge');
 
-			let j = this._init(b2DefaultRevoluteJointDef());
-
-			this.jID = b2CreateRevoluteJoint(wID, j);
+			const j = b2DefaultRevoluteJointDef();
+			try {
+				this._init(j);
+				this.jID = b2CreateRevoluteJoint(wID, j);
+			} finally {
+				j.delete();
+			}
 			jointDict[this.jID.index1] = this;
 		}
 
 		get angle() {
-			let ang = Box2D.b2RevoluteJoint_GetAngle(this.jID);
+			let ang = Box2D.b2RevoluteJoint_GetCurrentAngle(this.jID);
 			if ($._angleMode == 'radians') return ang;
 			return ang * DEGTORAD;
 		}
@@ -6683,14 +7081,14 @@ async function q5playPreSetup(q) {
 		}
 
 		get speed() {
-			return Box2D.b2RevoluteJoint_GetMotorSpeed(this.jID);
+			return Box2D.b2RevoluteJoint_GetTargetMotorSpeed(this.jID);
 		}
 		set speed(val) {
-			Box2D.b2RevoluteJoint_SetMotorSpeed(this.jID, val);
+			Box2D.b2RevoluteJoint_SetTargetMotorSpeed(this.jID, val);
 		}
 
 		get power() {
-			return Box2D.b2RevoluteJoint_GetMotorTorque(this.jID);
+			return Box2D.b2RevoluteJoint_GetCurrentMotorTorque(this.jID);
 		}
 
 		get maxPower() {
@@ -6705,13 +7103,17 @@ async function q5playPreSetup(q) {
 		constructor(spriteA, spriteB) {
 			super(spriteA, spriteB, 'slider');
 
-			let j = this._init(b2DefaultPrismaticJointDef());
-			j.enableLimit = false;
-			j.enableMotor = true;
-			j.maxMotorForce = 10;
-			j.motorSpeed = 0;
-
-			this.jID = b2CreatePrismaticJoint(wID, j);
+			const j = b2DefaultPrismaticJointDef();
+			try {
+				this._init(j);
+				j.enableLimit = false;
+				j.enableMotor = true;
+				j.maxMotorForce = 10;
+				j.motorSpeed = 0;
+				this.jID = b2CreatePrismaticJoint(wID, j);
+			} finally {
+				j.delete();
+			}
 			jointDict[this.jID.index1] = this;
 		}
 
@@ -6723,7 +7125,12 @@ async function q5playPreSetup(q) {
 			j.base.bodyIdB = b.bdID;
 
 			// set the anchor at sprite A's position in B's local frame
-			j.base.localFrameB.p = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+			const localPoint = b2Body_GetLocalPoint(b.bdID, scaleTo(a.x, a.y));
+			try {
+				j.base.localFrameB.p = localPoint;
+			} finally {
+				localPoint.delete();
+			}
 
 			// align the slide axis with the vector from A to B
 			let dx = b.x - a.x;
@@ -6731,16 +7138,21 @@ async function q5playPreSetup(q) {
 			let len = Math.sqrt(dx * dx + dy * dy);
 			let angle = len > 0 ? Math.atan2(dy, dx) : 0;
 
-			let qA = b2Body_GetRotation(a.bdID);
-			let qB = b2Body_GetRotation(b.bdID);
-			j.base.localFrameA.q.SetAngle(angle - qA.GetAngle());
-			j.base.localFrameB.q.SetAngle(angle - qB.GetAngle());
+			const qA = b2Body_GetRotation(a.bdID);
+			const qB = b2Body_GetRotation(b.bdID);
+			try {
+				j.base.localFrameA.q.SetAngle(angle - qA.GetAngle());
+				j.base.localFrameB.q.SetAngle(angle - qB.GetAngle());
+			} finally {
+				qA.delete();
+				qB.delete();
+			}
 
 			return j;
 		}
 
 		get translation() {
-			return Box2D.b2PrismaticJoint_GetTranslation(this.jID) * meterSize;
+			return Box2D.b2PrismaticJoint_GetCurrentTranslation(this.jID) * meterSize;
 		}
 
 		get limitsEnabled() {
@@ -6802,10 +7214,10 @@ async function q5playPreSetup(q) {
 		}
 
 		get speed() {
-			return Box2D.b2PrismaticJoint_GetMotorSpeed(this.jID);
+			return Box2D.b2PrismaticJoint_GetTargetMotorSpeed(this.jID);
 		}
 		set speed(val) {
-			Box2D.b2PrismaticJoint_SetMotorSpeed(this.jID, val);
+			Box2D.b2PrismaticJoint_SetTargetMotorSpeed(this.jID, val);
 			b2Joint_WakeBodies(this.jID);
 		}
 
@@ -6817,11 +7229,11 @@ async function q5playPreSetup(q) {
 		}
 
 		get power() {
-			return Box2D.b2PrismaticJoint_GetMotorForce(this.jID);
+			return Box2D.b2PrismaticJoint_GetCurrentMotorForce(this.jID);
 		}
 
 		get energy() {
-			return Box2D.b2PrismaticJoint_GetSpeed(this.jID);
+			return Box2D.b2PrismaticJoint_GetCurrentSpeed(this.jID);
 		}
 	};
 
@@ -6830,37 +7242,61 @@ async function q5playPreSetup(q) {
 			sprite ??= grabPoint;
 			super(sprite, sprite, 'grabber');
 
-			let bd = b2DefaultBodyDef();
-			bd.type = bodyTypes[2]; // KIN
-			bd.enableSleep = false;
-
-			this._target = { x: 0, y: 0, bdID: b2CreateBody(wID, bd) };
-
-			let j = b2DefaultMotorJointDef();
-			j.base.bodyIdA = this._target.bdID;
-			j.base.bodyIdB = sprite.bdID;
-			j.linearHertz = 7.5;
-			j.linearDampingRatio = 1.0;
-
-			let data = b2Body_GetMassData(sprite.bdID);
-
-			j.maxSpringForce = 500 * data.mass;
-
-			if (data.mass) {
-				let lever = Math.sqrt(data.rotationalInertia / data.mass);
-				j.maxVelocityTorque = 0.25 * lever * data.mass;
+			const bd = b2DefaultBodyDef();
+			try {
+				bd.type = bodyTypes[2]; // KIN
+				bd.enableSleep = false;
+				this._target = { x: 0, y: 0, bdID: b2CreateBody(wID, bd) };
+			} finally {
+				bd.delete();
 			}
 
-			this.jID = b2CreateMotorJoint(wID, j);
+			const j = b2DefaultMotorJointDef();
+			try {
+				j.base.bodyIdA = this._target.bdID;
+				j.base.bodyIdB = sprite.bdID;
+				j.linearHertz = 7.5;
+				j.linearDampingRatio = 1.0;
 
-			let offX = sprite.x - (grabPoint[0] || grabPoint.x),
-				offY = sprite.y - (grabPoint[1] || grabPoint.y);
-			if (!isSlop(offX) || !isSlop(offY)) {
-				this._setOffsetB(-offX, -offY);
-				this.target = grabPoint;
+				// the grab point must be expressed in the sprite's local frame
+				// so it accounts for the sprite's current rotation
+				const gx = grabPoint[0] ?? grabPoint.x ?? sprite.x,
+					gy = grabPoint[1] ?? grabPoint.y ?? sprite.y;
+				const localPoint = b2Body_GetLocalPoint(sprite.bdID, scaleTo(gx, gy));
+				try {
+					j.base.localFrameB.p = localPoint;
+				} finally {
+					localPoint.delete();
+				}
+
+				const data = b2Body_GetMassData(sprite.bdID);
+				try {
+					j.maxSpringForce = 500 * data.mass;
+
+					if (data.mass) {
+						let lever = Math.sqrt(data.rotationalInertia / data.mass);
+						j.maxVelocityTorque = 0.25 * lever * data.mass;
+					}
+				} finally {
+					data.delete();
+				}
+
+				this.jID = b2CreateMotorJoint(wID, j);
+			} finally {
+				j.delete();
 			}
 
+			this.target = grabPoint;
 			this.sprite = sprite;
+		}
+
+		delete() {
+			if (this.deleted) return;
+			try {
+				super.delete();
+			} finally {
+				b2DestroyBody(this._target.bdID);
+			}
 		}
 
 		_draw() {
@@ -6878,10 +7314,13 @@ async function q5playPreSetup(q) {
 			this._target.y = y;
 
 			let t = new b2Transform();
-			t.p = scaleTo(x, y);
-			t.q = ZERO_ROT;
-
-			b2Body_SetTargetTransform(this._target.bdID, t, $.world._timeStep);
+			try {
+				t.p.Set(x / meterSize, y / meterSize);
+				t.q.SetAngle(0);
+				b2Body_SetTargetTransform(this._target.bdID, t, $.world._timeStep, true);
+			} finally {
+				t.delete();
+			}
 		}
 
 		get maxForce() {
@@ -8571,6 +9010,7 @@ async function q5playPreSetup(q) {
 	let drawCmds = new DebugDrawCommandBuffer(),
 		jointStack = [],
 		shapeStack = [];
+	$.world._drawCmds = drawCmds;
 
 	const colorMax = $._colorFormat,
 		debugGreen = $._q5 ? $.color(0, colorMax, 0, colorMax * 0.9) : '#0f0e',

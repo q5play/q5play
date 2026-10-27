@@ -2,13 +2,17 @@
 # Run: bun lang/types.js
 
 from __future__ import annotations
-from typing import Any, Callable, Type, TypeVar, Generic, overload
+from typing import Any, Callable, Type, TypeVar, Generic, overload, Protocol
 from collections.abc import Awaitable
 from q5 import *
 
+class _HasXY(Protocol):
+    x: float
+    y: float
+
 class Q5Play:
 
-    sprites: dict
+    sprites: dict[int, Sprite]
     """
     Contains all the sprites in the sketch.
 
@@ -18,7 +22,7 @@ class Q5Play:
     The keys are the sprite's unique ids.
     """
 
-    groups: dict
+    groups: dict[int, Group]
     """
     Contains all the groups in the sketch.
 
@@ -223,12 +227,12 @@ class Visual:
     def draw(self, val: Any) -> None: ...
 
     @property
-    def img(self) -> Image:
+    def img(self) -> Q5.Image:
         """Current image or frame of animation being displayed."""
         ...
 
     @img.setter
-    def img(self, val: str | Image) -> None: ...
+    def img(self, val: str | Q5.Image) -> None: ...
 
     @property
     def ani(self) -> Ani:
@@ -438,42 +442,42 @@ class Sprite(Visual):
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., roundedRadius: float = ..., physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., roundedRadius: float = ..., physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float, y: float, d: float, physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float, y: float, d: float, physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, points: list[tuple[float, float]], roundedRadius: float, physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, points: list[tuple[float, float]], roundedRadius: float, physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, vertices: list[tuple[float, float]], physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, vertices: list[tuple[float, float]], physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float, y: float, vertices: list[tuple[float, float]], physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float, y: float, vertices: list[tuple[float, float]], physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float, y: float, distAngles: list[float], physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float, y: float, distAngles: list[float], physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float, y: float, distAngles: list[float], roundedRadius: float, physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float, y: float, distAngles: list[float], roundedRadius: float, physicsType: str = ...) -> 'Sprite': ...
 
     @overload
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> 'Sprite': ...
+    def new(cls, ani: str | Ani | Q5.Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> 'Sprite': ...
 
     @classmethod
-    def new(cls, ani: str | Ani | Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> 'Sprite':
+    def new(cls, ani: str | Ani | Q5.Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> 'Sprite':
         ...
 
     @overload
@@ -504,33 +508,33 @@ class Sprite(Visual):
     def __init__(self, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., roundedRadius: float = ..., physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., roundedRadius: float = ..., physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float, y: float, d: float, physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float, y: float, d: float, physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, points: list[tuple[float, float]], roundedRadius: float, physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, points: list[tuple[float, float]], roundedRadius: float, physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, vertices: list[tuple[float, float]], physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, vertices: list[tuple[float, float]], physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float, y: float, vertices: list[tuple[float, float]], physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float, y: float, vertices: list[tuple[float, float]], physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float, y: float, distAngles: list[float], physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float, y: float, distAngles: list[float], physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float, y: float, distAngles: list[float], roundedRadius: float, physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float, y: float, distAngles: list[float], roundedRadius: float, physicsType: str = ...) -> None: ...
 
     @overload
-    def __init__(self, ani: str | Ani | Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> None: ...
 
-    def __init__(self, ani: str | Ani | Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> None: ...
+    def __init__(self, ani: str | Ani | Q5.Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> None: ...
 
     @overload
     @classmethod
@@ -570,42 +574,42 @@ class Sprite(Visual):
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., roundedRadius: float = ..., physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float = ..., y: float = ..., w: float = ..., h: float = ..., roundedRadius: float = ..., physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float, y: float, d: float, physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float, y: float, d: float, physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, points: list[tuple[float, float]], roundedRadius: float, physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, points: list[tuple[float, float]], roundedRadius: float, physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, vertices: list[tuple[float, float]], physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, vertices: list[tuple[float, float]], physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float, y: float, vertices: list[tuple[float, float]], physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float, y: float, vertices: list[tuple[float, float]], physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float, y: float, distAngles: list[float], physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float, y: float, distAngles: list[float], physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float, y: float, distAngles: list[float], roundedRadius: float, physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float, y: float, distAngles: list[float], roundedRadius: float, physicsType: str = ...) -> Sprite: ...
 
     @overload
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> Sprite: ...
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> Sprite: ...
 
     @classmethod
-    def withSensor(cls, ani: str | Ani | Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> Sprite:
+    def withSensor(cls, ani: str | Ani | Q5.Image, x: float, y: float, sideLength: float, polygonName: str, roundedRadius: float = ..., physicsType: str = ...) -> Sprite:
         ...
 
     @property
@@ -808,7 +812,7 @@ class Sprite(Visual):
     def mass(self, val: float) -> None: ...
 
     @property
-    def centerOfMass(self) -> dict:
+    def centerOfMass(self) -> Vector | _HasXY:
         """
         The center of mass of the sprite's physics body, the point at which
         the physics body is balanced and rotates around. By default it's the
@@ -817,7 +821,7 @@ class Sprite(Visual):
         ...
 
     @centerOfMass.setter
-    def centerOfMass(self, val: dict) -> None: ...
+    def centerOfMass(self, val: Vector | _HasXY) -> None: ...
 
     @property
     def fixedCenterOfMass(self) -> bool:
@@ -940,7 +944,7 @@ class Sprite(Visual):
         ...
 
     @color.setter
-    def color(self, val: Color) -> None: ...
+    def color(self, val: str | Color) -> None: ...
 
     @property
     def colour(self) -> Color:
@@ -952,7 +956,7 @@ class Sprite(Visual):
         ...
 
     @colour.setter
-    def colour(self, val: Color) -> None: ...
+    def colour(self, val: str | Color) -> None: ...
 
     @property
     def fill(self) -> Color:
@@ -964,7 +968,7 @@ class Sprite(Visual):
         ...
 
     @fill.setter
-    def fill(self, val: Color) -> None: ...
+    def fill(self, val: str | Color) -> None: ...
 
     @property
     def stroke(self) -> Color:
@@ -972,7 +976,7 @@ class Sprite(Visual):
         ...
 
     @stroke.setter
-    def stroke(self, val: Color) -> None: ...
+    def stroke(self, val: str | Color) -> None: ...
 
     @property
     def strokeWeight(self) -> float:
@@ -1013,7 +1017,7 @@ class Sprite(Visual):
         ...
 
     @textStroke.setter
-    def textStroke(self, val: Color) -> None: ...
+    def textStroke(self, val: str | Color) -> None: ...
 
     @property
     def textStrokeWeight(self) -> float:
@@ -1300,7 +1304,7 @@ class Sprite(Visual):
     def rotationLock(self, val: bool) -> None: ...
 
     @property
-    def scale(self) -> float | dict:
+    def scale(self) -> float | Vector | _HasXY:
         """
         Horizontal and vertical scale of the sprite.
 
@@ -1315,7 +1319,7 @@ class Sprite(Visual):
         ...
 
     @scale.setter
-    def scale(self, val: float | list | dict) -> None: ...
+    def scale(self, val: float | list[Any] | Vector | _HasXY) -> None: ...
 
     def scaleBy(self, x: float, y: float = ...) -> None:
         """
@@ -1420,7 +1424,7 @@ class Sprite(Visual):
     def visible(self, val: bool) -> None: ...
 
     @property
-    def pos(self) -> dict:
+    def pos(self) -> Vector | _HasXY:
         """
         Gets the sprite's position as a readonly object {x, y} which
         won't be updated if the sprite moves. Useful for saving
@@ -1429,7 +1433,7 @@ class Sprite(Visual):
         ...
 
     @pos.setter
-    def pos(self, val: list[float] | dict) -> None: ...
+    def pos(self, val: list[float] | Vector | _HasXY) -> None: ...
 
     @property
     def position(self) -> Vector:
@@ -1437,7 +1441,7 @@ class Sprite(Visual):
         ...
 
     @position.setter
-    def position(self, val: list[float] | dict) -> None: ...
+    def position(self, val: list[float] | Vector | _HasXY) -> None: ...
 
     @property
     def canvasPos(self) -> Any:
@@ -1550,7 +1554,7 @@ class Sprite(Visual):
         ...
 
     @vel.setter
-    def vel(self, val: list | dict | Vector) -> None: ...
+    def vel(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def velocity(self) -> Vector:
@@ -1562,7 +1566,7 @@ class Sprite(Visual):
         ...
 
     @velocity.setter
-    def velocity(self, val: list | dict | Vector) -> None: ...
+    def velocity(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def grabbable(self) -> bool:
@@ -1585,7 +1589,7 @@ class Sprite(Visual):
     def gravityScale(self, val: float) -> None: ...
 
     @overload
-    def applyForce(self, amount: float, origin: dict = ...) -> None:
+    def applyForce(self, amount: float, origin: Vector | _HasXY = ...) -> None:
         """
         Applies a force magnitude at the sprite's current bearing.
 
@@ -1596,7 +1600,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def applyForce(self, force: list[dict | float], origin: dict = ...) -> None:
+    def applyForce(self, force: Vector | _HasXY | list[float], origin: Vector | _HasXY = ...) -> None:
         """
         Applies a force vector to the sprite.
 
@@ -1606,11 +1610,11 @@ class Sprite(Visual):
         """
         ...
 
-    def applyForce(self, force: list[dict | float], origin: dict = ...) -> None:
+    def applyForce(self, force: Vector | _HasXY | list[float], origin: Vector | _HasXY = ...) -> None:
         ...
 
     @overload
-    def applyForceScaled(self, amount: float, origin: dict = ...) -> None:
+    def applyForceScaled(self, amount: float, origin: Vector | _HasXY = ...) -> None:
         """
         Applies a force scaled to the sprite's mass using a magnitude.
 
@@ -1621,7 +1625,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def applyForceScaled(self, force: dict, origin: dict = ...) -> None:
+    def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         """
         Applies a force scaled to the sprite's mass using a vector.
 
@@ -1631,7 +1635,7 @@ class Sprite(Visual):
         """
         ...
 
-    def applyForceScaled(self, force: dict, origin: dict = ...) -> None:
+    def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         ...
 
     def applyWind(self, strength: float, angle: float, drag: float = ..., lift: float = ...) -> None:
@@ -1659,7 +1663,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def attractTo(self, pos: dict, force: float = ...) -> None:
+    def attractTo(self, pos: Vector | _HasXY, force: float = ...) -> None:
         """
         Applies a force to the sprite's center of mass attracting it to
         the given position.
@@ -1669,7 +1673,7 @@ class Sprite(Visual):
         """
         ...
 
-    def attractTo(self, pos: dict, force: float = ...) -> None:
+    def attractTo(self, pos: Vector | _HasXY, force: float = ...) -> None:
         ...
 
     @overload
@@ -1685,7 +1689,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def repelFrom(self, pos: dict, force: float = ...) -> None:
+    def repelFrom(self, pos: Vector | _HasXY, force: float = ...) -> None:
         """
         Applies a force to the sprite's center of mass repelling it from
         the given position.
@@ -1695,7 +1699,7 @@ class Sprite(Visual):
         """
         ...
 
-    def repelFrom(self, pos: dict, force: float = ...) -> None:
+    def repelFrom(self, pos: Vector | _HasXY, force: float = ...) -> None:
         ...
 
     def applyTorque(self, torque: Any) -> None:
@@ -1730,7 +1734,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def moveTo(self, pos: dict, speed: float = ...) -> Awaitable[bool]:
+    def moveTo(self, pos: Vector | _HasXY, speed: float = ...) -> Awaitable[bool]:
         """
         Attempts to move the sprite to a destination at a constant speed
         and stops the sprite if it reaches the destination.
@@ -1744,7 +1748,7 @@ class Sprite(Visual):
         """
         ...
 
-    def moveTo(self, pos: dict, speed: float = ...) -> Awaitable[bool]:
+    def moveTo(self, pos: Vector | _HasXY, speed: float = ...) -> Awaitable[bool]:
         ...
 
     @overload
@@ -1761,7 +1765,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def moveTowards(self, pos: dict, tracking: float = ...) -> None:
+    def moveTowards(self, pos: Vector | _HasXY, tracking: float = ...) -> None:
         """
         Moves the sprite towards a position at a percentage of the distance
         between itself and the destination.
@@ -1772,7 +1776,7 @@ class Sprite(Visual):
         """
         ...
 
-    def moveTowards(self, pos: dict, tracking: float = ...) -> None:
+    def moveTowards(self, pos: Vector | _HasXY, tracking: float = ...) -> None:
         ...
 
     @overload
@@ -1794,7 +1798,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def rotateTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         """
         Rotates the sprite to face a position at a constant speed,
         stopping if it arrives.
@@ -1809,7 +1813,7 @@ class Sprite(Visual):
         """
         ...
 
-    def rotateTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         ...
 
     @overload
@@ -1828,7 +1832,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def rotateMinTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateMinTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         """
         Rotates the sprite by the smallest angular distance to face a position
         at a constant speed, stopping when it arrives.
@@ -1843,7 +1847,7 @@ class Sprite(Visual):
         """
         ...
 
-    def rotateMinTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateMinTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         ...
 
     @overload
@@ -1858,7 +1862,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def rotateTowards(self, pos: dict, tracking: float = ..., facing: float = ...) -> None:
+    def rotateTowards(self, pos: Vector | _HasXY, tracking: float = ..., facing: float = ...) -> None:
         """
         Rotates the sprite towards a position.
 
@@ -1869,7 +1873,7 @@ class Sprite(Visual):
         """
         ...
 
-    def rotateTowards(self, pos: dict, tracking: float = ..., facing: float = ...) -> None:
+    def rotateTowards(self, pos: Vector | _HasXY, tracking: float = ..., facing: float = ...) -> None:
         ...
 
     @overload
@@ -1893,7 +1897,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def angleTo(self, pos: dict, facing: float = ...) -> float:
+    def angleTo(self, pos: Vector | _HasXY, facing: float = ...) -> float:
         """
         Finds the angle from this sprite to the given position.
 
@@ -1906,7 +1910,7 @@ class Sprite(Visual):
         """
         ...
 
-    def angleTo(self, pos: dict, facing: float = ...) -> float:
+    def angleTo(self, pos: Vector | _HasXY, facing: float = ...) -> float:
         ...
 
     @overload
@@ -1929,7 +1933,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def angleDistTo(self, pos: dict, facing: float = ...) -> float:
+    def angleDistTo(self, pos: Vector | _HasXY, facing: float = ...) -> float:
         """
         Finds the minimum angular distance the sprite would need to rotate
         to face a position, taking into account the sprite's current rotation.
@@ -1943,7 +1947,7 @@ class Sprite(Visual):
         """
         ...
 
-    def angleDistTo(self, pos: dict, facing: float = ...) -> float:
+    def angleDistTo(self, pos: Vector | _HasXY, facing: float = ...) -> float:
         ...
 
     @overload
@@ -1964,7 +1968,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def transformTowards(self, pos: dict, rotation: float = ..., tracking: float = ...) -> None:
+    def transformTowards(self, pos: Vector | _HasXY, rotation: float = ..., tracking: float = ...) -> None:
         """
         Moves and rotates a sprite's physics body towards a target transform
         at a percentage of the distance on each frame.
@@ -1976,7 +1980,7 @@ class Sprite(Visual):
         """
         ...
 
-    def transformTowards(self, pos: dict, rotation: float = ..., tracking: float = ...) -> None:
+    def transformTowards(self, pos: Vector | _HasXY, rotation: float = ..., tracking: float = ...) -> None:
         ...
 
     def delete(self) -> None:
@@ -2057,13 +2061,6 @@ class Sprite(Visual):
         """
         ...
 
-    def pass_(self, target: Sprite | Group) -> None:
-        """
-        Sets a pass through contact relationship between the sprite
-        and a target sprite or group.
-        """
-        ...
-
     def passes(self, target: Sprite | Group) -> None:
         """
         Sets a pass through contact relationship between the sprite
@@ -2094,7 +2091,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def distTo(self, pos: dict) -> float:
+    def distTo(self, pos: Vector | _HasXY) -> float:
         """
         Returns the distance to another sprite, the mouse, a touch pointer,
         or any other object with x and y properties. Uses q5's `dist` function.
@@ -2107,7 +2104,7 @@ class Sprite(Visual):
         """
         ...
 
-    def distTo(self, pos: dict) -> float:
+    def distTo(self, pos: Vector | _HasXY) -> float:
         ...
 
     @overload
@@ -2122,7 +2119,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def distanceTo(self, pos: dict) -> float:
+    def distanceTo(self, pos: Vector | _HasXY) -> float:
         """
         Returns the distance to another sprite, the mouse, a touch pointer,
         or any other object with x and y properties. Uses q5's `dist` function.
@@ -2135,13 +2132,13 @@ class Sprite(Visual):
         """
         ...
 
-    def distanceTo(self, pos: dict) -> float:
+    def distanceTo(self, pos: Vector | _HasXY) -> float:
         ...
 
-class Ani(list[Image]):
+class Ani(list[Q5.Image]):
 
     @classmethod
-    def new(cls, *args: Image) -> 'Ani':
+    def new(cls, *args: Q5.Image) -> 'Ani':  # type: ignore[override]
         """
         Ani objects are an array of images
         that can be displayed by a Visual or Sprite.
@@ -2151,14 +2148,14 @@ class Ani(list[Image]):
         """
         ...
 
-    def __init__(self, *args: Image) -> None: ...
+    def __init__(self, *args: Q5.Image) -> None: ...
 
     name: str
     """The name of the animation"""
 
     targetFrame: float
 
-    offset: dict
+    offset: Vector | _HasXY
     """
     The distance from the sprite or visual's position
     that the animation is drawn at.
@@ -2229,7 +2226,7 @@ class Ani(list[Image]):
     def frameDelay(self, val: float) -> None: ...
 
     @property
-    def scale(self) -> float | dict:
+    def scale(self) -> float | Vector | _HasXY:
         """
         The animation's scale.
 
@@ -2241,7 +2238,7 @@ class Ani(list[Image]):
         ...
 
     @scale.setter
-    def scale(self, val: float | dict) -> None: ...
+    def scale(self, val: float | Vector | _HasXY) -> None: ...
 
     def clone(self) -> Ani:
         """
@@ -2315,7 +2312,7 @@ class Ani(list[Image]):
         ...
 
     @property
-    def frameImage(self) -> Image:
+    def frameImage(self) -> Q5.Image:
         """The current frame as Q5.Image. Read only."""
         ...
 
@@ -2359,9 +2356,9 @@ class Anis:
 
     frameDelay: float
 
-    offset: dict
+    offset: Vector | _HasXY
 
-    scale: float | dict
+    scale: float | Vector | _HasXY
 
     looping: bool
 
@@ -2389,7 +2386,7 @@ class Anis:
     frameSize: str
     """Frame size of the animations in the collection, in the format "WIDTHxHEIGHT", for example "32x32"."""
 
-    spriteSheet: Image
+    spriteSheet: Q5.Image
     """The sprite sheet image used by the animations in the collection."""
 
 _T_Visuals = TypeVar('_T_Visuals', bound=Visual)
@@ -2405,7 +2402,7 @@ class Visuals(list[_T_Visuals], Generic[_T_Visuals]):
         """Draws the visuals on the canvas."""
         ...
 
-    img: Image
+    img: Q5.Image
     """Current image."""
 
     ani: Ani
@@ -2500,7 +2497,7 @@ class Visuals(list[_T_Visuals], Generic[_T_Visuals]):
     tile: str
     """The tile character that represents the Visuals or Group in a tile map."""
 
-    def addTiles(self, tiles: list[str], x: float = ..., y: float = ..., colWidth: float = ..., rowHeight: float = ...) -> None:
+    def addTiles(self, tiles: str | list[str], x: float = ..., y: float = ..., colWidth: float = ..., rowHeight: float = ...) -> None:
         """
         Adds sprites to the group based on a tile map.
 
@@ -2519,7 +2516,7 @@ class Group(Visuals[Sprite]):
     """
 
     @classmethod
-    def new(cls, *sprites: Sprite) -> 'Group':
+    def new(cls, *sprites: Sprite) -> 'Group':  # type: ignore[override]
         """
         A Group is a collection of and blueprint for
         sprites with similar traits and behaviors.
@@ -2722,7 +2719,7 @@ class Group(Visuals[Sprite]):
     rotationLock: bool
     """If true, the group sprites can not rotate."""
 
-    scale: float | list | dict
+    scale: float | list[Any] | Vector | _HasXY
     """
     Horizontal and vertical scale of the group sprites.
 
@@ -2803,7 +2800,7 @@ class Group(Visuals[Sprite]):
     It's useful for debugging.
     """
 
-    subgroups: list[dict]
+    subgroups: list[dict[str, Any]]
     """
     Groups can have subgroups, which inherit the properties
     of their parent groups.
@@ -2913,16 +2910,6 @@ class Group(Visuals[Sprite]):
         """
         ...
 
-    def pass_(self, target: Group) -> None:
-        """
-        Sets a pass through contact relationship between the group and the target group.
-
-        If you want the group sprites to never interact with the physics simulation,
-        passing through all other sprites, consider setting `group.physics = None`
-        for better performance.
-        """
-        ...
-
     def passes(self, target: Group) -> None:
         """
         Sets a pass through contact relationship between the group and the target group.
@@ -2934,29 +2921,29 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def applyForce(self, amount: float, origin: dict = ...) -> None:
+    def applyForce(self, amount: float, origin: Vector | _HasXY = ...) -> None:
         """Applies a force magnitude to the group at its bearing."""
         ...
 
     @overload
-    def applyForce(self, force: dict, origin: dict = ...) -> None:
+    def applyForce(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         """Applies a force vector to the group."""
         ...
 
-    def applyForce(self, force: dict, origin: dict = ...) -> None:
+    def applyForce(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         ...
 
     @overload
-    def applyForceScaled(self, amount: float, origin: dict = ...) -> None:
+    def applyForceScaled(self, amount: float, origin: Vector | _HasXY = ...) -> None:
         """Applies a force scaled to member masses using a magnitude."""
         ...
 
     @overload
-    def applyForceScaled(self, force: dict, origin: dict = ...) -> None:
+    def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         """Applies a force scaled to member masses using a vector."""
         ...
 
-    def applyForceScaled(self, force: dict, origin: dict = ...) -> None:
+    def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         ...
 
     def applyWind(self, speed: float, angle: float, drag: float = ..., lift: float = ...) -> None:
@@ -2971,14 +2958,14 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def attractTo(self, pos: dict, force: float = ...) -> None:
+    def attractTo(self, pos: Vector | _HasXY, force: float = ...) -> None:
         """
         Applies a force to the group's center of mass attracting it to
         the given position.
         """
         ...
 
-    def attractTo(self, pos: dict, force: float = ...) -> None:
+    def attractTo(self, pos: Vector | _HasXY, force: float = ...) -> None:
         ...
 
     def applyTorque(self, torque: Any) -> None:
@@ -2993,14 +2980,14 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def moveTo(self, pos: dict, speed: float = ...) -> Awaitable[bool]:
+    def moveTo(self, pos: Vector | _HasXY, speed: float = ...) -> Awaitable[bool]:
         """
         Moves each sprite in the group to a destination at a constant speed,
         maintaining their relative offsets from the group's centroid.
         """
         ...
 
-    def moveTo(self, pos: dict, speed: float = ...) -> Awaitable[bool]:
+    def moveTo(self, pos: Vector | _HasXY, speed: float = ...) -> Awaitable[bool]:
         ...
 
     @overload
@@ -3009,11 +2996,11 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def moveTowards(self, pos: dict, tracking: float = ...) -> None:
+    def moveTowards(self, pos: Vector | _HasXY, tracking: float = ...) -> None:
         """Moves the group towards a position."""
         ...
 
-    def moveTowards(self, pos: dict, tracking: float = ...) -> None:
+    def moveTowards(self, pos: Vector | _HasXY, tracking: float = ...) -> None:
         ...
 
     @overload
@@ -3025,14 +3012,14 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def rotateTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         """
         Rotates each sprite in the group to face a position. The sign of `speed`
         determines direction: positive = CW, negative = CCW.
         """
         ...
 
-    def rotateTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         ...
 
     def rotate(self, angle: float, speed: float = ...) -> Awaitable[bool]:
@@ -3048,14 +3035,14 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def rotateMinTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateMinTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         """
         Rotates each sprite in the group by the smallest angular distance to
         face a position, stopping when they arrive.
         """
         ...
 
-    def rotateMinTo(self, pos: dict, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
+    def rotateMinTo(self, pos: Vector | _HasXY, speed: float = ..., facing: float = ...) -> Awaitable[bool]:
         ...
 
     @overload
@@ -3064,11 +3051,11 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def rotateTowards(self, pos: dict, tracking: float = ..., facing: float = ...) -> None:
+    def rotateTowards(self, pos: Vector | _HasXY, tracking: float = ..., facing: float = ...) -> None:
         """Rotates each sprite in the group towards a position."""
         ...
 
-    def rotateTowards(self, pos: dict, tracking: float = ..., facing: float = ...) -> None:
+    def rotateTowards(self, pos: Vector | _HasXY, tracking: float = ..., facing: float = ...) -> None:
         ...
 
     @overload
@@ -3080,14 +3067,14 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def transformTowards(self, pos: dict, rotation: float = ..., tracking: float = ...) -> None:
+    def transformTowards(self, pos: Vector | _HasXY, rotation: float = ..., tracking: float = ...) -> None:
         """
         Moves and rotates each sprite in the group towards a target transform,
         maintaining their relative offsets from the group's centroid.
         """
         ...
 
-    def transformTowards(self, pos: dict, rotation: float = ..., tracking: float = ...) -> None:
+    def transformTowards(self, pos: Vector | _HasXY, rotation: float = ..., tracking: float = ...) -> None:
         ...
 
     @overload
@@ -3096,11 +3083,11 @@ class Group(Visuals[Sprite]):
         ...
 
     @overload
-    def repelFrom(self, pos: dict, force: float = ...) -> None:
+    def repelFrom(self, pos: Vector | _HasXY, force: float = ...) -> None:
         """Applies a repelling force from a position."""
         ...
 
-    def repelFrom(self, pos: dict, force: float = ...) -> None:
+    def repelFrom(self, pos: Vector | _HasXY, force: float = ...) -> None:
         ...
 
     def cull(self, top: float = ..., bottom: float = ..., left: float = ..., right: float = ..., cb: Callable[..., Any] | None = None) -> float:
@@ -3310,7 +3297,7 @@ class World:
         ...
 
     @overload
-    def getSpritesAt(self, pos: dict, radius: float = ..., group: Group = ..., cameraActiveWhenDrawn: bool = ...) -> list[Sprite]:
+    def getSpritesAt(self, pos: Vector | _HasXY, radius: float = ..., group: Group = ..., cameraActiveWhenDrawn: bool = ...) -> list[Sprite]:
         """
         Returns the sprites at a position, ordered by layer.
 
@@ -3327,7 +3314,7 @@ class World:
         """
         ...
 
-    def getSpritesAt(self, pos: dict, radius: float = ..., group: Group = ..., cameraActiveWhenDrawn: bool = ...) -> list[Sprite]:
+    def getSpritesAt(self, pos: Vector | _HasXY, radius: float = ..., group: Group = ..., cameraActiveWhenDrawn: bool = ...) -> list[Sprite]:
         ...
 
     @overload
@@ -3349,7 +3336,7 @@ class World:
         ...
 
     @overload
-    def getSpriteAt(self, pos: dict, radius: float = ..., group: Group = ...) -> Sprite:
+    def getSpriteAt(self, pos: Vector | _HasXY, radius: float = ..., group: Group = ...) -> Sprite:
         """
         Returns the sprite at the specified position
         on the top most layer, drawn when the camera was on.
@@ -3366,7 +3353,7 @@ class World:
         """
         ...
 
-    def getSpriteAt(self, pos: dict, radius: float = ..., group: Group = ...) -> Sprite:
+    def getSpriteAt(self, pos: Vector | _HasXY, radius: float = ..., group: Group = ...) -> Sprite:
         ...
 
     @property
@@ -3387,7 +3374,7 @@ class World:
     def allowSleeping(self, val: bool) -> None: ...
 
     @overload
-    def rayCast(self, startPos: list[dict | float], direction: float, maxDistance: float = ...) -> Sprite:
+    def rayCast(self, startPos: Vector | _HasXY | list[float], direction: float, maxDistance: float = ...) -> Sprite:
         """
         Finds the first sprite (with a physics body) that
         intersects a ray (line).
@@ -3403,7 +3390,7 @@ class World:
         ...
 
     @overload
-    def rayCast(self, startPos: list[dict | float], endPos: list[dict | float]) -> Sprite:
+    def rayCast(self, startPos: Vector | _HasXY | list[float], endPos: Vector | _HasXY | list[float]) -> Sprite:
         """
         Finds the first sprite (with a physics body) that
         intersects a ray from startPos to endPos.
@@ -3417,11 +3404,11 @@ class World:
         """
         ...
 
-    def rayCast(self, startPos: list[dict | float], endPos: list[dict | float]) -> Sprite:
+    def rayCast(self, startPos: Vector | _HasXY | list[float], endPos: Vector | _HasXY | list[float]) -> Sprite:
         ...
 
     @overload
-    def rayCastAll(self, startPos: list[dict | float], direction: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+    def rayCastAll(self, startPos: Vector | _HasXY | list[float], direction: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
         a ray (line), sorted by distance.
@@ -3438,7 +3425,7 @@ class World:
         ...
 
     @overload
-    def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+    def rayCastAll(self, startPos: Vector | _HasXY | list[float], endPos: Vector | _HasXY | list[float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
         a ray from startPos to endPos, sorted by distance.
@@ -3453,11 +3440,11 @@ class World:
         """
         ...
 
-    def rayCastAll(self, startPos: list[dict | float], endPos: list[dict | float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+    def rayCastAll(self, startPos: Vector | _HasXY | list[float], endPos: Vector | _HasXY | list[float], limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         ...
 
     @overload
-    def circleCast(self, startPos: list[dict | float], endPos: list[dict | float], radius: float) -> Sprite:
+    def circleCast(self, startPos: Vector | _HasXY | list[float], endPos: Vector | _HasXY | list[float], radius: float) -> Sprite:
         """
         Finds the first sprite (with a physics body) that
         intersects a swept circle (capsule cast) from startPos to endPos.
@@ -3473,7 +3460,7 @@ class World:
         ...
 
     @overload
-    def circleCast(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ...) -> Sprite:
+    def circleCast(self, startPos: Vector | _HasXY | list[float], direction: float, radius: float, maxDistance: float = ...) -> Sprite:
         """
         Finds the first sprite hit by sweeping a circle in a direction.
 
@@ -3488,11 +3475,11 @@ class World:
         """
         ...
 
-    def circleCast(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ...) -> Sprite:
+    def circleCast(self, startPos: Vector | _HasXY | list[float], direction: float, radius: float, maxDistance: float = ...) -> Sprite:
         ...
 
     @overload
-    def circleCastAll(self, startPos: list[dict | float], endPos: list[dict | float], radius: float, limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+    def circleCastAll(self, startPos: Vector | _HasXY | list[float], endPos: Vector | _HasXY | list[float], radius: float, limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites (with physics bodies) that intersect
         a swept circle (capsule cast) from startPos to endPos, sorted by distance.
@@ -3509,7 +3496,7 @@ class World:
         ...
 
     @overload
-    def circleCastAll(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+    def circleCastAll(self, startPos: Vector | _HasXY | list[float], direction: float, radius: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         """
         Finds all sprites hit by sweeping a circle in a direction, sorted by distance.
 
@@ -3525,7 +3512,7 @@ class World:
         """
         ...
 
-    def circleCastAll(self, startPos: list[dict | float], direction: float, radius: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
+    def circleCastAll(self, startPos: Vector | _HasXY | list[float], direction: float, radius: float, maxDistance: float = ..., limiter: Callable[..., Any] | None = None) -> list[Sprite]:
         ...
 
     @overload
@@ -3542,10 +3529,10 @@ class World:
         ...
 
     @overload
-    def explodeAt(self, pos: dict, radius: float = ..., magnitude: float = ..., falloff: float = ...) -> None:
+    def explodeAt(self, pos: Vector | _HasXY, radius: float = ..., magnitude: float = ..., falloff: float = ...) -> None:
         ...
 
-    def explodeAt(self, pos: dict, radius: float = ..., magnitude: float = ..., falloff: float = ...) -> None:
+    def explodeAt(self, pos: Vector | _HasXY, radius: float = ..., magnitude: float = ..., falloff: float = ...) -> None:
         ...
 
     @property
@@ -3614,7 +3601,7 @@ class Camera:
     def y(self, val: float) -> None: ...
 
     @property
-    def pos(self) -> dict:
+    def pos(self) -> Vector | _HasXY:
         """
         Gets the camera's position as a readonly {x, y} object that
         won't be updated if the camera moves. Useful for saving the
@@ -3623,7 +3610,7 @@ class Camera:
         ...
 
     @pos.setter
-    def pos(self, val: list[float] | dict) -> None: ...
+    def pos(self, val: list[float] | Vector | _HasXY) -> None: ...
 
     @property
     def position(self) -> Vector:
@@ -3631,7 +3618,7 @@ class Camera:
         ...
 
     @position.setter
-    def position(self, val: list[float] | dict) -> None: ...
+    def position(self, val: list[float] | Vector | _HasXY) -> None: ...
 
     def moveTo(self, x: float, y: float, speed: float) -> Awaitable[bool]:
         """
@@ -3696,7 +3683,7 @@ class Joint:
     """
 
     @classmethod
-    def new(cls, spriteA: Sprite, spriteB: Sprite, type_: str = ...) -> 'Joint':
+    def new(cls, spriteA: Sprite, spriteB: Sprite, type_: str = ...) -> 'Joint':  # type: ignore[override]
         """
         Don't use the Joint constructor directly, use one of these
         joint constructors instead:
@@ -3743,7 +3730,7 @@ class Joint:
         ...
 
     @offsetA.setter
-    def offsetA(self, val: list | dict | Vector) -> None: ...
+    def offsetA(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def offsetB(self) -> Vector:
@@ -3757,7 +3744,7 @@ class Joint:
         ...
 
     @offsetB.setter
-    def offsetB(self, val: list | dict | Vector) -> None: ...
+    def offsetB(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def draw(self) -> Callable[..., Any]:
@@ -3842,6 +3829,11 @@ class Joint:
 
 class GlueJoint(Joint):
 
+    @classmethod
+    def new(cls, spriteA: Sprite, spriteB: Sprite) -> 'GlueJoint':  # type: ignore[override]
+        """Glue joints are used to glue two sprites together."""
+        ...
+
     def __init__(self, spriteA: Sprite, spriteB: Sprite) -> None: ...
 
     @property
@@ -3859,6 +3851,14 @@ class GlueJoint(Joint):
     def damping(self, val: float) -> None: ...
 
 class DistanceJoint(Joint):
+
+    @classmethod
+    def new(cls, spriteA: Sprite, spriteB: Sprite) -> 'DistanceJoint':  # type: ignore[override]
+        """
+        Distance joints are used to constrain the distance
+        between two sprites.
+        """
+        ...
 
     def __init__(self, spriteA: Sprite, spriteB: Sprite) -> None: ...
 
@@ -3997,6 +3997,20 @@ class DistanceJoint(Joint):
         ...
 
 class WheelJoint(Joint):
+
+    @classmethod
+    def new(cls, spriteA: Sprite, spriteB: Sprite) -> 'WheelJoint':  # type: ignore[override]
+        """
+        Wheel joints can be used to create vehicles!
+
+        By default `motorEnabled` is false, `angle` is 90 degrees,
+        `maxPower` is 1000, `springiness` is 0.1, and `damping` is 0.7.
+
+        Args:
+            spriteA: the vehicle body
+            spriteB: the wheel
+        """
+        ...
 
     def __init__(self, spriteA: Sprite, spriteB: Sprite) -> None: ...
 
@@ -4144,6 +4158,16 @@ class WheelJoint(Joint):
 
 class HingeJoint(Joint):
 
+    @classmethod
+    def new(cls, spriteA: Sprite, spriteB: Sprite) -> 'HingeJoint':  # type: ignore[override]
+        """
+        Hinge joints attach two sprites together at a pivot point,
+        constraining them to rotate around this point, like a hinge.
+
+        Also known as a revolute joint.
+        """
+        ...
+
     def __init__(self, spriteA: Sprite, spriteB: Sprite) -> None: ...
 
     @property
@@ -4261,6 +4285,16 @@ class HingeJoint(Joint):
         ...
 
 class SliderJoint(Joint):
+
+    @classmethod
+    def new(cls, spriteA: Sprite, spriteB: Sprite) -> 'SliderJoint':  # type: ignore[override]
+        """
+        A slider joint constrains the motion of two sprites to sliding
+        along a common axis, without rotation.
+
+        Also known as a prismatic joint.
+        """
+        ...
 
     def __init__(self, spriteA: Sprite, spriteB: Sprite) -> None: ...
 
@@ -4388,6 +4422,18 @@ class SliderJoint(Joint):
 
 class GrabberJoint(Joint):
 
+    @classmethod
+    def new(cls, pointer: Any, sprite: Sprite) -> 'GrabberJoint':  # type: ignore[override]
+        """
+        A Grabber joint enables you to grab sprites and move them with
+        a max force towards a target position.
+
+        Args:
+            pointer: the point at which the sprite is grabbed
+            sprite: the sprite to grab
+        """
+        ...
+
     def __init__(self, pointer: Any, sprite: Sprite) -> None: ...
 
     sprite: Sprite
@@ -4438,7 +4484,7 @@ class CastInfo:
     """The distance from the start of the cast to the intersection point."""
 
     @property
-    def intersect(self) -> dict:
+    def intersect(self) -> Vector | _HasXY:
         """The intersection point of the cast with the sprite's shape."""
         ...
 
@@ -4460,7 +4506,7 @@ class FriendlyError(Exception):
     """
 
     @classmethod
-    def new(cls, func: Any, errorNum: Any, e: Any) -> 'FriendlyError':
+    def new(cls, func: Any, errorNum: Any, e: Any) -> 'FriendlyError':  # type: ignore[override]
         ...
 
     def __init__(self, func: Any, errorNum: Any, e: Any) -> None: ...
@@ -4494,7 +4540,7 @@ class InputDevice:
         """
         Same as the `released` function, which is preferred.
 
-        .. deprecated::
+        .. deprecated:: 1.0
 
         Returns:
             true on the first frame that the user released the input
@@ -4553,7 +4599,7 @@ class Mouse(InputDevice):
     right: float
     """The mouse's right button."""
 
-    scrollDelta: dict
+    scrollDelta: Vector | _HasXY
     """Contains the scroll status of the mouse wheel."""
 
     drag: dict
@@ -4574,7 +4620,7 @@ class Mouse(InputDevice):
     """
 
     @property
-    def pos(self) -> dict:
+    def pos(self) -> Vector | _HasXY:
         """
         Gets the mouse's current position in the world as a readonly object {x, y}
         that won't updated if the mouse moves.
@@ -4582,7 +4628,7 @@ class Mouse(InputDevice):
         ...
 
     @property
-    def position(self) -> dict:
+    def position(self) -> Vector | _HasXY:
         """The mouse's current position."""
         ...
 
@@ -4661,7 +4707,7 @@ class Mouse(InputDevice):
 class Pointer(InputDevice):
 
     @classmethod
-    def new(cls, pointer: Any) -> 'Pointer':
+    def new(cls, pointer: Any) -> 'Pointer':  # type: ignore[override]
         ...
 
     def __init__(self, pointer: Any) -> None: ...
@@ -4678,7 +4724,7 @@ class Pointer(InputDevice):
     duration: float
     """The amount of frames the pointer has been active for."""
 
-    canvasPos: dict
+    canvasPos: Vector | _HasXY
     """The pointer's absolute position on the canvas."""
 
     pressure: float
@@ -4811,7 +4857,7 @@ class KeyBoard(InputDevice):
 class Contro(InputDevice):
 
     @classmethod
-    def new(cls, gp: Any | str) -> 'Contro':
+    def new(cls, gp: Any | str) -> 'Contro':  # type: ignore[override]
         """
         Stores the input status of buttons, triggers, and sticks on
         game controllers. Used internally to create controller objects
@@ -5037,7 +5083,7 @@ class Contro(InputDevice):
 class Contros(list[Contro]):
 
     @classmethod
-    def new(cls) -> 'Contros':
+    def new(cls) -> 'Contros':  # type: ignore[override]
         """
         Used internally to create the `contros` array (aka `controllers`)
         of `Contro` objects, which store the input status of buttons,
@@ -5093,13 +5139,13 @@ class Contros(list[Contro]):
         """
         ...
 
-def colorPal(c: str, palette: list[dict | str]) -> str:
+def colorPal(c: str, palette: dict[str, str] | list[str]) -> str:
     ...
 
-def EmojiImage(emoji: str, textSize: float) -> Image:
+def EmojiImage(emoji: str, textSize: float) -> Q5.Image:
     ...
 
-def spriteArt(txt: str, scale: float, palette: list[dict | str]) -> Image:
+def spriteArt(txt: str, scale: float, palette: dict[str, str] | list[str]) -> Q5.Image:
     ...
 
 def animation(ani: Ani, x: float, y: float, dW: float, dH: float) -> None:
