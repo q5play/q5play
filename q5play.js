@@ -4152,7 +4152,7 @@ async function q5playPreSetup(q) {
 	const spriteStdProps = $.Sprite.propsAll.filter((p) => !spriteSkips.has(p));
 
 	// prettier-ignore
-	const groupStructuralKeys = new Set(['add','anis','contains','Group','idNum','length','mod','mouse','p','parent','Sprite','subgroups']);
+	const groupStructuralKeys = new Set(['add','anis','contains','Group','idNum','length','mod','mouse','p','parent','Sprite','subgroups','Visual']);
 	const groupProps = [...$.Sprite.propsAll, ...groupStructuralKeys, 'autoCull', 'autoMesh', 'joinTiles', 'withSensor'];
 	const groupPropsAll = new Set([...groupProps, 'ani', 'velocity']);
 	const groupDescriptorSkips = new Set(['tile', 'scale', 'width', 'height', 'diameter']);
@@ -6922,7 +6922,7 @@ async function q5playPreSetup(q) {
 					s._rotation = Math.atan2(data[2], data[3]) * RADTODEG;
 				}
 
-				if (s.debug || (!s._hasImagery && !s._userDefinedDraw)) {
+				if (s.debug || (!isSensor && !s._hasImagery && !s._userDefinedDraw)) {
 					shapeStack.push({ type, sprite: s, isSensor, isFirstShape, data, vertexCount });
 				}
 			}
@@ -9859,10 +9859,10 @@ async function q5playPreSetup(q) {
 		}
 
 		shapeStack.sort((a, b) => {
-			const layerDiff = a.sprite.layer - b.sprite.layer;
+			const layerDiff = a.sprite._layer - b.sprite._layer;
 			if (layerDiff !== 0) return layerDiff;
-			// always draw colliders first, then sensors on top
-			return a.isSensor === b.isSensor ? 0 : a.isSensor ? 1 : -1;
+			// always draw sensors first, then colliders on top
+			return b.isSensor - a.isSensor;
 		});
 
 		let v = { x: 0, y: 0 };
@@ -9880,7 +9880,6 @@ async function q5playPreSetup(q) {
 			s._cameraActiveWhenDrawn = true;
 
 			if (!s.debug) {
-				if (isSensor) continue;
 				$.fill(s.fill);
 				if (s.stroke) {
 					$.stroke(s.stroke);
