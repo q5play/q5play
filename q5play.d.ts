@@ -796,6 +796,25 @@ declare global {
 		addSensor(offsetX: number, offsetY: number, w?: number, h?: number, roundedRadius?: number): void;
 
 		/**
+		 * Creates a contact mesh from the opaque pixels in the sprite's image, replacing
+		 * its existing colliders or sensors. The image needs a transparent background.
+		 *
+		 * Since the physics simulator can only handle convex polygons
+		 * with a maximum of 8 vertices, this function will automatically generate
+		 * enough shapes to cover the opaque pixels in the image, at least 95% by default.
+		 *
+		 * The mesh replaces existing colliders, or existing sensors if the sprite
+		 * has no colliders.
+		 *
+		 * @param {number} [minimumCoverage] the minimum coverage threshold, as a value
+		 * between 0 and 1, 0.95 by default, or the amount of shapes to generate,
+		 * as a whole number greater than or equal to 1
+		 *
+		 * @returns {Promise<number> | number} the number of shapes generated
+		 */
+		makeMesh(minimumCoverage?: number): Promise<number> | number;
+
+		/**
 		 * The mass of the sprite's physics body.
 		 */
 		get mass(): number;
@@ -807,7 +826,7 @@ declare global {
 		 * same as the sprite's position, but it can be changed with this setter.
 		 */
 		get centerOfMass(): { x: number; y: number };
-		set centerOfMass(val: { x: number; y: number });
+		set centerOfMass(val: { x: number; y: number } | number[]);
 
 		/**
 		 * If true, the center of mass of the sprite's physics body is fixed to
@@ -885,6 +904,19 @@ declare global {
 		 */
 		get rotationSpeed(): number;
 		set rotationSpeed(val: number);
+
+		/**
+		 * Angular distance per physics update for the sprite's continuous orbit
+		 * around its immediate parent group's centroid.
+		 */
+		get orbitSpeed(): number;
+		set orbitSpeed(val: number);
+
+		/**
+		 * Whether the sprite rotates as it orbits.
+		 */
+		get orbitSpin(): boolean;
+		set orbitSpin(val: boolean);
 
 		/**
 		 * The sprite's current fill color.
@@ -1143,7 +1175,7 @@ declare global {
 		 * @default {x: 1, y: 1}
 		 */
 		get scale(): number | { x: number; y: number };
-		set scale(val: number | [] | { x: number; y: number });
+		set scale(val: number | number[] | { x: number; y: number });
 
 		/**
 		 * Scales the the sprite.
@@ -1320,14 +1352,14 @@ declare global {
 		 * @default {x: 0, y: 0}
 		 */
 		get vel(): Q5.Vector;
-		set vel(val: [] | { x: number; y: number } | Q5.Vector);
+		set vel(val: number[] | { x: number; y: number } | Q5.Vector);
 
 		/**
 		 * The sprite's velocity vector {x, y}
 		 * @default {x: 0, y: 0}
 		 */
 		get velocity(): Q5.Vector;
-		set velocity(val: [] | { x: number; y: number } | Q5.Vector);
+		set velocity(val: number[] | { x: number; y: number } | Q5.Vector);
 
 		/**
 		 * Whether the sprite can be grabbed by a pointer.
@@ -1367,14 +1399,14 @@ declare global {
 		 * @param amount force magnitude
 		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
 		 */
-		applyForce(amount: number, origin?: { x: number; y: number }): void;
+		applyForce(amount: number, origin?: number[] | { x: number; y: number }): void;
 
 		/**
 		 * Applies a force vector to the sprite.
 		 * @param force force vector as an object with `x` and `y` properties or array of [x, y]
 		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
 		 */
-		applyForce(force: { x: number; y: number } | number[], origin?: { x: number; y: number }): void;
+		applyForce(force: number[] | { x: number; y: number }, origin?: number[] | { x: number; y: number }): void;
 
 		/**
 		 * Applies a force that's scaled to the sprite's mass.
@@ -1392,14 +1424,14 @@ declare global {
 		 * @param amount force magnitude
 		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
 		 */
-		applyForceScaled(amount: number, origin?: { x: number; y: number }): void;
+		applyForceScaled(amount: number, origin?: number[] | { x: number; y: number }): void;
 
 		/**
 		 * Applies a force scaled to the sprite's mass using a vector.
 		 * @param force force vector as an object with `x` and `y` properties
 		 * @param origin point (relative to the sprite) where the force is applied. Accepts an object with `x` and `y` properties.
 		 */
-		applyForceScaled(force: { x: number; y: number }, origin?: { x: number; y: number }): void;
+		applyForceScaled(force: number[] | { x: number; y: number }, origin?: number[] | { x: number; y: number }): void;
 
 		/**
 		 * Applies wind force to the sprite.
@@ -1567,6 +1599,28 @@ declare global {
 		 * @param facing rotation angle the sprite should be at when "facing" the position, default is 0
 		 */
 		rotateTowards(pos: { x: number; y: number }, tracking?: number, facing?: number): void;
+
+		/**
+		 * Applies an orbital force around the parent group's centroid.
+		 * Unlike `orbitSpeed`, this applies force rather than setting velocity,
+		 * so collisions and other forces can pull the sprite off its orbit.
+		 * Only dynamic sprites are affected, and rotation is left alone.
+		 *
+		 * @param rate target angular distance per physics update
+		 * @param maxForce maximum force applied to the sprite, 20 by default
+		 */
+		applyOrbit(rate?: number, maxForce?: number): void;
+
+		/**
+		 * Orbits the sprite by a specific angle around its parent group's centroid
+		 * at the given speed, then stops.
+		 *
+		 * @param angle total angular distance to orbit by
+		 * @param speed angular distance to orbit per physics update
+		 * @param spin if true the sprite rotates along with the orbit, default is false
+		 * @returns a lazy thenable that resolves true if the sprite completed the orbit
+		 */
+		orbit(angle: number, speed?: number, spin?: boolean): PromiseLike<boolean>;
 
 		/**
 		 * Finds the angle from this sprite to the given position.
@@ -2097,6 +2151,8 @@ declare global {
 
 		/**
 		 * Adds sprites to the group based on a tile map.
+		 * Groups with `joinTiles` enabled combine matching tiles into sprites
+		 * with horizontal-run colliders.
 		 *
 		 * @param tiles
 		 * @param x x coordinate of the top left corner of the tile map, default is -colWidth * longest row / 2
@@ -2131,6 +2187,32 @@ declare global {
 		 * @param [sprites] the sprites to add to the group
 		 */
 		constructor(...sprites: Sprite[]);
+
+		/**
+		 * Makes contact meshes for group sprites.
+		 *
+		 * The mesh is made from an image or animation assigned to the group
+		 * or one of the group's sprites. If it's not loaded yet, the mesh is
+		 * created later and existing colliders/sensors stay in place until then.
+		 *
+		 * See `sprite.makeMesh` for more info.
+		 *
+		 * Set to `true` to make meshes with at least 95% coverage of
+		 * opaque pixels in the group or group sprite's imagery.
+		 *
+		 * Set to a decimal number between `0` and `1` to manual specify
+		 * the minimum coverage. Set to a whole number (<=1) for the mesh
+		 * to have that many shapes.
+		 *
+		 * @default false
+		 */
+		autoMesh: boolean | number;
+
+		/**
+		 * If true, tiles for this group are combined into a sprite
+		 * with merged horizontal-run colliders and a baked image or animation.
+		 */
+		joinTiles: boolean;
 
 		/**
 		 * Horizontal position of group sprites.
@@ -2288,6 +2370,10 @@ declare global {
 		 * sprites drawn later appear in the foreground.
 		 *
 		 * By default, sprites are drawn in the order they were created.
+		 *
+		 * Sprites without imagery or a custom draw function are
+		 * represented by filled debug shapes, which are drawn last
+		 * for optimal performance, regardless of their layer value.
 		 */
 		layer: number;
 
@@ -2365,7 +2451,7 @@ declare global {
 		 * number. This enables users to do things like `sprite.scale *= 2`
 		 * to double the group sprites' scale.
 		 */
-		scale: number | [] | { x: number; y: number };
+		scale: number | number[] | { x: number; y: number };
 
 		/**
 		 * Wake group sprites up or put it to sleep.
@@ -2444,6 +2530,12 @@ declare global {
 		 * The width of the group sprites.
 		 */
 		width: number;
+
+		/**
+		 * If true, new group sprites will have a sensor instead of a collider.
+		 * @default false
+		 */
+		withSensor: boolean;
 
 		/**
 		 * Each group has a unique id number. Don't change it!
@@ -2611,6 +2703,22 @@ declare global {
 		 * Applies a force scaled to member masses using a vector.
 		 */
 		applyForceScaled(force: { x: number; y: number }, origin?: { x: number; y: number }): void;
+
+		/**
+		 * Force-based version of orbit around `group.centroid` that applies a force to
+		 * each sprite rather than setting velocities directly, so collisions, other
+		 * forces, or a force that is too weak can pull sprites off orbit. Call it
+		 * every frame, unlike setting `orbitSpeed`, which updates automatically.
+		 * Only dynamic sprites are affected, and rotations are left alone.
+		 *
+		 * @param rate target angular distance per physics update, 0 brings sprites to rest relative to the centroid
+		 * @param maxForce maximum force applied to each sprite, 20 by default
+		 */
+		applyOrbit(rate?: number, maxForce?: number): void;
+
+		/**
+		 * Applies wind to the group.
+		 */
 		applyWind(speed: number, angle: number, drag?: number, lift?: number): void;
 
 		/**
@@ -2647,6 +2755,35 @@ declare global {
 		 * Moves the group towards a position.
 		 */
 		moveTowards(pos: { x: number | null; y: number | null }, tracking?: number): void;
+
+		/**
+		 * Orbit center used by `orbit` and `applyOrbit`.
+		 *
+		 * Can be assigned a position object. Assign `null` to get the
+		 * default behavior, placing the centroid at the center of the group.
+		 */
+		centroid: { x: number; y: number } | [number, number] | null;
+
+		/**
+		 * Angular distance per physics update for the group's continuous orbit.
+		 * Positive values orbit clockwise; 0 stops the orbit.
+		 */
+		orbitSpeed: number;
+
+		/**
+		 * Whether the group's sprites rotate as they orbit.
+		 */
+		orbitSpin: boolean;
+
+		/**
+		 * Orbits the group's sprites by a specific angle around
+		 * `group.centroid` at the given speed, then stops.
+		 *
+		 * @param angle total angular distance to orbit by
+		 * @param speed angular distance to orbit per physics update
+		 * @param spin if true sprites rotate along with the orbit, default is false
+		 */
+		orbit(angle: number, speed?: number, spin?: boolean): PromiseLike<boolean>;
 
 		/**
 		 * Rotates each sprite in the group to a target angle. The sign of `speed`
@@ -3213,7 +3350,7 @@ declare global {
 		 * @default {x: 0, y: 0}
 		 */
 		get offsetA(): Q5.Vector;
-		set offsetA(val: [] | { x: number; y: number } | Q5.Vector);
+		set offsetA(val: number[] | { x: number; y: number } | Q5.Vector);
 
 		/**
 		 * Offset to the joint's anchorB position from the center of spriteB.
@@ -3222,7 +3359,7 @@ declare global {
 		 * @default {x: 0, y: 0}
 		 */
 		get offsetB(): Q5.Vector;
-		set offsetB(val: [] | { x: number; y: number } | Q5.Vector);
+		set offsetB(val: number[] | { x: number; y: number } | Q5.Vector);
 
 		/**
 		 * Function that draws the joint. Can be overridden by the user.

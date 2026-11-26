@@ -12,12 +12,12 @@
  *       |__/          |__/                     \______/
  *
  * @package q5play
- * @version 4.5
+ * @version 4.6
  * @author quinton-ashley
  * @website https://q5play.org
  */
 
-let q5play_version = '4.5';
+let q5play_version = '4.6';
 
 if (typeof globalThis.Q5 == 'undefined' && typeof globalThis.p5 == 'undefined') {
 	throw new Error('q5play requires q5 to be loaded first. Visit https://q5js.org to learn more.');
@@ -144,8 +144,6 @@ async function q5playPreSetup(q) {
 		b2Shape_GetBounds,
 		b2Shape_GetContactCapacity,
 		b2Shape_GetContactData,
-
-		// get closest point on the shape to a target point
 		b2Shape_GetClosestPoint,
 
 		/* Chain */
@@ -248,6 +246,8 @@ async function q5playPreSetup(q) {
 			this.groupsCreated = 0;
 			this.spritesCreated = 0;
 			this.spritesDrawn = 0;
+			// settles when the latest in-progress Sprite.makeMesh call is done, else null
+			this._meshTail = null;
 			this.images = {};
 			this.palettes = [];
 			this.emojiScale = 1;
@@ -674,9 +674,12 @@ async function q5playPreSetup(q) {
 			this._isSensor = false;
 			this._isCollider = true;
 
-			this._density = sprite.density || 1;
-			this._friction = sprite.friction || 0.5;
-			this._restitution = sprite.bounciness || 0.2;
+			// same as the sprite's first collider, or else the props stored on the
+			// sprite. They're checked for undefined, not falsy, so an explicit 0 is kept
+			const first = sprite.colliders[0];
+			this._density = first?._density ?? sprite._density ?? 1;
+			this._friction = first?._friction ?? sprite._friction ?? 0.5;
+			this._restitution = first?._restitution ?? sprite._bounciness ?? 0.2;
 			this._rollingResistance = 0;
 			this._tangentSpeed = 0;
 
@@ -790,6 +793,7 @@ async function q5playPreSetup(q) {
 			}
 			this._img = this._extendImage(val);
 			this._hasImagery = true;
+			this._makeAutoMesh?.();
 		}
 
 		get image() {
@@ -819,6 +823,7 @@ async function q5playPreSetup(q) {
 			let img = await $.loadImage(val);
 			this._img = this._extendImage(img);
 			this._hasImagery = true;
+			this._makeAutoMesh?.();
 		}
 
 		addAni() {
@@ -881,7 +886,7 @@ async function q5playPreSetup(q) {
 			return Promise.all(loaders);
 		}
 
-		changeAni(name) {
+		_getAni(name) {
 			let ani = this.anis[name];
 			if (!ani) {
 				const groups = this.groups;
@@ -894,15 +899,21 @@ async function q5playPreSetup(q) {
 					let v = this._visuals;
 					ani = v._anis?.[name];
 				}
-				if (ani) ani = ani.clone();
-				else return error('Ani not found: ' + name);
-				this._hasImagery = true;
+				if (ani) {
+					ani = ani.clone();
+					ani.name = name;
+					this.anis[name] = ani;
+				}
 			}
+			return ani;
+		}
+
+		changeAni(name) {
+			let ani = this._getAni(name);
+			if (!ani) return error('Ani not found: ' + name);
 			// reset to frame 0 of that animation
 			if (this.resetAniOnChange) ani._frame = 0;
-			ani.name = name;
 			this.ani = ani;
-			this.anis[name] = ani;
 		}
 
 		playAni(name) {
@@ -1004,7 +1015,7 @@ async function q5playPreSetup(q) {
 				args.splice(0, 1);
 			}
 
-			let group, ani;
+			let group, imagery;
 
 			// first arg was a group to add the sprite to
 			// used internally by the group.Sprite class
@@ -1013,12 +1024,14 @@ async function q5playPreSetup(q) {
 				args.splice(0, 1);
 			}
 
+			withSensor ||= group?.withSensor;
+
 			// first arg is a Ani, animation name, or Q5.Image
 			if (
 				args[0] !== undefined &&
 				(typeof args[0] == 'string' || args[0] instanceof $.Ani || args[0] instanceof Q5.Image)
 			) {
-				ani = args[0];
+				imagery = args[0];
 				args.splice(0, 1);
 			}
 
@@ -1081,6 +1094,17 @@ async function q5playPreSetup(q) {
 			this._overlappers = {};
 
 			group ??= $.allSprites;
+			if (group.physics !== null) {
+				for (let g = group; g; g = $.q5play.groups[g.parent]) {
+					if (g.autoMesh) {
+						this._meshGroup = g;
+						this._meshCoverage = g.autoMesh === true ? 0.95 : g.autoMesh;
+						this._meshCollider = !withSensor;
+						break;
+					}
+					if (g._isAllSpritesGroup) break;
+				}
+			}
 			this.parent = group._uid;
 
 			this._tile = '';
@@ -1104,7 +1128,7 @@ async function q5playPreSetup(q) {
 						return _this.y;
 					},
 					set(val) {
-						_this.x = val;
+						_this.y = val;
 					}
 				}
 			});
@@ -1233,21 +1257,21 @@ async function q5playPreSetup(q) {
 			this.pos = { x, y };
 
 			if (!group._isAllSpritesGroup) {
-				if (!ani) {
+				if (!imagery) {
 					for (let _ani in group._anis) {
-						ani = _ani;
+						imagery = _ani;
 						break;
 					}
 					// Fallback to group image
-					if (!ani) {
-						ani = group._img;
-						if (typeof ani == 'function') {
-							ani = ani(group.length);
+					if (!imagery) {
+						imagery = group._img;
+						if (typeof imagery == 'function') {
+							imagery = imagery(group.length);
 						}
-						if (ani) this._img = true;
 					}
 				}
-			} // temporarily add all the groups the sprite belongs to,
+			}
+			// temporarily add all the groups the sprite belongs to,
 			// since the next section of code could potentially load an
 			// animation from one of the sprite's groups
 			for (let g = group; g; g = $.q5play.groups[g.parent]) {
@@ -1255,25 +1279,21 @@ async function q5playPreSetup(q) {
 			}
 			this.groups.reverse();
 
-			if (ani) {
+			if (imagery) {
 				this._hasImagery = true;
 
-				if (this._img || ani instanceof Q5.Image) {
-					if (typeof ani != 'string') this.image = ani;
-					else this.image = new $.EmojiImage(ani, w);
+				let v;
+				if (typeof imagery == 'string') {
+					let ani = this._getAni(imagery);
+					if (ani) v = this.ani = ani;
+					else if (imagery.length > 1 && imagery.includes('.')) {
+						v = this.img = imagery; // if image url
+					} else v = this.img = new $.EmojiImage(imagery, w);
+				} else if (imagery instanceof Q5.Image) v = this.img = imagery;
 
-					if (!w && (this._img.w != 1 || this._img.h != 1)) {
-						w = this._img.defaultWidth || this._img.w;
-						h ??= this._img.defaultHeight || this._img.h;
-					}
-				} else {
-					if (typeof ani == 'string') this.changeAni(ani);
-					else this.ani = ani.clone();
-
-					if (!w && (this.ani.w != 1 || this.ani.h != 1)) {
-						w = this.ani.defaultWidth || this.ani.w;
-						h ??= this.ani.defaultHeight || this.ani.h;
-					}
+				if (v && !w && (v.w != 1 || v.h != 1)) {
+					w = v.defaultWidth || v.w;
+					h ??= v.defaultHeight || v.h;
 				}
 			}
 
@@ -1335,8 +1355,11 @@ async function q5playPreSetup(q) {
 					args[3] = h;
 					args[4] ??= rr;
 				}
-				if (withSensor) this.addSensor(...args);
-				else this.addCollider(...args);
+				let meshed = this._meshGroup && this._getMeshImg() ? this.makeMesh(this._meshCoverage) : 0;
+				if (!meshed) {
+					if (withSensor) this.addSensor(...args);
+					else this.addCollider(...args);
+				}
 			}
 
 			this.prevX = x;
@@ -1360,7 +1383,7 @@ async function q5playPreSetup(q) {
 
 			// inherit properties from group in the order they were added
 			// skip props that were already set above
-			for (let prop of spriteStdInheritedProps) {
+			for (let prop of spriteStdProps) {
 				let val = group[prop];
 				if (val === undefined) continue;
 				if (typeof val == 'function' && isArrowFunction(val)) {
@@ -1389,7 +1412,7 @@ async function q5playPreSetup(q) {
 						if (!Object.prototype.hasOwnProperty.call(g, prop)) continue;
 						let c = prop.charCodeAt(0);
 						// exclude numeric array indices, built-in group keys, and private internals
-						if ((c >= 48 && c <= 57) || groupKeys[prop] || prop[0] == '_') {
+						if ((c >= 48 && c <= 57) || groupPropsAll.has(prop) || prop[0] == '_') {
 							continue;
 						}
 						keys.push(prop);
@@ -1428,6 +1451,7 @@ async function q5playPreSetup(q) {
 
 			this._textFill ??= $.color(0);
 			this._textSize ??= $.canvas ? $.textSize() : 12;
+			this._autoMeshReady = true;
 		}
 
 		static withSensor(x, y, w, h, physicsType) {
@@ -1464,6 +1488,242 @@ async function q5playPreSetup(q) {
 			} finally {
 				center?.delete();
 			}
+		}
+
+		_getMeshImg() {
+			let ani = this.ani;
+			let frame = ani?.[ani._frame];
+			return this.mask || this._img || (frame instanceof Q5.Image ? frame : ani?.spriteSheet);
+		}
+
+		makeMesh(minimumCoverage = 0.95) {
+			if (this._deleted) return 0;
+
+			const img = this._getMeshImg();
+			if (!img) {
+				warn("Can't make a mesh for a sprite that doesn't have an image or animation.");
+				return 0;
+			}
+
+			// decided now, not when the mesh is ready: replaces the sprite's current shapes
+			const asCollider = this._meshCollider ?? this.colliders.length > 0;
+			const q = $.q5play;
+			const call = (this._meshCall = {
+				asCollider,
+				replace: (asCollider ? this.colliders : this.sensors).slice(),
+				// Calls wait for earlier pending calls before making shapes, because Box2D
+				// results depend on creation order for overlapping shapes. Keeps it deterministic.
+				after: q._meshTail
+			});
+
+			let result =
+				img.w == 1 && img.h == 1
+					? (img.promise || img).then((image) => this._makeMesh(minimumCoverage, image, call))
+					: this._makeMesh(minimumCoverage, img, call);
+
+			if (typeof result?.then == 'function') {
+				// never rejects, so a failure can't break loadAll(), which includes the mesh
+				result = result.catch((e) => {
+					warn('Sprite.makeMesh failed: ' + (e?.message ?? e));
+					return 0;
+				});
+				$._loaders?.push(result);
+
+				const tail = (q._meshTail = result.then(() => {
+					if (q._meshTail === tail) q._meshTail = null;
+				}));
+			}
+			return Promise.resolve(result);
+		}
+
+		_makeMesh(coverage, img, call) {
+			const ani = this.ani,
+				frame = ani?.[ani._frame],
+				frameIsImage = frame instanceof Q5.Image;
+			if (!this.mask && !this._img && frameIsImage) img = frame;
+
+			const px = getImageRGBA(img, ani && !frameIsImage ? frame : null);
+			const cacheTarget = ani ? frame : img;
+			const cache = () => cacheTarget?._outlineColliderCache;
+			if (cacheTarget) cacheTarget._outlineColliderCache = (!px.refreshed && cache()) || new Map();
+			let polys = cache()?.get(coverage);
+
+			const finish = (polygons) => {
+				// wait for earlier makeMesh calls to finish
+				const { after } = call;
+				if (after) {
+					call.after = null;
+					return after.then(() => finish(polygons));
+				}
+				if (this._deleted || !polygons.length || call !== this._meshCall) return 0;
+
+				const makeColliders = call.asCollider;
+				const replaced = call.replace.filter((shape) => this._shapes.includes(shape));
+
+				// New shapes get the physics props stored on the sprite, but props set directly
+				// on a replaced shape take priority. They're written to the shape def before the
+				// shape is created, so an explicit 0 is kept.
+				const prev = replaced[0],
+					density = prev?._density ?? this._density,
+					friction = prev?._friction ?? this._friction,
+					restitution = prev?._restitution ?? this._bounciness,
+					rolling = prev?._rollingResistance ?? this._rollingResistance,
+					tangent = prev?._tangentSpeed ?? this._surfaceSpeed,
+					contactEvents = prev?._areContactEventsEnabled,
+					preSolveEvents = prev?._arePreSolveEventsEnabled;
+
+				// changing the shapes resets the mass, so keep one set by the user
+				const userMass = this._massUndef ? undefined : this.mass;
+
+				for (const shape of replaced) shape.delete();
+				if (!makeColliders && !this.sensors.length) this._hasSensors = false;
+
+				// displayed image size, scale, and offset
+				let dw = img.defaultWidth ?? img.width ?? px.w,
+					dh = img.defaultHeight ?? img.height ?? px.h,
+					sx = img._scale?.x ?? 1,
+					sy = img._scale?.y ?? 1,
+					ox = img.offset?.x ?? 0,
+					oy = img.offset?.y ?? 0;
+
+				if (ani && !this._img) {
+					if (ani.defaultWidth > 1) {
+						dw = ani.defaultWidth;
+						dh = ani.defaultHeight;
+					}
+					sx = ani._scale._x;
+					sy = ani._scale._y;
+					ox = ani._offset.x;
+					oy = ani._offset.y;
+				}
+				const kx = (dw / px.w) * sx,
+					ky = (dh / px.h) * sy;
+
+				// the sprite's own scale, applied to its shapes when it's set
+				const scx = this._scale?._x ?? 1,
+					scy = this._scale?._y ?? 1;
+
+				const shapes = this._shapes,
+					bdID = this.bdID,
+					startingShapeCount = shapes.length;
+
+				if (makeColliders && this.watch) this.mod[19] = true;
+				const center = this.fixedCenterOfMass ? b2Body_GetLocalCenter(bdID) : null;
+				try {
+					for (const poly of polygons) {
+						if (shapes.length >= $.Sprite.maxColliders) {
+							if (!this._warnedMaxColliders) {
+								warn(
+									`Sprite has ${shapes.length} colliders and sensors, which is greater than Sprite.maxColliders. Increasing the limit may cause performance issues.`
+								);
+								this._warnedMaxColliders = true;
+							}
+							break;
+						}
+
+						// image pixels to Box2D meters, centered on the sprite
+						const verts = poly.map((p) => ({
+							x: (((p.x - px.w * 0.5) * kx + ox) * scx) / meterSize,
+							y: (((p.y - px.h * 0.5) * ky + oy) * scy) / meterSize
+						}));
+						// skip slivers that Box2D would collapse
+						if (getOutlineLib().minWidth(verts) < linearSlop * 2) continue;
+
+						const shape = makeColliders ? new Collider(this) : new Sensor(this);
+						shape._isFirstShape = shapes.length === 0;
+						shape._packData();
+						if (makeColliders) {
+							const def = shape.def,
+								mat = def.material;
+							if (density !== undefined) shape._density = def.density = density;
+							if (friction !== undefined) shape._friction = mat.friction = friction;
+							if (restitution !== undefined) shape._restitution = mat.restitution = restitution;
+							if (rolling !== undefined) shape._rollingResistance = mat.rollingResistance = rolling;
+							if (tangent !== undefined) shape._tangentSpeed = mat.tangentSpeed = tangent;
+						}
+
+						const hull = b2ComputeHull(verts);
+						try {
+							if (hull.count !== undefined && hull.count < 3) {
+								shape.dispose();
+								continue;
+							}
+							const geom = b2MakePolygon(hull, 0);
+							const id = b2CreatePolygonShape(bdID, shape.def, geom);
+							shape._init(id, 1, geom);
+							if (makeColliders) {
+								if (contactEvents) shape._enableContactEvents();
+								if (preSolveEvents) shape._enablePreSolveEvents();
+								this._applyEventFlags(shape);
+							}
+							shapes.push(shape);
+							shapeDict[id.index1] = shape;
+						} finally {
+							hull.delete();
+						}
+					}
+					if (center) this._fixCenterOfMass(center);
+				} finally {
+					center?.delete();
+				}
+
+				if (userMass !== undefined && shapes.length > startingShapeCount) this.mass = userMass;
+
+				if (!startingShapeCount && shapes.length) {
+					this._hw = (this._w = dw) * 0.5;
+					this._hh = (this._h = dh) * 0.5;
+					this._roundedRadius = 0;
+				}
+
+				// the new shapes are all colliders or all sensors
+				const made = shapes.length - startingShapeCount;
+				(makeColliders ? this.colliders : this.sensors).push(...shapes.slice(startingShapeCount));
+				if (!makeColliders && made) this._hasSensors = true;
+
+				// default sensors are copies of the colliders, so they need to be made again
+				if (makeColliders && made) {
+					const defaults = this.sensors.filter((sensor) => sensor._isDefaultSensor);
+					if (defaults.length) {
+						for (const sensor of defaults) sensor.delete();
+						if (!this.sensors.length) this._hasSensors = false;
+						this.addDefaultSensors();
+					}
+				}
+				return made;
+			};
+
+			if (polys) return polys.then ? polys.then(finish) : finish(polys);
+
+			const alpha = getImageAlpha(px.data);
+			const worker = getOutlineWorker();
+			if (!worker) {
+				polys = getOutlineLib().computeImageOutlineShapes(alpha, px.w, px.h, coverage);
+				cache()?.set(coverage, polys);
+				return finish(polys);
+			}
+			const outlinePromise = computeOutlineShapesInWorker(worker, alpha, px.w, px.h, coverage).then(
+				(computed) => {
+					cache()?.set(coverage, computed);
+					return computed;
+				},
+				(error) => {
+					cache()?.delete(coverage);
+					throw error;
+				}
+			);
+			cache()?.set(coverage, outlinePromise);
+			return outlinePromise.then(finish);
+		}
+
+		// enables the collision events that collides, overlaps, passes, etc. need
+		// on a collider that was made after they were set up
+		_applyEventFlags(shape) {
+			if (this._areContactEventsEnabled) shape._enableContactEvents();
+			if (this._arePreSolveEventsEnabled) shape._enablePreSolveEvents();
+		}
+
+		_makeAutoMesh() {
+			if (this._autoMeshReady && this._meshGroup) this.makeMesh(this._meshCoverage);
 		}
 
 		_fixCenterOfMass(center) {
@@ -1771,6 +2031,7 @@ async function q5playPreSetup(q) {
 					this._hasSensors = true;
 				} else {
 					this.colliders.push(newShape);
+					this._applyEventFlags(newShape);
 				}
 			}
 		}
@@ -1835,12 +2096,16 @@ async function q5playPreSetup(q) {
 			b2Body_EnableSleeping(this.bdID, val);
 		}
 
+		// Physics props like bounciness are stored on the sprite as well as
+		// on its colliders. So they can be set while the sprite has no
+		// colliders, like when its mesh is still being made, and are used by
+		// the colliders made later.
 		get bounciness() {
-			if (!this.colliders.length) return 0;
-			return this.colliders[0].bounciness;
+			return this.colliders[0]?.bounciness ?? this._bounciness ?? 0;
 		}
 		set bounciness(val) {
 			if (this.watch) this.mod[7] = true;
+			this._bounciness = val;
 			for (let collider of this.colliders) {
 				collider.bounciness = val;
 			}
@@ -2008,11 +2273,11 @@ async function q5playPreSetup(q) {
 		}
 
 		get density() {
-			if (!this._shapes.length) return 1;
-			return this._shapes[0].density;
+			return this._shapes[0]?.density ?? this._density ?? 1;
 		}
 		set density(val) {
 			if (this.watch) this.mod[11] = true;
+			this._density = val;
 			for (let shape of this._shapes) {
 				shape.density = val;
 			}
@@ -2076,11 +2341,11 @@ async function q5playPreSetup(q) {
 		}
 
 		get friction() {
-			if (!this.colliders.length) return 0.5;
-			return this.colliders[0].friction;
+			return this.colliders[0]?.friction ?? this._friction ?? 0.5;
 		}
 		set friction(val) {
 			if (this.watch) this.mod[14] = true;
+			this._friction = val;
 			for (let collider of this.colliders) {
 				collider.friction = val;
 			}
@@ -2201,11 +2466,11 @@ async function q5playPreSetup(q) {
 		}
 
 		get rollingResistance() {
-			if (!this.colliders.length) return 0;
-			return this.colliders[0].rollingResistance;
+			return this.colliders[0]?.rollingResistance ?? this._rollingResistance ?? 0;
 		}
 		set rollingResistance(val) {
 			if (this.watch) this.mod[27] = true;
+			this._rollingResistance = val;
 			for (let collider of this.colliders) {
 				collider.rollingResistance = val;
 			}
@@ -2364,6 +2629,7 @@ async function q5playPreSetup(q) {
 				if (newSurfaceSpeed) sh.surfaceSpeed = newSurfaceSpeed;
 				shapes.push(sh);
 				this.colliders.push(sh);
+				this._applyEventFlags(sh);
 				shapeDict[segID.index1] = sh;
 			}
 		}
@@ -2437,14 +2703,14 @@ async function q5playPreSetup(q) {
 		}
 
 		get surfaceSpeed() {
-			if (!this.colliders.length) return 0;
-			return this.colliders[0].surfaceSpeed;
+			return this.colliders[0]?.surfaceSpeed ?? this._surfaceSpeed ?? 0;
 		}
 		set surfaceSpeed(val) {
 			if (this.watch) this.mod[21] = true;
 			if (this._hasCapsuleChain) {
 				return error('Can not set surfaceSpeed of a capsule chain.');
 			}
+			this._surfaceSpeed = val;
 			if (this._hasChain) this._chain.surfaceSpeed = val;
 			for (let collider of this.colliders) {
 				collider.surfaceSpeed = val;
@@ -2838,9 +3104,13 @@ async function q5playPreSetup(q) {
 				this._destRot = this._destRotArrivalTime = undefined;
 			}
 
-			if (!this._physicsEnabled && !this._deleted) return;
+			if (!this._physicsEnabled && !this._deleted) {
+				this._stepOrbit();
+				return;
+			}
 
 			this.__step();
+			this._stepOrbit();
 		}
 
 		//      a -> b
@@ -3059,7 +3329,7 @@ async function q5playPreSetup(q) {
 		}
 
 		_parseForceArgs() {
-			let args = arguments;
+			let args = [...arguments];
 			if (typeof args[0] == 'number' && (args.length == 1 || typeof args[1] != 'number')) {
 				args[3] = args[2];
 				args[2] = args[1];
@@ -3114,7 +3384,7 @@ async function q5playPreSetup(q) {
 			let b = x - this.x;
 			let c = Math.sqrt(a * a + b * b);
 
-			let percent = force / c;
+			let percent = (force || 1) / c;
 
 			let forceVector = FORCE_VEC.Set(b * percent, a * percent);
 			b2Body_ApplyForceToCenter(this.bdID, forceVector, true);
@@ -3132,7 +3402,7 @@ async function q5playPreSetup(q) {
 				y = pos.y;
 				x = pos.x;
 			}
-			this.attractTo(x, y, -force);
+			this.attractTo(x, y, -(force || 1));
 		}
 
 		applyTorque(val) {
@@ -3150,7 +3420,6 @@ async function q5playPreSetup(q) {
 			if (!distance) return;
 
 			if (typeof direction == 'string') {
-				directionNamed = true;
 				this._heading = direction;
 				direction = this._getDirectionAngle(direction);
 			}
@@ -3364,6 +3633,139 @@ async function q5playPreSetup(q) {
 			this.rotationSpeed = angle * tracking;
 		}
 
+		_applyOrbit(orbitStep, rate, maxForce) {
+			if (this._phys != 0 || !this._physicsEnabled || !(maxForce > 0)) return;
+
+			const a = rate * 60 * orbitStep.dt;
+			const cosM1 = $.cos(a) - 1;
+			const sin = $.sin(a);
+			const maxSq = maxForce * maxForce;
+
+			const dx = this.x - orbitStep.cx;
+			const dy = this.y - orbitStep.cy;
+			const m = this.mass * orbitStep.gain;
+
+			if (!this._velSynced) this._syncVel();
+			let fx = ((cosM1 * dx - sin * dy) * orbitStep.k + orbitStep.cvx - this.vx) * m;
+			let fy = ((sin * dx + cosM1 * dy) * orbitStep.k + orbitStep.cvy - this.vy) * m;
+
+			const magSq = fx * fx + fy * fy;
+			if (magSq > maxSq) {
+				const scale = maxForce / Math.sqrt(magSq);
+				fx *= scale;
+				fy *= scale;
+			}
+
+			b2Body_ApplyForceToCenter(this.bdID, FORCE_VEC.Set(fx, fy), true);
+		}
+
+		applyOrbit(rate = 1, maxForce = 20) {
+			this._applyOrbit(this.groups.at(-1)?._getOrbitStep(), rate, maxForce);
+		}
+
+		get orbitSpeed() {
+			return this._orbitSpeed ?? 0;
+		}
+
+		set orbitSpeed(val) {
+			this._endOrbitBy(false);
+			this._orbitSpeed = val;
+			if (val === 0) this._orbitStop(this._orbitSpin);
+		}
+
+		get orbitSpin() {
+			return this._orbitSpin ?? false;
+		}
+
+		set orbitSpin(val) {
+			this._orbitSpin = !!val;
+			if (!this._orbitSpin && !this._deleted) this.rotationSpeed = 0;
+		}
+
+		_endOrbitBy(completed) {
+			const s = this._orbitState;
+			if (!s) return;
+			this._orbitState = null;
+			if (s.resolve) {
+				s.resolve(completed);
+				s.resolve = null;
+			}
+		}
+
+		_orbitStop(spin = false) {
+			if (this._deleted) return;
+			this._setVel(0, 0);
+			if (spin) this.rotationSpeed = 0;
+		}
+
+		_orbitVel(speed = 0, spin = false) {
+			if (this._deleted) return;
+			const orbitStep = this.groups.at(-1)?._getOrbitStep();
+			if (!orbitStep) return;
+
+			const a = speed * 60 * orbitStep.dt;
+			const cosM1 = $.cos(a) - 1;
+			const sin = $.sin(a);
+			const dx = this.x - orbitStep.cx;
+			const dy = this.y - orbitStep.cy;
+
+			this._setVel(
+				(cosM1 * dx - sin * dy) * orbitStep.k + orbitStep.cvx,
+				(sin * dx + cosM1 * dy) * orbitStep.k + orbitStep.cvy
+			);
+			this.rotationSpeed = spin ? speed : 0;
+		}
+
+		_orbitNext() {
+			const s = this._orbitState;
+			if (!s) return;
+			if (s.left <= 0 || this._deleted) {
+				this._orbitStop(s.spin);
+				this._endOrbitBy(!this._deleted);
+				return;
+			}
+			const dt = $.world._timeStep || 1 / 60;
+			const step = Math.min(s.left, Math.abs(s.speed) * 60 * dt);
+			s.left -= step;
+			this._orbitVel((step * s.dir) / (60 * dt), s.spin);
+		}
+
+		orbit(angle, speed = 1, spin = false) {
+			this._endOrbitBy(false);
+			this._orbitStop(this._orbitSpin);
+			this._orbitSpeed = 0;
+
+			if (!angle || !speed || this._deleted) {
+				this._orbitStop(spin);
+				const reached = !angle && !this._deleted;
+				if ($._py) return Promise.resolve(reached);
+				return { then: (onFulfilled) => onFulfilled(reached) };
+			}
+
+			const state = {
+				left: Math.abs(angle),
+				dir: Math.sign(angle),
+				speed: Math.abs(speed),
+				spin: !!spin
+			};
+			this._orbitState = state;
+			this._orbitNext();
+
+			if ($._py) return new Promise((resolve) => (state.resolve = resolve));
+
+			return {
+				then: (onFulfilled) => {
+					state.resolve = onFulfilled;
+				}
+			};
+		}
+
+		_stepOrbit() {
+			if (this._deleted) return;
+			if (this._orbitState) this._orbitNext();
+			else if (this._orbitSpeed) this._orbitVel(this._orbitSpeed, this._orbitSpin);
+		}
+
 		transformTowards(x, y, rotation, tracking = 0.1) {
 			if (x === undefined) return;
 
@@ -3392,6 +3794,7 @@ async function q5playPreSetup(q) {
 		delete() {
 			if (this._deleted) return;
 			this._deleted = true;
+			this._endOrbitBy(false);
 			if (this.watch) this.mod[23] = true;
 
 			this.joints.deleteAll();
@@ -3497,10 +3900,13 @@ async function q5playPreSetup(q) {
 		_ensureCollide(target) {
 			this._ensureContactRelationship(target, 0);
 
+			// the flags are also used for colliders made later, like a mesh
+			// that isn't ready yet, see _applyEventFlags
 			if (!this._areContactEventsEnabled) {
 				for (let collider of this.colliders) {
 					collider._enableContactEvents();
 				}
+				this._areContactEventsEnabled = true;
 			}
 			if (!target._areContactEventsEnabled) {
 				if (target._isGroup) {
@@ -3508,11 +3914,13 @@ async function q5playPreSetup(q) {
 						for (let collider of s.colliders) {
 							collider._enableContactEvents();
 						}
+						s._areContactEventsEnabled = true;
 					}
 				} else {
 					for (let collider of target.colliders) {
 						collider._enableContactEvents();
 					}
+					target._areContactEventsEnabled = true;
 				}
 			}
 		}
@@ -3609,17 +4017,23 @@ async function q5playPreSetup(q) {
 		}
 
 		addDefaultSensors() {
-			if (this.colliders.length == 0) return this.addSensor(0, 0, 50, 50);
+			if (this.colliders.length == 0) {
+				this.addSensor(0, 0, 50, 50);
+				const sensor = this.sensors.at(-1);
+				if (sensor) sensor._isDefaultSensor = true;
+				return;
+			}
 
 			let bdID = this.bdID;
 			for (let collider of this.colliders) {
 				let shape = new Sensor(this);
+				shape._isDefaultSensor = true;
 				shape._packData();
 
 				let type = collider.type,
 					geom,
 					id;
-				if (type == 0) {
+				if (type == 0 || type == 1) {
 					const source = collider.geom;
 					geom = new b2Polygon();
 					geom.count = source.count;
@@ -3640,7 +4054,7 @@ async function q5playPreSetup(q) {
 						}
 					}
 					id = b2CreatePolygonShape(bdID, shape.def, geom);
-					shape._init(id, 0, geom);
+					shape._init(id, type, geom);
 				} else if (type == 3) {
 					const source = collider.geom;
 					geom = new b2Circle();
@@ -3732,38 +4146,17 @@ async function q5playPreSetup(q) {
 
 	$.Sprite.types = [$.DYN, $.STA, $.KIN];
 
+	// prettier-ignore
+	const spriteSkips = new Set(['ani','d','diameter','h','height','physics','scale','tile','w','width','vel','x','y','roundedRadius']);
 	// exclude props that are inherited in a special way or not traits
-	const spriteStdInheritedProps = $.Sprite.propsAll.filter(
-		// prettier-ignore
-		(p) =>
-			!['ani', 'd', 'diameter', 'h', 'height', 'physics', 'scale', 'tile', 'w', 'width', 'vel', 'x', 'y', 'roundedRadius'].includes(p)
-	);
+	const spriteStdProps = $.Sprite.propsAll.filter((p) => !spriteSkips.has(p));
 
-	let groupKeys = {};
-
-	{
-		const props = $.Sprite.propsAll.concat([
-			'add',
-			'ani',
-			'anis',
-			'autoCull',
-			'contains',
-			'Group',
-			'idNum',
-			'length',
-			'mod',
-			'mouse',
-			'p',
-			'parent',
-			'Sprite',
-			'subgroups',
-			'velocity'
-		]);
-
-		for (let prop of props) {
-			groupKeys[prop] = true;
-		}
-	}
+	// prettier-ignore
+	const groupStructuralKeys = new Set(['add','anis','contains','Group','idNum','length','mod','mouse','p','parent','Sprite','subgroups']);
+	const groupProps = [...$.Sprite.propsAll, ...groupStructuralKeys, 'autoCull', 'autoMesh', 'joinTiles', 'withSensor'];
+	const groupPropsAll = new Set([...groupProps, 'ani', 'velocity']);
+	const groupDescriptorSkips = new Set(['tile', 'scale', 'width', 'height', 'diameter']);
+	const groupStdProps = groupProps.filter((k) => !groupStructuralKeys.has(k) && !groupDescriptorSkips.has(k));
 
 	$.Ani = class extends Array {
 		constructor() {
@@ -3783,6 +4176,7 @@ async function q5playPreSetup(q) {
 				this._addedToSpriteOrGroup = true;
 			}
 			owner ??= $.allSprites;
+			this.owner = owner;
 
 			let anis = owner.anis;
 
@@ -4185,13 +4579,10 @@ async function q5playPreSetup(q) {
 		get frameImage() {
 			let f = this._frame;
 			let img = this[f];
-			if (img instanceof Q5.Image) return img;
+			if (!img || img instanceof Q5.Image) return img;
 
-			let { x, y, w, h } = img; // image info
-
-			let image = $.createImage(w, h);
-			image.copy(this.spriteSheet, this._offset.x, this._offset.y, w, h, x, y, w, h);
-			return image;
+			let { x, y, w, h } = img;
+			return this.spriteSheet.get(this._offset.x, this._offset.y, w, h, x, y, w, h);
 		}
 
 		get w() {
@@ -4386,7 +4777,7 @@ async function q5playPreSetup(q) {
 				if (!val.includes('.')) {
 					val = new $.EmojiImage(val, this.w || this.width || this.d || this.diameter);
 				} else if (using_p5) {
-					return $.Visual.prototype._setP5Img(val);
+					return $.Visual.prototype._setP5Img.call(this, val);
 				} else val = $.loadImage(val);
 			}
 			this._img = $.Visual.prototype._extendImage(val);
@@ -4463,32 +4854,78 @@ async function q5playPreSetup(q) {
 				tiles = tiles.split('\n');
 			}
 
+			let joinedTiles = new Map();
+			let longestRow = 0;
+			for (let row of tiles) longestRow = Math.max(longestRow, row.length);
+
+			const getGroupSource = (group) => {
+				for (let name in group._anis) {
+					if (group._anis[name] instanceof $.Ani) return group._anis[name];
+				}
+				return group._img || group.ani;
+			};
+
+			const getTileSize = (tile) => {
+				let source = tile._isAni ? tile : tile._isGroup ? getGroupSource(tile) : tile._img || tile.ani;
+				if (typeof source == 'function') source = source(tile.length);
+				return {
+					width: tile.w || source?.defaultWidth || source?.w,
+					height: tile.h || source?.defaultHeight || source?.h
+				};
+			};
+
 			for (let row = 0; row < tiles.length; row++) {
+				let runGroup = null;
+				let runCells = [];
+
+				const finishRun = () => {
+					if (runGroup && runCells.length) {
+						if (!joinedTiles.has(runGroup)) joinedTiles.set(runGroup, []);
+						joinedTiles.get(runGroup).push({ row, cells: runCells });
+					}
+					runGroup = null;
+					runCells = [];
+				};
+
 				for (let col = 0; col < tiles[row].length; col++) {
 					let t = tiles[row][col],
 						tile = tileDict[t];
 
-					if (!tile) continue;
-
-					if (colWidth == undefined) {
-						colWidth = tile.w || tile.ani.w;
-						rowHeight = tile.h || tile.ani.h;
+					if (!tile) {
+						finishRun();
+						continue;
 					}
 
+					let size = getTileSize(tile);
+					colWidth ??= size.width;
+					rowHeight ??= size.height;
+
 					if (x === undefined) {
-						let longestRow = 0;
-						for (let r of tiles) {
-							if (r.length > longestRow) longestRow = r.length;
-						}
 						x ??= longestRow * colWidth * -0.5;
 						y ??= (tiles.length - 1) * rowHeight * -0.5;
 					}
 
 					let tileX = x + col * colWidth;
 					let tileY = y + row * rowHeight;
+					let tileAni = tile._isAni ? tile : null;
+					let tileGroup = tileAni ? (tileAni.owner?._isGroup ? tileAni.owner : null) : tile._isGroup ? tile : null;
 
-					if (tile._isAni) {
-						let ani = tile;
+					if (tileGroup?.joinTiles) {
+						if (runGroup !== tileGroup) {
+							finishRun();
+							runGroup = tileGroup;
+						}
+
+						let source = tileAni || getGroupSource(tileGroup);
+						if (typeof source == 'function') source = source(tileGroup.length);
+						runCells.push({ col, source });
+						continue;
+					}
+
+					finishRun();
+
+					if (tileAni) {
+						let ani = tileAni;
 						if (ani.owner._isGroup) {
 							let g = ani.owner,
 								sprite = new g.Sprite(ani, tileX, tileY);
@@ -4520,6 +4957,203 @@ async function q5playPreSetup(q) {
 						vis.x = tileX;
 						vis.y = tileY;
 						this.push(vis);
+					}
+				}
+
+				finishRun();
+			}
+
+			for (let [group, runs] of joinedTiles) {
+				let verticalRuns = [];
+				let previousRunsBySpan = new Map();
+				for (let run of runs) {
+					let startCol = run.cells[0].col,
+						endCol = run.cells.at(-1).col,
+						span = `${startCol}:${endCol}`,
+						previousRun = previousRunsBySpan.get(span);
+
+					if (previousRun && previousRun.endRow == run.row - 1) {
+						previousRun.endRow = run.row;
+						previousRun.cells.push(...run.cells.map((cell) => ({ ...cell, row: run.row })));
+					} else {
+						let mergedRun = {
+							startCol,
+							endCol,
+							startRow: run.row,
+							endRow: run.row,
+							cells: run.cells.map((cell) => ({ ...cell, row: run.row }))
+						};
+						verticalRuns.push(mergedRun);
+						previousRunsBySpan.set(span, mergedRun);
+					}
+				}
+
+				let maxTextureDimension = Q5.device?.limits?.maxTextureDimension2D || 4096;
+				let bakedPixelDensity = $.pixelDensity();
+				if (
+					Math.ceil(colWidth * bakedPixelDensity) > maxTextureDimension ||
+					Math.ceil(rowHeight * bakedPixelDensity) > maxTextureDimension
+				) {
+					for (let run of verticalRuns) {
+						for (let cell of run.cells) {
+							let spriteX = x + cell.col * colWidth,
+								spriteY = y + cell.row * rowHeight,
+								sprite = cell.source
+									? new group.Sprite(cell.source, spriteX, spriteY, colWidth, rowHeight)
+									: new group.Sprite(spriteX, spriteY, colWidth, rowHeight);
+							if (this != group) this.push(sprite);
+						}
+					}
+					continue;
+				}
+
+				let maxColsPerTexture = Math.max(1, Math.floor(maxTextureDimension / (colWidth * bakedPixelDensity))),
+					maxRowsPerTexture = Math.max(1, Math.floor(maxTextureDimension / (rowHeight * bakedPixelDensity))),
+					runsByTextureRegion = new Map();
+
+				for (let run of verticalRuns) {
+					let cellsByRegion = new Map();
+					for (let cell of run.cells) {
+						let rowIndex = Math.floor(cell.row / maxRowsPerTexture),
+							colIndex = Math.floor(cell.col / maxColsPerTexture),
+							regionKey = `${rowIndex}:${colIndex}`,
+							region = cellsByRegion.get(regionKey);
+
+						if (!region) cellsByRegion.set(regionKey, (region = { rowIndex, colIndex, cells: [] }));
+						region.cells.push(cell);
+					}
+
+					for (let [regionKey, region] of cellsByRegion) {
+						let regionRuns = runsByTextureRegion.get(regionKey);
+						if (!regionRuns) runsByTextureRegion.set(regionKey, (regionRuns = []));
+
+						regionRuns.push({
+							startCol: Math.max(run.startCol, region.colIndex * maxColsPerTexture),
+							endCol: Math.min(run.endCol, (region.colIndex + 1) * maxColsPerTexture - 1),
+							startRow: Math.max(run.startRow, region.rowIndex * maxRowsPerTexture),
+							endRow: Math.min(run.endRow, (region.rowIndex + 1) * maxRowsPerTexture - 1),
+							cells: region.cells
+						});
+					}
+				}
+
+				let maxColliders = Math.max(1, $.Sprite.maxColliders);
+				for (let regionRuns of runsByTextureRegion.values()) {
+					for (let start = 0; start < regionRuns.length; start += maxColliders) {
+						let chunk = regionRuns.slice(start, start + maxColliders);
+						let minCol = Infinity,
+							maxCol = -Infinity,
+							minRow = Infinity,
+							maxRow = -Infinity,
+							cells = [];
+
+						for (let run of chunk) {
+							minRow = Math.min(minRow, run.startRow);
+							maxRow = Math.max(maxRow, run.endRow);
+							for (let cell of run.cells) {
+								minCol = Math.min(minCol, cell.col);
+								maxCol = Math.max(maxCol, cell.col);
+								cells.push(cell);
+							}
+						}
+
+						let width = (maxCol - minCol + 1) * colWidth,
+							height = (maxRow - minRow + 1) * rowHeight,
+							spriteX = x + ((minCol + maxCol) * colWidth) / 2,
+							spriteY = y + ((minRow + maxRow) * rowHeight) / 2,
+							sprite = new group.Sprite(spriteX, spriteY, width, height);
+
+						for (let shape of [...sprite._shapes]) shape.delete();
+
+						let addShape = (group.withSensor ? sprite.addSensor : sprite.addCollider).bind(sprite);
+						for (let run of chunk) {
+							if (!sprite._physicsEnabled) break;
+							let runWidth = (run.endCol - run.startCol + 1) * colWidth,
+								runHeight = (run.endRow - run.startRow + 1) * rowHeight,
+								runX = ((run.startCol + run.endCol) * colWidth) / 2,
+								runY = ((run.startRow + run.endRow) * rowHeight) / 2;
+							addShape(
+								runX - ((minCol + maxCol) * colWidth) / 2,
+								runY - ((minRow + maxRow) * rowHeight) / 2,
+								runWidth,
+								runHeight
+							);
+						}
+
+						let frameCount = 1;
+						let animation;
+						for (let cell of cells) {
+							if (cell.source?._isAni && cell.source.length > frameCount) {
+								frameCount = cell.source.length;
+								animation ??= cell.source;
+							}
+						}
+
+						let bakedFrames = [];
+						for (let frame = 0; frame < frameCount; frame++) {
+							let image = $.createImage(width, height, {
+								pixelDensity: bakedPixelDensity,
+								defaultImageScale: 1 / bakedPixelDensity
+							});
+							for (let cell of cells) {
+								let source = cell.source;
+								if (!source) continue;
+
+								let tileImage = source;
+								let sourceX = 0,
+									sourceY = 0,
+									sourceWidth,
+									sourceHeight;
+								if (source._isAni) {
+									if (!source.length) continue;
+									let frameInfo = source[frame % source.length];
+									if (frameInfo instanceof Q5.Image) {
+										tileImage = frameInfo;
+									} else {
+										tileImage = source.spriteSheet;
+										let pixelDensity = tileImage?._pixelDensity || 1;
+										sourceX = frameInfo.x * pixelDensity;
+										sourceY = frameInfo.y * pixelDensity;
+										sourceWidth = frameInfo.w * pixelDensity;
+										sourceHeight = frameInfo.h * pixelDensity;
+									}
+								}
+
+								if (!tileImage?.canvas) continue;
+								let sourceCanvas = tileImage.canvas;
+								sourceWidth ??= sourceCanvas.width;
+								sourceHeight ??= sourceCanvas.height;
+								image.ctx.drawImage(
+									sourceCanvas,
+									sourceX,
+									sourceY,
+									sourceWidth,
+									sourceHeight,
+									(cell.col - minCol) * colWidth,
+									(cell.row - minRow) * rowHeight,
+									colWidth,
+									rowHeight
+								);
+							}
+							bakedFrames.push(image);
+						}
+
+						if (frameCount > 1) {
+							let bakedAni = new $.Ani(sprite, 'merged');
+							bakedAni.push(...bakedFrames);
+							bakedAni.frameDelay = animation.frameDelay;
+							bakedAni.looping = animation.looping;
+							bakedAni.playing = animation.playing;
+							bakedAni.scale = 1;
+							bakedAni.offset = { x: 0, y: 0 };
+							sprite._img = null;
+							sprite.ani = bakedAni;
+						} else {
+							sprite.ani = null;
+							sprite.img = bakedFrames[0];
+						}
+
+						if (this != group) this.push(sprite);
 					}
 				}
 			}
@@ -4617,11 +5251,7 @@ async function q5playPreSetup(q) {
 				}
 			};
 
-			let skipProps = ['ani', 'tile', 'scale', 'velocity', 'width', 'height', 'diameter'];
-
-			for (let prop of $.Sprite.propsAll) {
-				if (skipProps.includes(prop)) continue;
-
+			for (let prop of groupStdProps) {
 				Object.defineProperty(this, prop, {
 					get() {
 						let val = _this['_' + prop];
@@ -4693,6 +5323,8 @@ async function q5playPreSetup(q) {
 				this.autoCull = true;
 				this.autoDraw = true;
 				this.autoUpdate = true;
+				this.autoMesh = false;
+				this.withSensor = false;
 
 				this._scale._x = 1;
 				this._scale._y = 1;
@@ -4723,13 +5355,13 @@ async function q5playPreSetup(q) {
 			}
 
 			for (let g of this.subgroups) {
-				g[prop] = val;
+				g.scale = val;
 			}
 			for (let i = 0; i < this.length; i++) {
 				let s = this[i];
 				let v = val;
 				if (typeof val == 'function') v = val(i);
-				s[prop] = v;
+				s.scale = v;
 			}
 		}
 
@@ -5070,8 +5702,9 @@ async function q5playPreSetup(q) {
 				x += s.x;
 				y += s.y;
 			}
-			this.centroid = { x: x / this.length, y: y / this.length };
-			return this.centroid;
+			this._customCentroid = false;
+			this._centroid = { x: x / this.length, y: y / this.length };
+			return this._centroid;
 		}
 
 		_resetDistancesFromCentroid() {
@@ -5216,6 +5849,164 @@ async function q5playPreSetup(q) {
 			};
 		}
 
+		get centroid() {
+			if (this._customCentroid) return this._centroid;
+			return this._resetCentroid();
+		}
+
+		set centroid(val) {
+			if (!val) {
+				this._customCentroid = false;
+				return;
+			}
+			if (Array.isArray(val)) {
+				this._centroid = { x: val[0], y: val[1] };
+			} else if (typeof val == 'object') {
+				this._centroid = val;
+			}
+			this._customCentroid = true;
+		}
+
+		get orbitSpeed() {
+			return this._orbitSpeed ?? 0;
+		}
+
+		set orbitSpeed(val) {
+			this._endOrbitBy(false);
+			this._orbitSpeed = val;
+			if (val === 0) this._orbitStop(this._orbitSpin);
+		}
+
+		get orbitSpin() {
+			return this._orbitSpin ?? false;
+		}
+
+		set orbitSpin(val) {
+			this._orbitSpin = !!val;
+			if (!this._orbitSpin) {
+				for (let sp of this) sp.rotationSpeed = 0;
+			}
+		}
+
+		_endOrbitBy(completed) {
+			const s = this._orbitState;
+			if (!s) return;
+			this._orbitState = null;
+			if (s.resolve) {
+				s.resolve(completed);
+				s.resolve = null;
+			}
+		}
+
+		_orbitStop(spin = false) {
+			for (let sp of this) {
+				sp.vel.x = 0;
+				sp.vel.y = 0;
+				if (spin) sp.rotationSpeed = 0;
+			}
+		}
+
+		_orbitVel(speed = 0, spin = false) {
+			if (!this.length) return;
+			const ctr = this.centroid;
+			const cx = ctr.x;
+			const cy = ctr.y;
+			let cvx = 0,
+				cvy = 0;
+			if (this._customCentroid && this._centroid?._isSprite) {
+				cvx = this._centroid.vel.x;
+				cvy = this._centroid.vel.y;
+			}
+
+			const dt = $.world._timeStep || 1 / 60;
+			const a = speed * 60 * dt;
+			const cosM1 = $.cos(a) - 1;
+			const sin = $.sin(a);
+			const k = 1 / (dt * meterSize);
+
+			for (let sp of this) {
+				const dx = sp.x - cx;
+				const dy = sp.y - cy;
+				sp.vel.x = (cosM1 * dx - sin * dy) * k + cvx;
+				sp.vel.y = (sin * dx + cosM1 * dy) * k + cvy;
+				sp.rotationSpeed = spin ? speed : 0;
+			}
+		}
+
+		_orbitNext() {
+			const s = this._orbitState;
+			if (!s) return;
+			if (s.left <= 0 || !this.length) {
+				this._orbitStop(s.spin);
+				this._endOrbitBy(true);
+				return;
+			}
+			const dt = $.world._timeStep || 1 / 60;
+			const step = Math.min(s.left, Math.abs(s.speed) * 60 * dt);
+			s.left -= step;
+			this._orbitVel((step * s.dir) / (60 * dt), s.spin);
+		}
+
+		orbit(angle, speed = 1, spin = false) {
+			this._endOrbitBy(false);
+			this._orbitStop(this._orbitSpin);
+			this._orbitSpeed = 0;
+
+			if (!angle || !this.length || !speed) {
+				this._orbitStop(spin);
+				const reached = !angle || !this.length;
+				if ($._py) return Promise.resolve(reached);
+				return { then: (onFulfilled) => onFulfilled(reached) };
+			}
+
+			const state = {
+				left: Math.abs(angle),
+				dir: Math.sign(angle),
+				speed: Math.abs(speed),
+				spin: !!spin
+			};
+			this._orbitState = state;
+			this._orbitNext();
+
+			if ($._py) return new Promise((resolve) => (state.resolve = resolve));
+
+			return {
+				then: (onFulfilled) => {
+					state.resolve = onFulfilled;
+				}
+			};
+		}
+
+		applyOrbit(rate = 1, maxForce = 20) {
+			if (!this.length || !(maxForce > 0)) return;
+			const orbitStep = this._getOrbitStep();
+			if (!orbitStep) return;
+
+			for (let s of this) {
+				s._applyOrbit(orbitStep, rate, maxForce);
+			}
+		}
+
+		_getOrbitStep() {
+			if (this._orbitStep?.stepId === $.frameCount) return this._orbitStep;
+
+			const dt = $.world._timeStep;
+			const ctr = this.centroid;
+			const isSpriteCentroid = this._customCentroid && this._centroid?._isSprite;
+			const S = $.world.subSteps;
+
+			return (this._orbitStep = {
+				stepId: $.frameCount,
+				cx: ctr.x,
+				cy: ctr.y,
+				cvx: isSpriteCentroid ? this._centroid.vel.x : 0,
+				cvy: isSpriteCentroid ? this._centroid.vel.y : 0,
+				k: 1 / (dt * meterSize),
+				gain: (2 * S) / (S + 1) / dt,
+				dt
+			});
+		}
+
 		transformTowards(x, y, rotation, tracking = 0.1) {
 			if (x === undefined) return;
 
@@ -5301,9 +6092,6 @@ async function q5playPreSetup(q) {
 				let size = top;
 				cb = bottom;
 				top = bottom = left = right = size;
-			}
-			if (isNaN(top) || isNaN(bottom) || isNaN(left) || isNaN(right)) {
-				throw new TypeError('The culling boundary must be defined with numbers');
 			}
 			if (cb && typeof cb != 'function') {
 				throw new TypeError('The callback to group.cull must be a function');
@@ -5536,6 +6324,8 @@ async function q5playPreSetup(q) {
 
 		_step() {
 			this.__step();
+			if (this._orbitState) this._orbitNext();
+			else if (this._orbitSpeed) this._orbitVel(this._orbitSpeed, this._orbitSpin);
 		}
 
 		update() {
@@ -5674,10 +6464,11 @@ async function q5playPreSetup(q) {
 				b2World_SetCustomFilterCallback(wID, (shapeIdA, shapeIdB) => {
 					const shapeA = shapeDict[shapeIdA.index1],
 						shapeB = shapeDict[shapeIdB.index1],
-						isSensorA = shapeA._isSensor,
-						isSensorB = shapeB._isSensor,
-						spriteA = shapeA.sprite,
-						spriteB = shapeB.sprite;
+						spriteA = shapeA?.sprite,
+						spriteB = shapeB?.sprite;
+					if (!spriteA || !spriteB) return false;
+					const isSensorA = shapeA._isSensor,
+						isSensorB = shapeB._isSensor;
 
 					// If both shapes are sensors, generate overlap events,
 					// or if both are colliders that shouldn't overlap,
@@ -5709,9 +6500,10 @@ async function q5playPreSetup(q) {
 				try {
 					const shapeA = shapeDict[evt[idA].index1],
 						shapeB = shapeDict[evt[idB].index1],
-						a = shapeA.sprite,
-						b = shapeB.sprite,
-						ledgerA = a[t],
+						a = shapeA?.sprite,
+						b = shapeB?.sprite;
+					if (!a || !b || a._deleted || b._deleted) continue;
+					const ledgerA = a[t],
 						ledgerB = b[t];
 
 					ledgerA[b._uid] = 0;
@@ -5805,7 +6597,7 @@ async function q5playPreSetup(q) {
 				const evt = events.GetJointEvent(i);
 				try {
 					const j = jointDict[evt.jointId.index1];
-					j.onStrain();
+					j?.onStrain();
 				} finally {
 					evt.delete?.();
 				}
@@ -5863,10 +6655,10 @@ async function q5playPreSetup(q) {
 		}
 
 		get hitThreshold() {
-			return b2World_SetHitEventThreshold(wID);
+			return b2World_GetHitEventThreshold(wID);
 		}
 		set hitThreshold(val) {
-			b2World_GetHitEventThreshold(wID, val);
+			b2World_SetHitEventThreshold(wID, val);
 		}
 
 		get meterSize() {
@@ -5982,7 +6774,7 @@ async function q5playPreSetup(q) {
 
 		getSpritesAt(x, y, radius, group, cameraActiveWhenDrawn) {
 			if (x == $.mouse && !$.mouse.isActive) return [];
-			if (x?.x) {
+			if (typeof x == 'object') {
 				// shift args if first arg is a position object
 				let args = [x.x, x.y, y, radius, group];
 				[x, y, radius, group, cameraActiveWhenDrawn] = args;
@@ -6013,7 +6805,7 @@ async function q5playPreSetup(q) {
 			let spriteSet = new Set();
 
 			for (const shape of shapes) {
-				const s = shape.sprite;
+				const s = shape?.sprite;
 				if (!s) continue;
 				if (s._cameraActiveWhenDrawn == cameraActiveWhenDrawn) {
 					spriteSet.add(s);
@@ -6174,6 +6966,7 @@ async function q5playPreSetup(q) {
 					// if casting from the sprite or the sprite was already hit by this cast
 					if (s._uid === startPos._uid || s._castID == castID) return 1; // continue casting
 
+					s._castID = castID;
 					s.cast = new CastInfo(
 						s,
 						castResult.point.x,
@@ -6232,6 +7025,7 @@ async function q5playPreSetup(q) {
 						// if casting from the sprite or the sprite was already hit by this cast
 						if (s._uid === startPos._uid || s._castID == castID) return 1; // continue casting
 
+						s._castID = castID;
 						s.cast = new CastInfo(
 							s,
 							castResult.point.x,
@@ -6393,7 +7187,6 @@ async function q5playPreSetup(q) {
 			let destIdx = this._destIdx;
 			let steps = Math.ceil(c / speed);
 
-			// TODO: change position in camera.update()
 			return (async () => {
 				for (let i = 0; i < steps; i++) {
 					this.x += velX;
@@ -6418,7 +7211,6 @@ async function q5playPreSetup(q) {
 			this._zoomIdx++;
 			let zoomIdx = this._zoomIdx;
 
-			// TODO: change zoom in camera.update()
 			return (async () => {
 				for (let i = 0; i < frames; i++) {
 					if (zoomIdx != this._zoomIdx) return false;
@@ -7953,7 +8745,6 @@ async function q5playPreSetup(q) {
 	$.InputDevice = class {
 		constructor() {
 			this.holdThreshold = 12;
-
 			this._default = 0;
 		}
 
@@ -7963,6 +8754,20 @@ async function q5playPreSetup(q) {
 		 */
 		_ac(inp) {
 			return inp;
+		}
+
+		get any() {
+			let maxVal = 0;
+			const skips = (this._skips ??= new Set(['any', 'holdThreshold', 'id', 'duration', 'pressure', 'x', 'y']));
+			for (let k in this) {
+				if (skips.has(k)) continue;
+				const v = this[k];
+				if (typeof v == 'number') {
+					if (v != 0 && v <= 1) return v;
+					if (v > maxVal) maxVal = v;
+				}
+			}
+			return maxVal;
 		}
 
 		presses(inp) {
@@ -8018,8 +8823,6 @@ async function q5playPreSetup(q) {
 			this._default = 'left';
 			this._visible = true;
 			this._cursor = 'default';
-			this._ogX = 0;
-			this._ogY = 0;
 
 			this.x = 0;
 			this.y = 0;
@@ -8536,8 +9339,8 @@ async function q5playPreSetup(q) {
 	};
 
 	if (window) {
-		window.addEventListener('keydown', onkeydown.bind(this));
-		window.addEventListener('keyup', onkeyup.bind(this));
+		window.addEventListener('keydown', onkeydown.bind($));
+		window.addEventListener('keyup', onkeyup.bind($));
 	}
 
 	$.Contro = class extends $.InputDevice {
@@ -8846,7 +9649,7 @@ async function q5playPreSetup(q) {
 		_onConnect(gp) {
 			if (!gp) return;
 			for (let i = 0; i < this.length; i++) {
-				if (gp.index == this[i].gamepad?.index) {
+				if (gp.index == this[i]?.gamepad?.index) {
 					this[i].connected = true;
 					log('contros[' + i + '] reconnected: ' + gp.id);
 					return;
@@ -8877,7 +9680,7 @@ async function q5playPreSetup(q) {
 		_onDisconnect(gp) {
 			if (!gp) return;
 			for (let i = 0; i < this.length; i++) {
-				if (this[i].gamepad?.index === gp.index) {
+				if (this[i]?.gamepad?.index === gp.index) {
 					this[i].connected = false;
 					log('contros[' + i + '] disconnected: ' + gp.id);
 					if (this.onDisconnect(gp)) {
@@ -9055,8 +9858,12 @@ async function q5playPreSetup(q) {
 			else $.line(data[0], data[1], data[4], data[5]);
 		}
 
-		// Sort by layer
-		shapeStack.sort((a, b) => a.sprite.layer - b.sprite.layer);
+		shapeStack.sort((a, b) => {
+			const layerDiff = a.sprite.layer - b.sprite.layer;
+			if (layerDiff !== 0) return layerDiff;
+			// always draw colliders first, then sensors on top
+			return a.isSensor === b.isSensor ? 0 : a.isSensor ? 1 : -1;
+		});
 
 		let v = { x: 0, y: 0 };
 		let xf = {
@@ -9157,7 +9964,7 @@ async function q5playPreSetup(q) {
 				$._setFillIdx($._getStrokeIdx());
 				$._doFill();
 				$.noStroke();
-				if (!isSensor && isFirstShape) {
+				if (isFirstShape || isSensor) {
 					if (cmd.type != 4) {
 						$.beginShape();
 						let a = 0.05,
@@ -9399,6 +10206,1432 @@ function q5playRemove() {
 	this._removed = true;
 	this.world?.delete();
 }
+
+// #region image outline colliders
+
+function outlineLib() {
+	const MAX_POLY_VERTS = 8; // Box2D limit
+	const EPS = 1e-7; // cross product tolerance
+	// contours smaller than this (pixels²) are noise
+	const MIN_RING_AREA = 0.75;
+	// Visvalingam–Whyatt triangle area (pixels²) below which a vertex is never worth keeping
+	const MIN_DETAIL = 0.1;
+	// A shape with fewer than MAX_POLY_VERTS vertices takes back simplified-away
+	// outline points that stick out past it (while staying convex), if a point adds
+	// at least this fraction of the part's area...
+	const REFINE_MIN_GAIN = 0.001;
+	// ...and sticks out at least this far (pixels), the least the physics engine keeps
+	const REFINE_MIN_DEVIATION = 0.5;
+
+	// the most shapes made for one connected opaque part of an image
+	const MAX_SHAPES = 24;
+	// parts longer than this (pixels) are shrunk to about SAMPLE_SIZE to find their shape count
+	const SHRINK_ABOVE = 512;
+	const SAMPLE_SIZE = 256;
+	// shrunk parts are scored a bit off, so they're held to a slightly higher coverage
+	const SHRUNK_COVERAGE_MARGIN = 0.01;
+	// Past the minimum coverage, a shape is only added if it adds at least this much
+	// coverage (checked LOOKAHEAD shapes ahead), and never past the target
+	const MIN_GAIN = 0.03;
+	const LOOKAHEAD = 2;
+	// small parts also need a shape to add this many pixels, or it only fits image pixels
+	const MIN_GAIN_PIXELS = 2;
+	// parts with fewer opaque pixels than this just get their convex hull
+	const MIN_SPLIT_AREA = 36;
+
+	const cross = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+
+	function ringArea(ring) {
+		let a = 0;
+		for (let i = 0, n = ring.length; i < n; i++) {
+			const p = ring[i],
+				q = ring[(i + 1) % n];
+			a += p.x * q.y - q.x * p.y;
+		}
+		return a * 0.5;
+	}
+
+	function pointInRing(x, y, ring) {
+		let inside = false;
+		for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+			const a = ring[i],
+				b = ring[j];
+			if (a.y > y != b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+		}
+		return inside;
+	}
+
+	function sharpenCorners(ring) {
+		const n = ring.length;
+		if (n < 6) return ring;
+		const near = (a, b) => Math.abs(a - b) < 1e-6;
+		const used = new Array(n).fill(false);
+		const rep = new Array(n).fill(null);
+		const horiz = (a, b) => near(a.y, b.y) && !near(a.x, b.x);
+		const vert = (a, b) => near(a.x, b.x) && !near(a.y, b.y);
+		const dot = (ax, ay, bx, by) => ax * bx + ay * by;
+
+		for (let i = 0; i < n; i++) {
+			const ix = (k) => (((i + k) % n) + n) % n;
+			const o = ring[ix(-1)],
+				p = ring[i],
+				q = ring[ix(1)],
+				r = ring[ix(2)];
+
+			{
+				const a = ring[ix(-2)],
+					m = ring[ix(-1)],
+					b = ring[ix(0)];
+				const s0 = ring[ix(-3)],
+					s1 = ring[ix(1)];
+				if (
+					!used[ix(-2)] &&
+					!used[ix(-1)] &&
+					!used[ix(0)] &&
+					near(Math.abs(a.x - m.x), 0.5) &&
+					near(Math.abs(a.y - m.y), 0.5) &&
+					near(Math.abs(b.x - m.x), 0.5) &&
+					near(Math.abs(b.y - m.y), 0.5)
+				) {
+					let c1, c2;
+					if (near(a.x, b.x) && !near(a.y, b.y) && horiz(s0, a) && horiz(b, s1)) {
+						if (dot(s0.x - a.x, 0, a.x - m.x, 0) > 0 && dot(s1.x - b.x, 0, b.x - m.x, 0) > 0) {
+							c1 = { x: m.x, y: a.y };
+							c2 = { x: m.x, y: b.y };
+						}
+					} else if (near(a.y, b.y) && !near(a.x, b.x) && vert(s0, a) && vert(b, s1)) {
+						if (dot(0, s0.y - a.y, 0, a.y - m.y) > 0 && dot(0, s1.y - b.y, 0, b.y - m.y) > 0) {
+							c1 = { x: a.x, y: m.y };
+							c2 = { x: b.x, y: m.y };
+						}
+					}
+					if (c1) {
+						used[ix(-2)] = used[ix(-1)] = used[ix(0)] = true;
+						rep[ix(-2)] = [c1];
+						rep[ix(-1)] = [c2];
+						rep[ix(0)] = [];
+						continue;
+					}
+				}
+			}
+
+			if (used[i] || used[ix(1)]) continue;
+			if (!near(Math.abs(q.x - p.x), 0.5) || !near(Math.abs(q.y - p.y), 0.5)) continue;
+			let c;
+			if (horiz(o, p) && vert(q, r)) c = { x: q.x, y: p.y };
+			else if (vert(o, p) && horiz(q, r)) c = { x: p.x, y: q.y };
+			else continue;
+			if (dot(c.x - p.x, c.y - p.y, p.x - o.x, p.y - o.y) <= 0) continue;
+			if (dot(q.x - c.x, q.y - c.y, r.x - q.x, r.y - q.y) <= 0) continue;
+			used[i] = used[ix(1)] = true;
+			rep[i] = [c];
+			rep[ix(1)] = [];
+		}
+
+		const out = [];
+		for (let i = 0; i < n; i++) {
+			if (rep[i]) out.push(...rep[i]);
+			else out.push(ring[i]);
+		}
+		return out.length >= 3 ? out : ring;
+	}
+
+	function traceImageOutlines(data, w, h, threshold = 0.5) {
+		const W = w + 2,
+			H = h + 2;
+		const v = new Float32Array(W * H);
+		for (let y = 0; y < h; y++) {
+			let src = y * w,
+				dst = (y + 1) * W + 1;
+			for (let x = 0; x < w; x++, src++, dst++) v[dst] = data[src] / 255;
+		}
+
+		const numEdges = 2 * W * H;
+		const link = new Int32Array(numEdges).fill(-1);
+		const hasLink = new Uint8Array(numEdges);
+
+		for (let cy = 0; cy < H - 1; cy++) {
+			for (let cx = 0; cx < W - 1; cx++) {
+				const i = cy * W + cx;
+				const a = v[i],
+					b = v[i + 1],
+					c = v[i + W + 1],
+					d = v[i + W];
+				const s0 = a >= threshold,
+					s1 = b >= threshold,
+					s2 = c >= threshold,
+					s3 = d >= threshold;
+				if (s0 == s1 && s1 == s2 && s2 == s3) continue;
+
+				const s = [s0, s1, s2, s3];
+				const ids = [2 * i, 2 * (i + 1) + 1, 2 * (i + W), 2 * i + 1];
+				const all = [];
+				for (let k = 0; k < 4; k++) {
+					const p = s[k],
+						q = s[(k + 1) & 3];
+					if (p != q) all.push({ id: ids[k], enter: q });
+				}
+				if (all.length == 2) {
+					const e = all[0].enter ? all[0] : all[1];
+					const x = all[0].enter ? all[1] : all[0];
+					link[x.id] = e.id;
+					hasLink[x.id] = 1;
+				} else {
+					const connected = (a + b + c + d) * 0.25 >= threshold;
+					for (let j = 0; j < 4; j++) {
+						if (!all[j].enter) continue;
+						const partner = connected ? all[(j + 3) & 3] : all[(j + 1) & 3];
+						link[partner.id] = all[j].id;
+						hasLink[partner.id] = 1;
+					}
+				}
+			}
+		}
+
+		const edgePoint = (id) => {
+			const o = id & 1,
+				k = id >> 1;
+			const gx = k % W,
+				gy = (k / W) | 0;
+			const gx2 = o ? gx : gx + 1,
+				gy2 = o ? gy + 1 : gy;
+			const va = v[gy * W + gx],
+				vb = v[gy2 * W + gx2];
+			const t = (threshold - va) / (vb - va);
+			return { x: gx + t * (gx2 - gx) - 0.5, y: gy + t * (gy2 - gy) - 0.5 };
+		};
+
+		const rings = [];
+		for (let startID = 0; startID < numEdges; startID++) {
+			if (!hasLink[startID]) continue;
+			let ring = [];
+			let id = startID;
+			while (id >= 0 && hasLink[id]) {
+				hasLink[id] = 0;
+				const next = link[id];
+				const p = edgePoint(id);
+				const last = ring[ring.length - 1];
+				if (!last || Math.abs(last.x - p.x) > 1e-9 || Math.abs(last.y - p.y) > 1e-9) ring.push(p);
+				id = next;
+			}
+			while (
+				ring.length > 1 &&
+				Math.abs(ring[0].x - ring.at(-1).x) <= 1e-9 &&
+				Math.abs(ring[0].y - ring.at(-1).y) <= 1e-9
+			) {
+				ring.pop();
+			}
+			if (ring.length < 3) continue;
+			ring = sharpenCorners(ring);
+			if (Math.abs(ringArea(ring)) < MIN_RING_AREA) continue;
+			rings.push(ring);
+		}
+		return rings;
+	}
+
+	class OutlineMinHeap {
+		constructor(capacity = 2048) {
+			this.k = new Float64Array(capacity);
+			this.i = new Int32Array(capacity);
+			this.v = new Int32Array(capacity);
+			this._size = 0;
+		}
+		get size() {
+			return this._size;
+		}
+		clear() {
+			this._size = 0;
+		}
+		ensureCapacity(cap) {
+			if (cap > this.k.length) {
+				const newCap = Math.max(cap, this.k.length * 2);
+				const nk = new Float64Array(newCap);
+				const ni = new Int32Array(newCap);
+				const nv = new Int32Array(newCap);
+				nk.set(this.k);
+				ni.set(this.i);
+				nv.set(this.v);
+				this.k = nk;
+				this.i = ni;
+				this.v = nv;
+			}
+		}
+		push(key, idx, ver) {
+			this.ensureCapacity(this._size + 1);
+			const { k, i, v } = this;
+			let n = this._size++;
+			while (n > 0) {
+				const p = (n - 1) >> 1;
+				if (k[p] <= key) break;
+				k[n] = k[p];
+				i[n] = i[p];
+				v[n] = v[p];
+				n = p;
+			}
+			k[n] = key;
+			i[n] = idx;
+			v[n] = ver;
+		}
+		popInto(out) {
+			const { k, i, v } = this;
+			out.key = k[0];
+			out.idx = i[0];
+			out.ver = v[0];
+
+			const len = --this._size;
+			if (len === 0) return out;
+
+			const key = k[len],
+				idx = i[len],
+				ver = v[len];
+
+			let n = 0;
+			while (true) {
+				let c = (n << 1) + 1;
+				if (c >= len) break;
+				if (c + 1 < len && k[c + 1] < k[c]) c++;
+				if (k[c] >= key) break;
+				k[n] = k[c];
+				i[n] = i[c];
+				v[n] = v[c];
+				n = c;
+			}
+			k[n] = key;
+			i[n] = idx;
+			v[n] = ver;
+			return out;
+		}
+	}
+
+	function visvalingamOrder(rings) {
+		const areas = rings.map(ringArea);
+		const parent = new Array(rings.length).fill(-1);
+		const keep = new Array(rings.length).fill(true);
+		for (let r = 0; r < rings.length; r++) {
+			if (areas[r] > 0) continue;
+			const pt = rings[r][0];
+			let best = -1;
+			for (let o = 0; o < rings.length; o++) {
+				if (areas[o] <= 0 || (best >= 0 && areas[o] >= areas[best])) continue;
+				if (pointInRing(pt.x, pt.y, rings[o])) best = o;
+			}
+			if (best < 0) keep[r] = false;
+			else parent[r] = best;
+		}
+
+		let total = 0;
+		const start = [],
+			len = [];
+		for (let r = 0; r < rings.length; r++) {
+			start.push(total);
+			len.push(keep[r] ? rings[r].length : 0);
+			total += len[r];
+		}
+
+		const X = new Float64Array(total),
+			Y = new Float64Array(total),
+			prev = new Int32Array(total),
+			next = new Int32Array(total),
+			ringOf = new Int32Array(total),
+			ver = new Int32Array(total),
+			alive = new Uint8Array(total),
+			removedAt = new Int32Array(total).fill(0x7fffffff);
+		const cnt = len.slice();
+		const holesOf = rings.map(() => []);
+		for (let r = 0; r < rings.length; r++) {
+			if (parent[r] >= 0 && keep[r]) holesOf[parent[r]].push(r);
+			for (let k = 0; k < len[r]; k++) {
+				const i = start[r] + k;
+				X[i] = rings[r][k].x;
+				Y[i] = rings[r][k].y;
+				prev[i] = start[r] + ((k + len[r] - 1) % len[r]);
+				next[i] = start[r] + ((k + 1) % len[r]);
+				ringOf[i] = r;
+				alive[i] = 1;
+			}
+		}
+
+		let minX = Infinity,
+			minY = Infinity,
+			maxX = -Infinity,
+			maxY = -Infinity;
+		for (let i = 0; i < total; i++) {
+			if (X[i] < minX) minX = X[i];
+			if (X[i] > maxX) maxX = X[i];
+			if (Y[i] < minY) minY = Y[i];
+			if (Y[i] > maxY) maxY = Y[i];
+		}
+		const cell = Math.max(1, Math.sqrt(((maxX - minX) * (maxY - minY)) / Math.max(total, 1)) * 3);
+		const gw = Math.floor((maxX - minX) / cell) + 1,
+			gh = Math.floor((maxY - minY) / cell) + 1;
+		const grid = new Array(gw * gh);
+		for (let i = 0; i < total; i++) {
+			const g = Math.floor((Y[i] - minY) / cell) * gw + Math.floor((X[i] - minX) / cell);
+			(grid[g] ??= []).push(i);
+		}
+
+		const area2 = (i) => Math.abs(cross(X[prev[i]], Y[prev[i]], X[i], Y[i], X[next[i]], Y[next[i]]));
+
+		const blocker = (i) => {
+			const p = prev[i],
+				q = next[i];
+			const ax = X[p],
+				ay = Y[p],
+				bx = X[i],
+				by = Y[i],
+				cx = X[q],
+				cy = Y[q];
+			const o = cross(ax, ay, bx, by, cx, cy) > 0 ? 1 : -1;
+			const x0 = Math.min(ax, bx, cx),
+				x1 = Math.max(ax, bx, cx),
+				y0 = Math.min(ay, by, cy),
+				y1 = Math.max(ay, by, cy);
+			const gx0 = Math.floor((x0 - minX) / cell),
+				gx1 = Math.floor((x1 - minX) / cell),
+				gy0 = Math.floor((y0 - minY) / cell),
+				gy1 = Math.floor((y1 - minY) / cell);
+			for (let gy = gy0; gy <= gy1; gy++) {
+				for (let gx = gx0; gx <= gx1; gx++) {
+					const list = grid[gy * gw + gx];
+					if (!list) continue;
+					for (let n = 0; n < list.length; n++) {
+						const j = list[n];
+						if (!alive[j] || j == p || j == i || j == q) continue;
+						const x = X[j],
+							y = Y[j];
+						if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+						if (
+							(x == ax && y == ay) ||
+							(x == bx && y == by) ||
+							(x == cx && y == cy) ||
+							cross(ax, ay, bx, by, x, y) * o < 0 ||
+							cross(bx, by, cx, cy, x, y) * o < 0 ||
+							cross(cx, cy, ax, ay, x, y) * o < 0
+						) {
+							continue;
+						}
+						return j;
+					}
+				}
+			}
+			return -1;
+		};
+
+		const heap = new OutlineMinHeap();
+		const top = { key: 0, idx: 0, ver: 0 };
+		const push = (i) => {
+			ver[i]++;
+			heap.push(area2(i) * 0.5, i, ver[i]);
+		};
+
+		const eventEnd = [];
+		const eventSig = [];
+		let sig = 0;
+		let removed = 0;
+		const waiting = new Map();
+		const wake = (j) => {
+			const list = waiting.get(j);
+			if (!list) return;
+			waiting.delete(j);
+			for (const i of list) if (alive[i]) push(i);
+		};
+		const kill = (i) => {
+			alive[i] = 0;
+			removedAt[i] = eventEnd.length;
+			removed++;
+			wake(i);
+		};
+		const killRing = (r) => {
+			for (let k = 0; k < len[r]; k++) if (alive[start[r] + k]) kill(start[r] + k);
+			cnt[r] = 0;
+		};
+
+		const UNCHECKED_AREA = 0.01;
+
+		for (let phase = 0; phase < 2 && removed < total; phase++) {
+			heap.clear();
+			for (let i = 0; i < total; i++) if (alive[i]) push(i);
+			while (heap.size > 0) {
+				heap.popInto(top);
+				const key = top.key,
+					i = top.idx,
+					v = top.ver;
+				if (!alive[i] || v != ver[i]) continue;
+				const r = ringOf[i];
+				if (cnt[r] <= 3) {
+					killRing(r);
+					for (const h of holesOf[r]) killRing(h);
+					eventEnd.push(removed);
+					eventSig.push((sig = Math.max(sig, key)));
+					continue;
+				}
+				if (phase == 0 && key > UNCHECKED_AREA) {
+					const b = blocker(i);
+					if (b >= 0) {
+						if (!waiting.has(b)) waiting.set(b, []);
+						waiting.get(b).push(i);
+						continue;
+					}
+				}
+				const p = prev[i],
+					q = next[i];
+				next[p] = q;
+				prev[q] = p;
+				cnt[r]--;
+				kill(i);
+				eventEnd.push(removed);
+				eventSig.push((sig = Math.max(sig, key)));
+				push(p);
+				push(q);
+			}
+		}
+
+		const groupsAt = (e) => {
+			const ringAt = (r) => {
+				const ring = [];
+				for (let k = 0; k < len[r]; k++) {
+					const i = start[r] + k;
+					if (removedAt[i] > e) ring.push({ x: X[i], y: Y[i], i });
+				}
+				return ring;
+			};
+			const groups = new Map();
+			for (let r = 0; r < rings.length; r++) {
+				if (!keep[r] || parent[r] >= 0) continue;
+				const ring = ringAt(r);
+				if (ring.length >= 3) groups.set(r, { outer: ring, holes: [] });
+			}
+			for (let r = 0; r < rings.length; r++) {
+				if (!keep[r] || parent[r] < 0 || !groups.has(parent[r])) continue;
+				const ring = ringAt(r);
+				if (ring.length >= 3) groups.get(parent[r]).holes.push(ring);
+			}
+			return [...groups.values()];
+		};
+
+		let holeRings = 0,
+			area = 0;
+		for (let r = 0; r < rings.length; r++) {
+			if (!keep[r]) continue;
+			if (parent[r] >= 0) holeRings++;
+			area += areas[r];
+		}
+
+		// the points removed between i and j (both alive at level e), or null if they aren't adjacent then
+		const removedBetween = (i, j, e) => {
+			const r = ringOf[i];
+			if (r != ringOf[j]) return null;
+			const s0 = start[r],
+				n = len[r],
+				end = j - s0;
+			for (const step of [1, n - 1]) {
+				const between = [];
+				let k = (i - s0 + step) % n;
+				while (k != end && removedAt[s0 + k] <= e) {
+					between.push(s0 + k);
+					k = (k + step) % n;
+				}
+				if (k == end) return between;
+			}
+			return null;
+		};
+
+		return {
+			total,
+			holes: holeRings,
+			area,
+			X,
+			Y,
+			removedBetween,
+			events: eventEnd.length,
+			aliveAt: (e) => total - (e < 0 ? 0 : eventEnd[e]),
+			lastEventBelow: (area) => {
+				let lo = -1,
+					hi = eventSig.length - 1;
+				while (lo < hi) {
+					const mid = (lo + hi + 1) >> 1;
+					if (eventSig[mid] <= area) lo = mid;
+					else hi = mid - 1;
+				}
+				return lo;
+			},
+			groupsAt
+		};
+	}
+
+	function isConvex(pts) {
+		const n = pts.length;
+		for (let i = 0; i < n; i++) {
+			const a = pts[i],
+				b = pts[(i + 1) % n];
+			for (let j = 0; j < n; j++) {
+				if (j == i || j == (i + 1) % n) continue;
+				if (cross(a.x, a.y, b.x, b.y, pts[j].x, pts[j].y) < -EPS) return false;
+			}
+		}
+		return true;
+	}
+
+	function dropStraight(pts) {
+		let out = pts;
+		let changed = true;
+		while (changed && out.length > 3) {
+			changed = false;
+			for (let i = 0; i < out.length; i++) {
+				const a = out[(i + out.length - 1) % out.length],
+					b = out[i],
+					c = out[(i + 1) % out.length];
+				if (Math.abs(cross(a.x, a.y, b.x, b.y, c.x, c.y)) <= EPS) {
+					out = out.slice(0, i).concat(out.slice(i + 1));
+					changed = true;
+					break;
+				}
+			}
+		}
+		return out;
+	}
+
+	function segsCross(a, b, c, d) {
+		const o1 = cross(a.x, a.y, b.x, b.y, c.x, c.y),
+			o2 = cross(a.x, a.y, b.x, b.y, d.x, d.y),
+			o3 = cross(c.x, c.y, d.x, d.y, a.x, a.y),
+			o4 = cross(c.x, c.y, d.x, d.y, b.x, b.y);
+		return o1 * o2 < 0 && o3 * o4 < 0;
+	}
+
+	function bridgeHoles(outer, holes) {
+		const pts = outer.slice();
+		if (!holes.length) return pts;
+
+		const rings = [outer, ...holes];
+		const segs = [];
+		for (const r of rings) for (let i = 0; i < r.length; i++) segs.push([r[i], r[(i + 1) % r.length]]);
+		const allPts = rings.flat();
+
+		const same = (a, b) => a.x == b.x && a.y == b.y;
+		const visible = (m, p) => {
+			for (const [a, b] of segs) {
+				if (same(a, m) || same(b, m) || same(a, p) || same(b, p)) continue;
+				if (segsCross(m, p, a, b)) return false;
+			}
+			for (const q of allPts) {
+				if (same(q, m) || same(q, p)) continue;
+				if (Math.abs(cross(m.x, m.y, p.x, p.y, q.x, q.y)) <= EPS) {
+					const dx = p.x - m.x,
+						dy = p.y - m.y;
+					const t = ((q.x - m.x) * dx + (q.y - m.y) * dy) / (dx * dx + dy * dy);
+					if (t > 0 && t < 1) return false;
+				}
+			}
+			const mx = (m.x + p.x) * 0.5,
+				my = (m.y + p.y) * 0.5;
+			let inside = 0;
+			for (const r of rings) if (pointInRing(mx, my, r)) inside++;
+			return inside % 2 == 1;
+		};
+
+		const used = new Set();
+		const order = holes
+			.map((h) => {
+				let m = 0;
+				for (let i = 1; i < h.length; i++) if (h[i].x > h[m].x) m = i;
+				return { h, m };
+			})
+			.sort((a, b) => b.h[b.m].x - a.h[a.m].x);
+
+		for (const { h, m } of order) {
+			const M = h[m];
+			const cands = pts
+				.filter((p) => !used.has(p))
+				.map((p) => ({ p, d: (p.x - M.x) ** 2 + (p.y - M.y) ** 2 }))
+				.sort((a, b) => a.d - b.d);
+			let P = null;
+			for (const c of cands) {
+				if (visible(M, c.p)) {
+					P = c.p;
+					break;
+				}
+			}
+			if (!P) continue;
+			const seq = [];
+			for (let k = 0; k < h.length; k++) seq.push(h[(m + k) % h.length]);
+			seq.push(M, P);
+			pts.splice(pts.indexOf(P) + 1, 0, ...seq);
+			segs.push([M, P]);
+			used.add(M);
+			used.add(P);
+		}
+		return pts;
+	}
+
+	function earClip(pts) {
+		const n = pts.length;
+		const prev = new Int32Array(n),
+			next = new Int32Array(n);
+		for (let i = 0; i < n; i++) {
+			prev[i] = (i + n - 1) % n;
+			next[i] = (i + 1) % n;
+		}
+		const tris = [];
+		const turn = (i) => {
+			const a = pts[prev[i]],
+				b = pts[i],
+				c = pts[next[i]];
+			return cross(a.x, a.y, b.x, b.y, c.x, c.y);
+		};
+		const isEar = (a, b, c) => {
+			const A = pts[a],
+				B = pts[b],
+				C = pts[c];
+			if (cross(A.x, A.y, B.x, B.y, C.x, C.y) <= EPS) return false;
+			for (let p = next[c]; p != a; p = next[p]) {
+				const Q = pts[p];
+				if ((Q.x == A.x && Q.y == A.y) || (Q.x == B.x && Q.y == B.y) || (Q.x == C.x && Q.y == C.y)) continue;
+				if (
+					cross(A.x, A.y, B.x, B.y, Q.x, Q.y) >= 0 &&
+					cross(B.x, B.y, C.x, C.y, Q.x, Q.y) >= 0 &&
+					cross(C.x, C.y, A.x, A.y, Q.x, Q.y) >= 0 &&
+					turn(p) <= 0
+				) {
+					return false;
+				}
+			}
+			return true;
+		};
+		const unlink = (i) => {
+			next[prev[i]] = next[i];
+			prev[next[i]] = prev[i];
+		};
+
+		let remaining = n,
+			cur = 0;
+		while (remaining > 3) {
+			let found = -1;
+			let i = cur;
+			for (let k = 0; k < remaining; k++) {
+				if (isEar(prev[i], i, next[i])) {
+					found = i;
+					break;
+				}
+				i = next[i];
+			}
+			if (found >= 0) {
+				tris.push([prev[found], found, next[found]]);
+				cur = next[found];
+				unlink(found);
+				remaining--;
+				continue;
+			}
+			let degenerate = -1,
+				convex = -1;
+			i = cur;
+			for (let k = 0; k < remaining; k++) {
+				const t = turn(i);
+				if (Math.abs(t) <= EPS) {
+					degenerate = i;
+					break;
+				}
+				if (t > 0 && convex < 0) convex = i;
+				i = next[i];
+			}
+			const pick = degenerate >= 0 ? degenerate : convex;
+			if (pick < 0) break;
+			if (degenerate < 0) tris.push([prev[pick], pick, next[pick]]);
+			cur = next[pick];
+			unlink(pick);
+			remaining--;
+		}
+		if (remaining == 3) {
+			const a = prev[cur],
+				c = next[cur];
+			const A = pts[a],
+				B = pts[cur],
+				C = pts[c];
+			if (cross(A.x, A.y, B.x, B.y, C.x, C.y) > EPS) tris.push([a, cur, c]);
+		}
+		return tris;
+	}
+
+	// does the work both merge passes share
+	function mergePrepare(tris, pts) {
+		const ids = new Map(),
+			verts = [],
+			canon = new Int32Array(pts.length).fill(-1);
+		const cid = (i) => {
+			let id = canon[i];
+			if (id < 0) {
+				const key = pts[i].x + ',' + pts[i].y;
+				id = ids.get(key);
+				if (id === undefined) {
+					id = verts.length;
+					ids.set(key, id);
+					verts.push(pts[i]);
+				}
+				canon[i] = id;
+			}
+			return id;
+		};
+		const polys = tris.map((t) => t.map(cid));
+		const K = 1 << 22;
+		const owner = new Map();
+		for (let pi = 0; pi < polys.length; pi++) {
+			const P = polys[pi];
+			for (let k = 0; k < P.length; k++) owner.set(P[k] * K + P[(k + 1) % P.length], pi);
+		}
+
+		const diags = [];
+		for (const key of owner.keys()) {
+			const u = Math.floor(key / K),
+				v = key % K;
+			if (u < v && owner.has(v * K + u)) {
+				const d = (verts[u].x - verts[v].x) ** 2 + (verts[u].y - verts[v].y) ** 2;
+				diags.push([u, v, d]);
+			}
+		}
+		return { verts, polys, owner, diags, K };
+	}
+
+	function mergeTriangles(prep, longestFirst) {
+		const { verts, K } = prep;
+		// merging replaces polygons, never changes one, so a shallow copy is enough
+		const polys = prep.polys.slice();
+		const owner = new Map(prep.owner);
+		const diags = prep.diags.slice().sort((a, b) => (longestFirst ? b[2] - a[2] : a[2] - b[2]));
+		const register = (pi) => {
+			const P = polys[pi];
+			for (let k = 0; k < P.length; k++) owner.set(P[k] * K + P[(k + 1) % P.length], pi);
+		};
+
+		for (const [u, v] of diags) {
+			const pa = owner.get(u * K + v),
+				pb = owner.get(v * K + u);
+			if (pa === undefined || pb === undefined || pa == pb) continue;
+			const A = polys[pa],
+				B = polys[pb];
+			if (!A || !B) continue;
+			const ia = A.indexOf(u),
+				ib = B.indexOf(v);
+			if (ia < 0 || ib < 0 || A[(ia + 1) % A.length] != v || B[(ib + 1) % B.length] != u) continue;
+			if (A.length + B.length - 2 > MAX_POLY_VERTS) continue;
+
+			const merged = [];
+			for (let k = 1; k <= A.length; k++) merged.push(A[(ia + k) % A.length]);
+			for (let k = 2; k < B.length; k++) merged.push(B[(ib + k) % B.length]);
+			if (new Set(merged).size != merged.length) continue;
+			const mp = merged.map((id) => verts[id]);
+			if (!isConvex(mp)) continue;
+
+			owner.delete(u * K + v);
+			owner.delete(v * K + u);
+			polys[pa] = merged;
+			polys[pb] = null;
+			register(pa);
+		}
+		return polys.filter(Boolean).map((P) => P.map((id) => verts[id]));
+	}
+
+	function decomposeGroup(outer, holes) {
+		if (ringArea(outer) < 0) outer = outer.slice().reverse();
+		holes = holes.map((h) => (ringArea(h) > 0 ? h.slice().reverse() : h));
+
+		if (!holes.length && outer.length <= MAX_POLY_VERTS && isConvex(outer)) {
+			const p = dropStraight(outer);
+			return p.length >= 3 ? [p] : [];
+		}
+
+		const pts = bridgeHoles(outer, holes);
+		const prep = mergePrepare(earClip(pts), pts);
+
+		let best = null,
+			bestCost = Infinity;
+		for (const longestFirst of [false, true]) {
+			const polys = mergeTriangles(prep, longestFirst)
+				.map(dropStraight)
+				.filter((p) => p.length >= 3);
+			const cost = polys.reduce((s, p) => s + p.length, 0);
+			if (cost < bestCost) {
+				best = polys;
+				bestCost = cost;
+			}
+		}
+		return best;
+	}
+
+	function fitShapeCount(polys, count) {
+		polys = polys.slice();
+
+		// merge pieces or split polygons to match an explicit count
+		while (polys.length > count) {
+			let best = null;
+			for (let i = 0; i < polys.length; i++) {
+				for (let j = i + 1; j < polys.length; j++) {
+					const hull = limitedConvexHull([...polys[i], ...polys[j]]);
+					if (hull.length < 3) continue;
+					const addedArea = Math.abs(ringArea(hull)) - Math.abs(ringArea(polys[i])) - Math.abs(ringArea(polys[j]));
+					if (!best || addedArea < best.addedArea) best = { i, j, hull, addedArea };
+				}
+			}
+			if (!best) break;
+			polys[best.i] = best.hull;
+			polys.splice(best.j, 1);
+		}
+
+		while (polys.length < count) {
+			let split = -1,
+				largestArea = 0;
+			for (let i = 0; i < polys.length; i++) {
+				const area = Math.abs(ringArea(polys[i]));
+				if (area > largestArea) {
+					largestArea = area;
+					split = i;
+				}
+			}
+			if (split < 0) break;
+
+			const poly = polys[split];
+			if (poly.length == 3) {
+				let edge = 0,
+					longest = 0;
+				for (let i = 0; i < 3; i++) {
+					const a = poly[i],
+						b = poly[(i + 1) % 3],
+						length = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+					if (length > longest) {
+						longest = length;
+						edge = i;
+					}
+				}
+				const a = poly[edge],
+					b = poly[(edge + 1) % 3],
+					c = poly[(edge + 2) % 3],
+					mid = { x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5 };
+				polys.splice(split, 1, [a, mid, c], [mid, b, c]);
+				continue;
+			}
+
+			let diagonal = null,
+				longest = 0;
+			for (let i = 0; i < poly.length; i++) {
+				for (let j = i + 2; j < poly.length; j++) {
+					if (i == 0 && j == poly.length - 1) continue;
+					const a = poly[i],
+						b = poly[j],
+						length = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+					if (length > longest) {
+						longest = length;
+						diagonal = [i, j];
+					}
+				}
+			}
+			if (!diagonal) break;
+			const [start, end] = diagonal;
+			const first = poly.slice(start, end + 1);
+			const second = poly.slice(end).concat(poly.slice(0, start + 1));
+			polys.splice(split, 1, first, second);
+		}
+		return polys;
+	}
+
+	function convexHull(points) {
+		const pts = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+		const turn = (o, a, b) => cross(o.x, o.y, a.x, a.y, b.x, b.y);
+		const lower = [],
+			upper = [];
+		for (const p of pts) {
+			while (lower.length >= 2 && turn(lower.at(-2), lower.at(-1), p) <= 0) lower.pop();
+			lower.push(p);
+		}
+		for (let i = pts.length - 1; i >= 0; i--) {
+			const p = pts[i];
+			while (upper.length >= 2 && turn(upper.at(-2), upper.at(-1), p) <= 0) upper.pop();
+			upper.push(p);
+		}
+		lower.pop();
+		upper.pop();
+		return lower.concat(upper);
+	}
+
+	function limitedConvexHull(points) {
+		let hull = convexHull(points);
+		// dropping a vertex keeps a convex polygon convex: drop the smallest-area one until it fits
+		while (hull.length > MAX_POLY_VERTS) {
+			let drop = 0,
+				smallest = Infinity;
+			for (let i = 0; i < hull.length; i++) {
+				const p = hull[(i + hull.length - 1) % hull.length],
+					q = hull[(i + 1) % hull.length];
+				const area = Math.abs(cross(p.x, p.y, hull[i].x, hull[i].y, q.x, q.y));
+				if (area < smallest) {
+					smallest = area;
+					drop = i;
+				}
+			}
+			hull.splice(drop, 1);
+		}
+		hull = dropStraight(hull);
+		return hull.length >= 3 ? hull : [];
+	}
+
+	// Shrinks an image longer than SHRINK_ABOVE to about SAMPLE_SIZE
+	// by averaging block alpha. Point (x, y) in the result is (x * stride, y * stride) in the original.
+	function downsample(data, w, h) {
+		const longest = Math.max(w, h);
+		const stride = longest > SHRINK_ABOVE ? Math.ceil(longest / SAMPLE_SIZE) : 1;
+		if (stride == 1) return { data, w, h, stride };
+
+		const sw = Math.ceil(w / stride),
+			sh = Math.ceil(h / stride),
+			sampled = new Uint8ClampedArray(sw * sh);
+		for (let y = 0; y < sh; y++) {
+			const y0 = y * stride,
+				y1 = Math.min(h, y0 + stride);
+			for (let x = 0; x < sw; x++) {
+				const x0 = x * stride,
+					x1 = Math.min(w, x0 + stride);
+				let sum = 0;
+				for (let yy = y0; yy < y1; yy++) {
+					for (let xx = x0; xx < x1; xx++) sum += data[yy * w + xx];
+				}
+				sampled[y * sw + x] = sum / ((y1 - y0) * (x1 - x0));
+			}
+		}
+		return { data: sampled, w: sw, h: sh, stride };
+	}
+
+	// Chooses how many shapes the whole image needs, making each count's shapes as
+	// shapesForCount does for an explicit count.
+	// 1. A convex image (or a speck) is its convex hull, one shape.
+	// 2. Otherwise the fewest shapes that reach the minimum coverage.
+	// 3. Then more shapes, only while each one adds a lot.
+	function autoCount(rings, data, w, h, minCoverage, targetCoverage) {
+		const score = coverageScorer(data, w, h);
+		let fitter;
+		const fit = (count) => (fitter ??= visvalingamFitter(rings))(count);
+
+		const made = [],
+			scored = [];
+		const shapesAt = (count) => (made[count] ??= shapesForCount(rings, count, fit));
+		const scoreAt = (count) => (scored[count] ??= score(shapesAt(count)));
+
+		const hull = convexHull(rings.flat());
+		if (score.opaque < MIN_SPLIT_AREA || (hull.length >= 3 && score([hull]) >= minCoverage)) {
+			return shapesAt(1);
+		}
+
+		// shapes beyond what the most detailed outline is made of add nothing
+		const most = Math.max(1, Math.min(MAX_SHAPES, fit(MAX_SHAPES).length));
+
+		let count = 1;
+		while (count <= most && scoreAt(count) < minCoverage) count++;
+
+		if (count > most) {
+			// the minimum can't be reached, so use the best there is
+			let best = 1;
+			for (let c = 2; c <= most; c++) if (scoreAt(c) > scoreAt(best) + 1e-9) best = c;
+			return shapesAt(best);
+		}
+
+		const minGain = Math.max(MIN_GAIN, MIN_GAIN_PIXELS / score.opaque);
+		while (count < most && scoreAt(count) < targetCoverage) {
+			// the fewest shapes that add enough, looking ahead in case the next one doesn't
+			let next = 0;
+			for (let c = count + 1; !next && c <= Math.min(most, count + LOOKAHEAD); c++) {
+				if (scoreAt(c) - scoreAt(count) >= minGain * (c - count)) next = c;
+			}
+			if (!next) break;
+			count = next;
+		}
+		return shapesAt(count);
+	}
+
+	// Full-size shapes for a part whose count was found shrunk. The count can come up
+	// short at full size, so it's raised until the minimum coverage is reached.
+	function fullSizeShapes(rings, data, w, h, count, minCoverage) {
+		if (count <= 1) return shapesForCount(rings, 1);
+
+		const score = coverageScorer(data, w, h);
+		let fitter;
+		const fit = (c) => (fitter ??= visvalingamFitter(rings))(c);
+
+		let best = shapesForCount(rings, count, fit),
+			bestScore = score(best);
+		for (let c = count; bestScore < minCoverage && c < MAX_SHAPES; ) {
+			const polys = shapesForCount(rings, ++c, fit);
+			const s = score(polys);
+			if (s > bestScore) {
+				best = polys;
+				bestScore = s;
+			}
+		}
+		return best;
+	}
+
+	// balances shape count against coverage for the whole image, so VW can spread shapes across parts
+	function autoShapes(data, w, h, alphaThreshold, minCoverage) {
+		const sample = downsample(data, w, h);
+		let rings = traceImageOutlines(sample.data, sample.w, sample.h, alphaThreshold);
+		if (!rings.length) return [];
+
+		const shrunkCoverage = minCoverage + (sample.stride > 1 ? SHRUNK_COVERAGE_MARGIN : 0);
+		let polys = autoCount(rings, sample.data, sample.w, sample.h, shrunkCoverage, minCoverage);
+
+		if (sample.stride > 1) {
+			rings = traceImageOutlines(data, w, h, alphaThreshold);
+			if (rings.length) polys = fullSizeShapes(rings, data, w, h, polys.length, minCoverage);
+		}
+		return polys;
+	}
+
+	// Scores polygon coverage: opaque pixels covered / (all opaque pixels + transparent pixels covered).
+	// Opaque pixels are counted once per image, and each polygon set is scored per row from
+	// where polygon edges cross it. A pixel is covered exactly when
+	// pointInRing(x + 0.5, y + 0.5, poly) says so (pixel (x, y) spans (x, y)-(x + 1, y + 1)).
+	function coverageScorer(data, w, h) {
+		const stride = w + 1;
+		// opaqueBefore[y * stride + x]: opaque pixels in row y left of column x
+		const opaqueBefore = new Int32Array(stride * h);
+		let opaque = 0;
+		for (let y = 0; y < h; y++) {
+			let count = 0;
+			for (let x = 0; x < w; x++) {
+				if (data[y * w + x] >= 128) count++;
+				opaqueBefore[y * stride + x + 1] = count;
+			}
+			opaque += count;
+		}
+
+		// room for a polygon with up to 4096 edges crossing a row
+		const crossings = new Float64Array(4096);
+		const spans = [];
+
+		const scorer = (polys) => {
+			const n = polys.length;
+			const top = new Float64Array(n),
+				bottom = new Float64Array(n);
+			let firstRow = h,
+				lastRow = -1;
+			for (let p = 0; p < n; p++) {
+				const poly = polys[p];
+				let min = Infinity,
+					max = -Infinity;
+				for (let i = 0; i < poly.length; i++) {
+					const y = poly[i].y;
+					if (y < min) min = y;
+					if (y > max) max = y;
+				}
+				top[p] = min;
+				bottom[p] = max;
+				// rows whose centers are between the polygon's top and bottom
+				firstRow = Math.min(firstRow, Math.max(0, Math.ceil(min - 0.5)));
+				lastRow = Math.max(lastRow, Math.min(h - 1, Math.floor(max - 0.5)));
+			}
+
+			let covered = 0,
+				intersection = 0;
+			for (let y = firstRow; y <= lastRow; y++) {
+				const yc = y + 0.5;
+				// spans = [first column, last column, ...] covered by each polygon in this row
+				spans.length = 0;
+				for (let p = 0; p < n; p++) {
+					if (yc < top[p] || yc > bottom[p]) continue;
+					const poly = polys[p];
+					let count = 0;
+					for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+						const a = poly[i],
+							b = poly[j];
+						if (a.y > yc != b.y > yc) {
+							const x = ((b.x - a.x) * (yc - a.y)) / (b.y - a.y) + a.x;
+							let k = count++;
+							for (; k > 0 && crossings[k - 1] > x; k--) crossings[k] = crossings[k - 1];
+							crossings[k] = x;
+						}
+					}
+					// a pixel is inside from one crossing up to, not including, the next
+					for (let c = 0; c + 1 < count; c += 2) {
+						const first = Math.max(0, Math.ceil(crossings[c] - 0.5)),
+							last = Math.min(w - 1, Math.ceil(crossings[c + 1] - 0.5) - 1);
+						if (first <= last) spans.push(first, last);
+					}
+				}
+				if (!spans.length) continue;
+
+				for (let s = 2; s < spans.length; s += 2) {
+					const first = spans[s],
+						last = spans[s + 1];
+					let k = s - 2;
+					for (; k >= 0 && spans[k] > first; k -= 2) {
+						spans[k + 2] = spans[k];
+						spans[k + 3] = spans[k + 1];
+					}
+					spans[k + 2] = first;
+					spans[k + 3] = last;
+				}
+
+				// merge overlapping spans and count what they cover
+				const row = y * stride;
+				let first = spans[0],
+					last = spans[1];
+				for (let s = 2; s <= spans.length; s += 2) {
+					if (s < spans.length && spans[s] <= last + 1) {
+						if (spans[s + 1] > last) last = spans[s + 1];
+						continue;
+					}
+					covered += last - first + 1;
+					intersection += opaqueBefore[row + last + 1] - opaqueBefore[row + first];
+					if (s < spans.length) {
+						first = spans[s];
+						last = spans[s + 1];
+					}
+				}
+			}
+			return intersection / (opaque + (covered - intersection) || 1);
+		};
+		scorer.opaque = opaque;
+		return scorer;
+	}
+
+	// Takes back removed outline points for a convex shape (see REFINE_MIN_GAIN), biggest gain first
+	function refineShape(poly, order, e) {
+		if (poly.length >= MAX_POLY_VERTS || poly.some((p) => p.i === undefined)) return poly;
+
+		const { X, Y } = order;
+		const minGain = REFINE_MIN_GAIN * Math.abs(order.area);
+		const best = new Map();
+		// the removed point past edge a-b that adds the most area
+		const outFrom = (a, b) => {
+			const key = a.i * order.total + b.i;
+			if (best.has(key)) return best.get(key);
+			let found = null;
+			const between = order.removedBetween(a.i, b.i, e);
+			const length = Math.hypot(b.x - a.x, b.y - a.y);
+			if (between && between.length && length > 0) {
+				let most = REFINE_MIN_DEVIATION;
+				for (const g of between) {
+					// the shape is left of its edges, so outside is right
+					const out = -cross(a.x, a.y, b.x, b.y, X[g], Y[g]) / length;
+					if (out > most) {
+						most = out;
+						found = { x: X[g], y: Y[g], i: g, gain: (out * length) / 2 };
+					}
+				}
+			}
+			best.set(key, found);
+			return found;
+		};
+
+		let pts = poly;
+		while (pts.length < MAX_POLY_VERTS) {
+			const options = [];
+			for (let j = 0; j < pts.length; j++) {
+				const c = outFrom(pts[j], pts[(j + 1) % pts.length]);
+				if (c && c.gain >= minGain) options.push({ j, c });
+			}
+			options.sort((a, b) => b.c.gain - a.c.gain);
+
+			let taken = false;
+			for (const { j, c } of options) {
+				const next = pts.slice(0, j + 1).concat([c], pts.slice(j + 1));
+				if (isConvex(next)) {
+					pts = next;
+					taken = true;
+					break;
+				}
+			}
+			if (!taken) break;
+		}
+		return pts;
+	}
+
+	// Returns a function that makes the shapes for a count. The outline is simplified once.
+	function visvalingamFitter(rings) {
+		const order = visvalingamOrder(rings);
+		const cache = new Map();
+		const evalAt = (e) => {
+			let polys = cache.get(e);
+			if (!polys) {
+				polys = [];
+				for (const g of order.groupsAt(e)) polys.push(...decomposeGroup(g.outer, g.holes));
+				cache.set(e, polys);
+			}
+			return polys;
+		};
+
+		const last = order.events - 2;
+		const finest = Math.min(order.lastEventBelow(MIN_DETAIL), last);
+
+		const fit = (k, from) => {
+			let lo = from,
+				hi = last;
+			while (lo < hi) {
+				const mid = (lo + hi) >> 1;
+				if (order.aliveAt(mid) <= k * MAX_POLY_VERTS) hi = mid;
+				else lo = mid + 1;
+			}
+			if (evalAt(lo).length <= k) return lo;
+
+			// n vertices and h holes make at most n + 2h - 2 triangles, and merging only lowers that,
+			// so from the first level with that few vertices on, the shapes fit without counting
+			hi = last;
+			const few = k + 2 - 2 * order.holes;
+			if (few >= 3) {
+				let a = lo,
+					b = last;
+				while (a < b) {
+					const mid = (a + b) >> 1;
+					if (order.aliveAt(mid) <= few) b = mid;
+					else a = mid + 1;
+				}
+				if (order.aliveAt(a) <= few) hi = a;
+			}
+			while (lo < hi) {
+				const mid = (lo + hi) >> 1;
+				if (evalAt(mid).length <= k) hi = mid;
+				else lo = mid + 1;
+			}
+			let best = lo;
+			while (best < last && evalAt(best).length > k) best++;
+			for (let e = best - 1; e >= Math.max(from, best - 4); e--) {
+				if (evalAt(e).length <= k) best = e;
+			}
+			return best;
+		};
+
+		const refined = new Map();
+		const refinedAt = (e) => {
+			let polys = refined.get(e);
+			if (!polys) {
+				polys = evalAt(e).map((poly) => refineShape(poly, order, e).map((p) => ({ x: p.x, y: p.y })));
+				refined.set(e, polys);
+			}
+			return polys;
+		};
+
+		return (count) => refinedAt(fit(Math.max(1, Math.round(count)), finest));
+	}
+
+	// the shapes for an explicit count, which auto also picks from. fit makes shapes for a count above 1
+	function shapesForCount(rings, count, fit) {
+		const requested = Math.round(count);
+		if (requested <= 1) {
+			const hull = limitedConvexHull(rings.flat());
+			if (hull.length) return [hull];
+		}
+		return fitShapeCount((fit ?? visvalingamFitter(rings))(count), requested);
+	}
+
+	function computeImageOutlineShapes(data, w, h, coverage, alphaThreshold = 0.5) {
+		if (coverage < 1) return autoShapes(data, w, h, alphaThreshold, coverage);
+
+		const rings = traceImageOutlines(data, w, h, alphaThreshold);
+		if (!rings.length) return [];
+
+		return shapesForCount(rings, coverage);
+	}
+
+	function minWidth(pts) {
+		let min = Infinity;
+		for (let i = 0; i < pts.length; i++) {
+			const a = pts[i],
+				b = pts[(i + 1) % pts.length];
+			const len = Math.hypot(b.x - a.x, b.y - a.y);
+			if (!len) return 0;
+			let far = 0;
+			for (const p of pts) far = Math.max(far, Math.abs(cross(a.x, a.y, b.x, b.y, p.x, p.y)) / len);
+			min = Math.min(min, far);
+		}
+		return min;
+	}
+
+	return { computeImageOutlineShapes, minWidth };
+}
+
+let mainOutlineLib;
+const getOutlineLib = () => (mainOutlineLib ??= outlineLib());
+
+let outlineWorker;
+
+function getOutlineWorker() {
+	if (
+		typeof Bun != 'undefined' ||
+		typeof window == 'undefined' ||
+		!globalThis.Worker ||
+		!globalThis.Blob ||
+		!globalThis.URL?.createObjectURL
+	)
+		return null;
+	if (outlineWorker) return outlineWorker;
+
+	const source = `const outline = (${outlineLib.toString()})();
+self.onmessage = ({ data: { alpha, w, h, count }, ports: [port] }) =>
+	port.postMessage(outline.computeImageOutlineShapes(new Uint8ClampedArray(alpha), w, h, count));`;
+	const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+	try {
+		outlineWorker = new Worker(url);
+	} finally {
+		URL.revokeObjectURL(url);
+	}
+	return outlineWorker;
+}
+
+// each request gets its own MessageChannel, so the worker replies straight to the
+// promise that asked and no request ids have to be tracked. Takes ownership of alpha.
+function computeOutlineShapesInWorker(worker, alpha, w, h, count) {
+	return new Promise((resolve, reject) => {
+		const { port1, port2 } = new MessageChannel();
+		const settle = (fn, value) => {
+			worker.removeEventListener('error', onError);
+			port1.close();
+			fn(value);
+		};
+		const onError = (event) => {
+			if (outlineWorker == worker) outlineWorker = null;
+			worker.terminate();
+			settle(reject, event.error || new Error(event.message || 'Image outline worker failed.'));
+		};
+		port1.onmessage = ({ data }) => settle(resolve, data);
+		port1.onmessageerror = () => settle(reject, new Error('Image outline worker message failed.'));
+		worker.addEventListener('error', onError);
+		try {
+			worker.postMessage({ alpha: alpha.buffer, w, h, count }, [alpha.buffer, port2]);
+		} catch (error) {
+			settle(reject, error);
+		}
+	});
+}
+
+function getImageRGBA(img, frame) {
+	const src = img.canvas || img;
+	const pixelDensity = img._pixelDensity || 1;
+	if (frame) {
+		const w = Math.round(frame.w * pixelDensity),
+			h = Math.round(frame.h * pixelDensity);
+		const refreshed = !frame.data || img.modified;
+		if (refreshed) {
+			frame.data = img.ctx.getImageData(
+				Math.round(frame.x * pixelDensity),
+				Math.round(frame.y * pixelDensity),
+				w,
+				h
+			).data;
+		}
+		return { data: frame.data, w, h, refreshed };
+	}
+
+	const w = src.naturalWidth || src.width,
+		h = src.naturalHeight || src.height;
+	const refreshed = !img.data || img.modified;
+	if (refreshed) img.data = img.ctx.getImageData(0, 0, w, h).data;
+	return { data: img.data, w, h, refreshed };
+}
+
+// the outline code only needs the alpha channel, a quarter of the RGBA bytes
+function getImageAlpha(rgba) {
+	const alpha = new Uint8ClampedArray(rgba.length / 4);
+	for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3];
+	return alpha;
+}
+
+// #endregion image outline colliders
 
 globalThis.Canvas ??= () => {
 	p5._friendlyError(`Visit https://github.com/q5play/p5-compat to learn how to use q5play with p5.js`);

@@ -803,6 +803,23 @@ class Sprite(Visual):
         """
         ...
 
+    def makeMesh(self, minimumCoverage: float = ...) -> Awaitable[float] | float:
+        """
+        Creates a contact mesh from the opaque pixels in the sprite's image, replacing
+        its existing colliders or sensors. The image needs a transparent background.
+
+        Since the physics simulator can only handle convex polygons
+        with a maximum of 8 vertices, this function will automatically generate
+        enough shapes to cover the opaque pixels in the image, at least 95% by default.
+
+        The mesh replaces existing colliders, or existing sensors if the sprite
+        has no colliders.
+
+        Returns:
+            the number of shapes generated
+        """
+        ...
+
     @property
     def mass(self) -> float:
         """The mass of the sprite's physics body."""
@@ -821,7 +838,7 @@ class Sprite(Visual):
         ...
 
     @centerOfMass.setter
-    def centerOfMass(self, val: Vector | _HasXY) -> None: ...
+    def centerOfMass(self, val: Vector | _HasXY | list[float]) -> None: ...
 
     @property
     def fixedCenterOfMass(self) -> bool:
@@ -933,6 +950,25 @@ class Sprite(Visual):
 
     @rotationSpeed.setter
     def rotationSpeed(self, val: float) -> None: ...
+
+    @property
+    def orbitSpeed(self) -> float:
+        """
+        Angular distance per physics update for the sprite's continuous orbit
+        around its immediate parent group's centroid.
+        """
+        ...
+
+    @orbitSpeed.setter
+    def orbitSpeed(self, val: float) -> None: ...
+
+    @property
+    def orbitSpin(self) -> bool:
+        """Whether the sprite rotates as it orbits."""
+        ...
+
+    @orbitSpin.setter
+    def orbitSpin(self, val: bool) -> None: ...
 
     @property
     def color(self) -> Color:
@@ -1319,7 +1355,7 @@ class Sprite(Visual):
         ...
 
     @scale.setter
-    def scale(self, val: float | list[Any] | Vector | _HasXY) -> None: ...
+    def scale(self, val: float | list[float] | Vector | _HasXY) -> None: ...
 
     def scaleBy(self, x: float, y: float = ...) -> None:
         """
@@ -1554,7 +1590,7 @@ class Sprite(Visual):
         ...
 
     @vel.setter
-    def vel(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
+    def vel(self, val: list[float] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def velocity(self) -> Vector:
@@ -1566,7 +1602,7 @@ class Sprite(Visual):
         ...
 
     @velocity.setter
-    def velocity(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
+    def velocity(self, val: list[float] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def grabbable(self) -> bool:
@@ -1589,7 +1625,7 @@ class Sprite(Visual):
     def gravityScale(self, val: float) -> None: ...
 
     @overload
-    def applyForce(self, amount: float, origin: Vector | _HasXY = ...) -> None:
+    def applyForce(self, amount: float, origin: list[float] | Vector | _HasXY = ...) -> None:
         """
         Applies a force magnitude at the sprite's current bearing.
 
@@ -1600,7 +1636,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def applyForce(self, force: Vector | _HasXY | list[float], origin: Vector | _HasXY = ...) -> None:
+    def applyForce(self, force: list[float] | Vector | _HasXY, origin: list[float] | Vector | _HasXY = ...) -> None:
         """
         Applies a force vector to the sprite.
 
@@ -1610,11 +1646,11 @@ class Sprite(Visual):
         """
         ...
 
-    def applyForce(self, force: Vector | _HasXY | list[float], origin: Vector | _HasXY = ...) -> None:
+    def applyForce(self, force: list[float] | Vector | _HasXY, origin: list[float] | Vector | _HasXY = ...) -> None:
         ...
 
     @overload
-    def applyForceScaled(self, amount: float, origin: Vector | _HasXY = ...) -> None:
+    def applyForceScaled(self, amount: float, origin: list[float] | Vector | _HasXY = ...) -> None:
         """
         Applies a force scaled to the sprite's mass using a magnitude.
 
@@ -1625,7 +1661,7 @@ class Sprite(Visual):
         ...
 
     @overload
-    def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
+    def applyForceScaled(self, force: list[float] | Vector | _HasXY, origin: list[float] | Vector | _HasXY = ...) -> None:
         """
         Applies a force scaled to the sprite's mass using a vector.
 
@@ -1635,7 +1671,7 @@ class Sprite(Visual):
         """
         ...
 
-    def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
+    def applyForceScaled(self, force: list[float] | Vector | _HasXY, origin: list[float] | Vector | _HasXY = ...) -> None:
         ...
 
     def applyWind(self, strength: float, angle: float, drag: float = ..., lift: float = ...) -> None:
@@ -1874,6 +1910,34 @@ class Sprite(Visual):
         ...
 
     def rotateTowards(self, pos: Vector | _HasXY, tracking: float = ..., facing: float = ...) -> None:
+        ...
+
+    def applyOrbit(self, rate: float = ..., maxForce: float = ...) -> None:
+        """
+        Applies an orbital force around the parent group's centroid.
+        Unlike `orbitSpeed`, this applies force rather than setting velocity,
+        so collisions and other forces can pull the sprite off its orbit.
+        Only dynamic sprites are affected, and rotation is left alone.
+
+        Args:
+            rate: target angular distance per physics update
+            maxForce: maximum force applied to the sprite, 20 by default
+        """
+        ...
+
+    def orbit(self, angle: float, speed: float = ..., spin: bool = ...) -> Awaitable[bool]:
+        """
+        Orbits the sprite by a specific angle around its parent group's centroid
+        at the given speed, then stops.
+
+        Args:
+            angle: total angular distance to orbit by
+            speed: angular distance to orbit per physics update
+            spin: if true the sprite rotates along with the orbit, default is false
+
+        Returns:
+            a lazy thenable that resolves true if the sprite completed the orbit
+        """
         ...
 
     @overload
@@ -2500,6 +2564,8 @@ class Visuals(list[_T_Visuals], Generic[_T_Visuals]):
     def addTiles(self, tiles: str | list[str], x: float = ..., y: float = ..., colWidth: float = ..., rowHeight: float = ...) -> None:
         """
         Adds sprites to the group based on a tile map.
+        Groups with `joinTiles` enabled combine matching tiles into sprites
+        with horizontal-run colliders.
 
         Args:
             x: x coordinate of the top left corner of the tile map, default is -colWidth * longest row / 2
@@ -2536,6 +2602,32 @@ class Group(Visuals[Sprite]):
         ...
 
     def __init__(self, *sprites: Sprite) -> None: ...
+
+    autoMesh: bool | float
+    """
+    Makes contact meshes for group sprites.
+
+    The mesh is made from an image or animation assigned to the group
+    or one of the group's sprites. If it's not loaded yet, the mesh is
+    created later and existing colliders/sensors stay in place until then.
+
+    See `sprite.makeMesh` for more info.
+
+    Set to `True` to make meshes with at least 95% coverage of
+    opaque pixels in the group or group sprite's imagery.
+
+    Set to a decimal number between `0` and `1` to manual specify
+    the minimum coverage. Set to a whole number (<=1) for the mesh
+    to have that many shapes.
+
+    Default: `False`
+    """
+
+    joinTiles: bool
+    """
+    If true, tiles for this group are combined into a sprite
+    with merged horizontal-run colliders and a baked image or animation.
+    """
 
     x: float
     """Horizontal position of group sprites."""
@@ -2660,6 +2752,10 @@ class Group(Visuals[Sprite]):
     sprites drawn later appear in the foreground.
 
     By default, sprites are drawn in the order they were created.
+
+    Sprites without imagery or a custom draw function are
+    represented by filled debug shapes, which are drawn last
+    for optimal performance, regardless of their layer value.
     """
 
     life: float
@@ -2719,7 +2815,7 @@ class Group(Visuals[Sprite]):
     rotationLock: bool
     """If true, the group sprites can not rotate."""
 
-    scale: float | list[Any] | Vector | _HasXY
+    scale: float | list[float] | Vector | _HasXY
     """
     Horizontal and vertical scale of the group sprites.
 
@@ -2793,6 +2889,13 @@ class Group(Visuals[Sprite]):
 
     width: float
     """The width of the group sprites."""
+
+    withSensor: bool
+    """
+    If true, new group sprites will have a sensor instead of a collider.
+
+    Default: `False`
+    """
 
     idNum: float
     """
@@ -2946,7 +3049,22 @@ class Group(Visuals[Sprite]):
     def applyForceScaled(self, force: Vector | _HasXY, origin: Vector | _HasXY = ...) -> None:
         ...
 
+    def applyOrbit(self, rate: float = ..., maxForce: float = ...) -> None:
+        """
+        Force-based version of orbit around `group.centroid` that applies a force to
+        each sprite rather than setting velocities directly, so collisions, other
+        forces, or a force that is too weak can pull sprites off orbit. Call it
+        every frame, unlike setting `orbitSpeed`, which updates automatically.
+        Only dynamic sprites are affected, and rotations are left alone.
+
+        Args:
+            rate: target angular distance per physics update, 0 brings sprites to rest relative to the centroid
+            maxForce: maximum force applied to each sprite, 20 by default
+        """
+        ...
+
     def applyWind(self, speed: float, angle: float, drag: float = ..., lift: float = ...) -> None:
+        """Applies wind to the group."""
         ...
 
     @overload
@@ -3001,6 +3119,35 @@ class Group(Visuals[Sprite]):
         ...
 
     def moveTowards(self, pos: Vector | _HasXY, tracking: float = ...) -> None:
+        ...
+
+    centroid: Vector | _HasXY | tuple[float, float] | None
+    """
+    Orbit center used by `orbit` and `applyOrbit`.
+
+    Can be assigned a position object. Assign `None` to get the
+    default behavior, placing the centroid at the center of the group.
+    """
+
+    orbitSpeed: float
+    """
+    Angular distance per physics update for the group's continuous orbit.
+    Positive values orbit clockwise; 0 stops the orbit.
+    """
+
+    orbitSpin: bool
+    """Whether the group's sprites rotate as they orbit."""
+
+    def orbit(self, angle: float, speed: float = ..., spin: bool = ...) -> Awaitable[bool]:
+        """
+        Orbits the group's sprites by a specific angle around
+        `group.centroid` at the given speed, then stops.
+
+        Args:
+            angle: total angular distance to orbit by
+            speed: angular distance to orbit per physics update
+            spin: if true sprites rotate along with the orbit, default is false
+        """
         ...
 
     @overload
@@ -3730,7 +3877,7 @@ class Joint:
         ...
 
     @offsetA.setter
-    def offsetA(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
+    def offsetA(self, val: list[float] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def offsetB(self) -> Vector:
@@ -3744,7 +3891,7 @@ class Joint:
         ...
 
     @offsetB.setter
-    def offsetB(self, val: list[Any] | Vector | _HasXY | Vector) -> None: ...
+    def offsetB(self, val: list[float] | Vector | _HasXY | Vector) -> None: ...
 
     @property
     def draw(self) -> Callable[..., Any]:
